@@ -1,0 +1,18 @@
+{
+  "initialized": "Sun Aug 31 21:42:35 EDT 2025",
+  "version": "2.0.0",
+  "project_name": "agent-os",
+  "active_commands": [],
+  "recent_tasks": [],
+  "cache_stats": {
+    "hits": 0,
+    "misses": 0,
+    "size": "0"
+  },
+  "workflow_history": [],
+  "environment": {
+    "node_version": "v22.14.0",
+    "npm_version": "10.9.2",
+    "python_version": "Python 3.13.2"
+  }
+}

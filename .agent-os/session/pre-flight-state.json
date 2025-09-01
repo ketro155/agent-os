@@ -1,0 +1,20 @@
+{
+  "initialized": "Sun Aug 31 21:42:43 EDT 2025",
+  "rules": {
+    "subagent_delegation": "IMPORTANT: For any step that specifies a subagent in the subagent=\"\" XML attribute you MUST use the specified subagent",
+    "xml_processing": "Process XML blocks sequentially",
+    "step_execution": "Read and execute every numbered step in the process_flow EXACTLY as instructions specify",
+    "clarification_protocol": "If clarification needed, stop and ask user specific numbered questions",
+    "template_compliance": "Use exact templates as provided"
+  },
+  "checks_performed": [
+    "environment_validation",
+    "cache_initialization",
+    "specification_loading",
+    "xml_processing_verification"
+  ],
+  "subagents_required": [],
+  "clarifications_needed": [],
+  "spec_path": "none",
+  "xml_blocks_found": 1
+}
