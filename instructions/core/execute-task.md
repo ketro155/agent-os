@@ -226,6 +226,7 @@ Execute the parent task and all sub-tasks in order using test-driven development
   <final_subtask_verification>
     IF final sub-task is "Verify all tests pass":
       - Run entire test suite
+      - Apply intelligent failure recovery if tests fail
       - Fix any remaining failures
       - Ensure specification compliance tests pass
       - Ensure no regressions
@@ -478,6 +479,93 @@ ONLY after output validation passes, mark this task and its sub-tasks complete b
   MARK: [x] for completed items immediately
   DOCUMENT: Blocking issues with ⚠️ emoji
   LIMIT: 3 attempts before marking as blocked
+</instructions>
+
+</step>
+
+<step number="6" name="intelligent_failure_recovery" priority="CONDITIONAL">
+
+### Step 6: Intelligent Failure Recovery
+
+Apply context-efficient debugging when failures occur during task execution.
+
+<failure_detection>
+  TRIGGER_CONDITIONS:
+    - Test failures in Step 5 verification
+    - Build/compilation errors during implementation
+    - Specification compliance violations
+    - Runtime errors during development
+  
+  AUTOMATIC_ACTIVATION:
+    - When any step reports failures
+    - Before escalating to manual debugging
+    - After initial failure, before retry
+</failure_detection>
+
+<context_efficient_analysis>
+  SMART_CONTEXT_LOADING:
+    Step 1 - Error Classification (minimal context):
+      - Parse error messages for type classification
+      - Identify failure category (test, build, spec, runtime)
+      - Determine if issue is fixable with cached context
+    
+    Step 2 - Targeted Context Retrieval (only if needed):
+      IF issue requires additional context:
+        - Load ONLY files mentioned in error traces
+        - Use codebase-indexer for similar error patterns
+        - Fetch spec sections related to failing functionality
+      ELSE:
+        - Use existing cached context from Step 3
+        - Apply common fix patterns
+    
+    Step 3 - Progressive Context Expansion:
+      IF initial fix attempt fails:
+        - Expand context to related modules
+        - Include integration test contexts
+        - Load architectural patterns from standards
+</context_efficient_analysis>
+
+<auto_resolution_patterns>
+  COMMON_FIXES (no additional context needed):
+    - Missing imports → Add imports based on error analysis
+    - Typos in function names → Fix using codebase references
+    - Simple test assertion failures → Adjust based on spec requirements
+    - Formatting/style violations → Auto-apply from standards
+  
+  PATTERN_MATCHING (use cached codebase context):
+    - Similar error patterns from codebase-indexer
+    - Successful implementations of same functionality
+    - Spec compliance templates from previous tasks
+    
+  ESCALATION_CRITERIA:
+    - Multiple fix attempts fail (>3 attempts)
+    - Error requires architectural changes
+    - Context usage approaches session limits
+    - User intervention explicitly needed
+</auto_resolution_patterns>
+
+<session_continuity_preparation>
+  CONTEXT_STATE_EXPORT:
+    IF debugging requires new session:
+      CREATE: debug-session-state.md with:
+        - Current task and subtask progress
+        - Error context and attempted fixes
+        - Relevant spec sections and codebase references
+        - Next debugging steps to attempt
+      
+    HANDOFF_FORMAT:
+      - Error summary and classification
+      - Files and functions involved
+      - Attempted resolution steps
+      - Recommended next actions
+      - Critical context to preserve
+</session_continuity_preparation>
+
+<instructions>
+  PRIORITY: Attempt auto-resolution with minimal context first
+  ESCALATION: Create debug handoff state if context limits approached
+  FALLBACK: Recommend explicit debug command for complex issues
+  BENEFIT: 80% of common issues resolved automatically, smooth handoffs for complex cases
 </instructions>
 
 </step>
