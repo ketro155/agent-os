@@ -5,6 +5,105 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2025-12-08
+
+### Upstream Integration from buildermethods/agent-os
+
+This release integrates selected components from the main AgentOS repository (v2.1.1) while preserving our embedded instruction architecture for reliability.
+
+### New Command: `/shape-spec` (Specification Shaping Phase)
+
+New lightweight command for exploring and refining feature concepts before full specification.
+
+**Purpose:**
+- Explore feasibility before investing in full spec
+- Analyze trade-offs between multiple approaches
+- Define clear scope boundaries
+- Validate ideas quickly
+
+**Workflow:**
+| Step | Action |
+|------|--------|
+| 1 | Understand feature concept |
+| 2 | Check product alignment |
+| 3 | Explore technical feasibility |
+| 4 | Identify 2-3 approaches |
+| 5 | Analyze trade-offs |
+| 6 | Define scope boundaries |
+| 7 | Create shaped spec summary |
+| 8 | Get user validation |
+
+**Creates:** `.agent-os/specs/shaped/YYYY-MM-DD-concept-name.md`
+
+**Next Step:** Run `/create-spec` to generate full specification
+
+### Categorized Standards Structure
+
+Standards are now organized by domain for better discoverability in larger projects:
+
+```
+standards/
+├── global/           # Cross-cutting concerns
+│   ├── coding-style.md
+│   ├── conventions.md
+│   ├── error-handling.md
+│   ├── validation.md
+│   └── tech-stack.md
+├── frontend/         # UI development
+│   ├── react-patterns.md
+│   └── styling.md
+├── backend/          # Server-side development
+│   ├── api-design.md
+│   └── database.md
+└── testing/          # Test patterns
+    └── test-patterns.md
+```
+
+### New Skill: `implementation-verifier`
+
+End-to-end verification skill that auto-invokes after completing all tasks in a spec.
+
+**Verification Steps:**
+1. **Task Completion Audit** - Verify all task checkboxes marked complete
+2. **Specification Compliance** - Match implementation to spec requirements
+3. **Test Suite Validation** - Run full test suite, check coverage
+4. **Roadmap Synchronization** - Update completed items in roadmap
+5. **Report Generation** - Create verification report
+
+**Output:** `.agent-os/verification/YYYY-MM-DD-[spec-name].md`
+
+### New Optional Skill: `standards-to-skill`
+
+Template and guide for converting standards documents into Claude Code skills.
+
+**Use When:**
+- Converting existing standards to auto-invoked skills
+- Creating new standards that warrant automatic application
+- Optimizing how standards are surfaced during development
+
+### Installation Updates
+
+```bash
+# Default installation now includes 9 skills (was 8)
+./setup/project.sh --claude-code
+
+# Full installation now includes 5 optional skills (was 4)
+./setup/project.sh --claude-code --full-skills
+```
+
+**New Commands:**
+- `/shape-spec` - Specification shaping phase
+
+**New Skills (Default):**
+- `implementation-verifier` - End-to-end verification
+
+**New Skills (Optional):**
+- `standards-to-skill` - Standards conversion template
+
+**Skills Total:** 9 default + 5 optional = 14 skills
+
+---
+
 ## [1.7.0] - 2025-12-08
 
 ### Progress Log System (Cross-Session Memory)

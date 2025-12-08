@@ -20,7 +20,11 @@ Agent-OS is a **development framework** that gets installed INTO other projects 
 ```
 Target Project/
 ├── .agent-os/
-│   ├── standards/          # Development standards and best practices
+│   ├── standards/          # Categorized development standards (v1.8.0+)
+│   │   ├── global/         # Cross-cutting: coding-style, conventions, error-handling, validation, tech-stack
+│   │   ├── frontend/       # UI patterns: react-patterns, styling
+│   │   ├── backend/        # Server patterns: api-design, database
+│   │   └── testing/        # Test patterns: test-patterns
 │   ├── state/              # State management and caching
 │   │   ├── workflow.json   # Current workflow state
 │   │   ├── session-cache.json # Runtime cache (auto-generated)
@@ -77,6 +81,33 @@ Target Project/
 
 ### 1. `/plan-product` - New Product Planning
 **Purpose**: Initialize a new product with mission, vision, and roadmap
+
+---
+
+### 1.5 `/shape-spec` - Specification Shaping (NEW in v1.8.0)
+**Purpose**: Lightweight exploration and refinement of feature concepts before full specification
+
+**Use this command when:**
+- You have a rough idea but need to explore feasibility
+- Multiple approaches are viable and need trade-off analysis
+- Scope is unclear and needs boundary definition
+
+**Workflow**:
+1. Understand the feature concept
+2. Check product alignment with mission
+3. Explore technical feasibility
+4. Identify 2-3 approach options
+5. Analyze trade-offs
+6. Define scope boundaries
+7. Create shaped spec summary
+8. Get user validation
+
+**Creates**:
+- `.agent-os/specs/shaped/YYYY-MM-DD-concept-name.md`
+
+**Dependencies**: None (optional: mission-lite.md, tech-stack.md for context)
+
+**Next Step**: Run `/create-spec` to generate full specification
 
 **Workflow**:
 1. Create product directory structure
@@ -306,6 +337,7 @@ Skills are auto-invoked by Claude based on context. They live in `.claude/skills
 | **brainstorming** | Socratic design refinement | During spec creation |
 | **writing-plans** | Create detailed micro-task plans | During task breakdown |
 | **session-startup** | Load progress context, verify environment | At execute-tasks start |
+| **implementation-verifier** | End-to-end verification before delivery | After all tasks complete |
 
 **Tier 2 - Optional Skills (Installed with `--full-skills`):**
 
@@ -315,6 +347,7 @@ Skills are auto-invoked by Claude based on context. They live in `.claude/skills
 | **verification** | Evidence-based completion verification | `.claude/skills/optional/` |
 | **skill-creator** | Guide for creating custom skills | `.claude/skills/optional/` |
 | **mcp-builder** | Guide for creating MCP servers | `.claude/skills/optional/` |
+| **standards-to-skill** | Convert standards docs to skills | `.claude/skills/optional/` |
 
 ---
 

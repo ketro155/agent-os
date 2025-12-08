@@ -6,7 +6,7 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="1.7.0"
+AGENT_OS_VERSION="1.8.0"
 AGENT_OS_RELEASE_DATE="2025-12-08"
 
 # Track installation progress for cleanup
@@ -301,7 +301,7 @@ if [ "$CLAUDE_CODE" = true ]; then
     if [ "$IS_FROM_BASE" = true ]; then
         # Copy from base installation
         echo "  📂 Commands:"
-        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
+        for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
             if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
                 copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
             else
@@ -332,7 +332,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
         echo ""
         echo "  📂 Skills (Tier 1 - Default):"
-        for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup; do
+        for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier; do
             if [ -f "$BASE_AGENT_OS/claude-code/skills/${skill}.md" ]; then
                 copy_file "$BASE_AGENT_OS/claude-code/skills/${skill}.md" "./.claude/skills/${skill}.md" "$OVERWRITE_CLAUDE" "skills/${skill}.md"
             else
@@ -345,7 +345,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             echo ""
             echo "  📂 Skills (Tier 2 - Optional):"
             create_tracked_dir "./.claude/skills/optional"
-            for skill in code-review verification skill-creator mcp-builder; do
+            for skill in code-review verification skill-creator mcp-builder standards-to-skill; do
                 if [ -f "$BASE_AGENT_OS/claude-code/skills/optional/${skill}.md" ]; then
                     copy_file "$BASE_AGENT_OS/claude-code/skills/optional/${skill}.md" "./.claude/skills/optional/${skill}.md" "$OVERWRITE_CLAUDE" "skills/optional/${skill}.md"
                 else
@@ -358,7 +358,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         echo "  Downloading Claude Code files from GitHub..."
         echo ""
         echo "  📂 Commands:"
-        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
+        for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
             download_file "${BASE_URL}/commands/${cmd}.md" \
                 "./.claude/commands/${cmd}.md" \
                 "$OVERWRITE_CLAUDE" \
@@ -386,7 +386,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
         echo ""
         echo "  📂 Skills (Tier 1 - Default):"
-        for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup; do
+        for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier; do
             download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
                 "./.claude/skills/${skill}.md" \
                 "$OVERWRITE_CLAUDE" \
@@ -398,7 +398,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             echo ""
             echo "  📂 Skills (Tier 2 - Optional):"
             create_tracked_dir "./.claude/skills/optional"
-            for skill in code-review verification skill-creator mcp-builder; do
+            for skill in code-review verification skill-creator mcp-builder standards-to-skill; do
                 download_file "${BASE_URL}/claude-code/skills/optional/${skill}.md" \
                     "./.claude/skills/optional/${skill}.md" \
                     "$OVERWRITE_CLAUDE" \
@@ -596,7 +596,7 @@ if [ "$CURSOR" = true ]; then
 
     if [ "$IS_FROM_BASE" = true ]; then
         # Convert commands from base installation to Cursor rules
-        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product; do
+        for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product; do
             if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
                 convert_to_cursor_rule "$BASE_AGENT_OS/commands/${cmd}.md" "./.cursor/rules/${cmd}.mdc"
             else
@@ -606,7 +606,7 @@ if [ "$CURSOR" = true ]; then
     else
         # Download from GitHub and convert when using --no-base
         echo "  Downloading and converting from GitHub..."
-        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product; do
+        for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product; do
             TEMP_FILE="/tmp/${cmd}.md"
             curl -s -o "$TEMP_FILE" "${BASE_URL}/commands/${cmd}.md"
             if [ -f "$TEMP_FILE" ]; then
@@ -663,9 +663,9 @@ echo "   .agent-os/shared/          - Shared modules (error recovery, state patt
 if [ "$CLAUDE_CODE" = true ]; then
     echo "   .claude/commands/          - Claude Code commands (with embedded instructions)"
     echo "   .claude/agents/            - Claude Code specialized subagents"
-    echo "   .claude/skills/            - Claude Code skills (8 default skills)"
+    echo "   .claude/skills/            - Claude Code skills (9 default skills)"
     if [ "$FULL_SKILLS" = true ]; then
-        echo "   .claude/skills/optional/   - Optional Tier 2 skills (4 additional)"
+        echo "   .claude/skills/optional/   - Optional Tier 2 skills (5 additional)"
     fi
 fi
 
@@ -684,19 +684,21 @@ echo "Next steps:"
 echo ""
 
 if [ "$CLAUDE_CODE" = true ]; then
-    echo "Claude Code useage:"
+    echo "Claude Code usage:"
     echo "  /plan-product    - Set the mission & roadmap for a new product"
     echo "  /analyze-product - Set up the mission and roadmap for an existing product"
-    echo "  /create-spec     - Create a spec for a new feature"
+    echo "  /shape-spec      - Explore and refine a feature concept before full spec"
+    echo "  /create-spec     - Create a detailed spec for a new feature"
     echo "  /execute-tasks   - Build and ship code for a new feature"
     echo ""
 fi
 
 if [ "$CURSOR" = true ]; then
-    echo "Cursor useage:"
+    echo "Cursor usage:"
     echo "  @plan-product    - Set the mission & roadmap for a new product"
     echo "  @analyze-product - Set up the mission and roadmap for an existing product"
-    echo "  @create-spec     - Create a spec for a new feature"
+    echo "  @shape-spec      - Explore and refine a feature concept before full spec"
+    echo "  @create-spec     - Create a detailed spec for a new feature"
     echo "  @execute-tasks   - Build and ship code for a new feature"
     echo ""
 fi

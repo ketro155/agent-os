@@ -12,8 +12,8 @@ Agent OS is a development framework that installs into other projects to provide
 
 ```bash
 # Test installation in a separate test project
-./setup/project.sh --claude-code                 # Basic installation (7 default skills)
-./setup/project.sh --claude-code --full-skills   # Full installation (11 skills)
+./setup/project.sh --claude-code                 # Basic installation (9 default skills)
+./setup/project.sh --claude-code --full-skills   # Full installation (14 skills)
 ./setup/project.sh --claude-code --with-hooks    # With validation hooks
 ./setup/project.sh --cursor                      # Cursor support
 ```
@@ -32,7 +32,11 @@ agent-os/
 │   ├── project.sh         # Main installer
 │   ├── base.sh
 │   └── functions.sh
-├── standards/             # Development standards → copied to .agent-os/standards/
+├── standards/             # Categorized development standards → copied to .agent-os/standards/
+│   ├── global/            # Cross-cutting: coding-style, conventions, error-handling, validation, tech-stack
+│   ├── frontend/          # UI patterns: react-patterns, styling
+│   ├── backend/           # Server patterns: api-design, database
+│   └── testing/           # Test patterns: test-patterns
 ├── config.yml             # Configuration template
 └── SYSTEM-OVERVIEW.md     # Comprehensive system documentation
 ```
@@ -41,7 +45,7 @@ agent-os/
 
 **Commands** (source: `commands/*.md`):
 - `plan-product` / `analyze-product` - Product initialization
-- `create-spec` → `create-tasks` → `execute-tasks` - Feature development pipeline
+- `shape-spec` → `create-spec` → `create-tasks` → `execute-tasks` - Feature development pipeline
 - `index-codebase` - Code reference management
 - `debug` - Context-aware debugging with git integration
 
@@ -64,6 +68,8 @@ agent-os/
 | tdd | Auto-invoke before implementing features to enforce RED-GREEN-REFACTOR |
 | brainstorming | Invoke during spec creation for Socratic design refinement |
 | writing-plans | Invoke during task breakdown for detailed micro-task planning |
+| session-startup | Load progress context, verify environment at execute-tasks start |
+| implementation-verifier | End-to-end verification before delivery (after all tasks complete) |
 
 **Optional Skills** (source: `claude-code/skills/optional/*.md`) - Installed with `--full-skills`:
 
@@ -73,6 +79,7 @@ agent-os/
 | verification | Evidence-based completion verification |
 | skill-creator | Guide for creating custom Agent OS skills |
 | mcp-builder | Guide for creating MCP servers |
+| standards-to-skill | Template for converting standards to skills |
 
 **Native Claude Code Features Used:**
 - **Explore agent**: Specification discovery, document retrieval (replaces spec-cache-manager, context-fetcher)
