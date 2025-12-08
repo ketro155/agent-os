@@ -1,9 +1,73 @@
 #!/bin/bash
 
 # Agent OS Project Installation Script
-# This script installs Agent OS in a project directory
+# This script installs Agent OS in a project directory with embedded instructions
 
 set -e  # Exit on error
+
+# Version information
+AGENT_OS_VERSION="1.7.0"
+AGENT_OS_RELEASE_DATE="2025-12-08"
+
+# Track installation progress for cleanup
+INSTALL_STARTED=false
+DIRECTORIES_CREATED=()
+FILES_CREATED=()
+
+# Cleanup function for failed installations
+cleanup_on_failure() {
+    local exit_code=$?
+
+    # Only cleanup if installation actually started and failed
+    if [ "$INSTALL_STARTED" = true ] && [ $exit_code -ne 0 ]; then
+        echo ""
+        echo "⚠️  Installation failed! Cleaning up partial installation..."
+        echo ""
+
+        # Remove created files (in reverse order)
+        for ((i=${#FILES_CREATED[@]}-1; i>=0; i--)); do
+            if [ -f "${FILES_CREATED[$i]}" ]; then
+                rm -f "${FILES_CREATED[$i]}" 2>/dev/null || true
+                echo "   Removed: ${FILES_CREATED[$i]}"
+            fi
+        done
+
+        # Remove created directories (in reverse order, only if empty)
+        for ((i=${#DIRECTORIES_CREATED[@]}-1; i>=0; i--)); do
+            if [ -d "${DIRECTORIES_CREATED[$i]}" ]; then
+                rmdir "${DIRECTORIES_CREATED[$i]}" 2>/dev/null || true
+            fi
+        done
+
+        echo ""
+        echo "❌ Installation was rolled back. Please check the error above and try again."
+        echo ""
+        echo "If this problem persists, please report it at:"
+        echo "https://github.com/buildermethods/agent-os/issues"
+        echo ""
+    fi
+
+    # Clean up temp files if any
+    rm -f /tmp/agent-os-functions-$$.sh 2>/dev/null || true
+}
+
+# Set trap to cleanup on error, interrupt, or termination
+trap cleanup_on_failure EXIT INT TERM
+
+# Helper function to track created directories
+create_tracked_dir() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        mkdir -p "$dir"
+        DIRECTORIES_CREATED+=("$dir")
+    fi
+}
+
+# Helper function to track created files
+track_file() {
+    local file="$1"
+    FILES_CREATED+=("$file")
+}
 
 # Initialize flags
 NO_BASE=false
@@ -12,6 +76,9 @@ OVERWRITE_STANDARDS=false
 CLAUDE_CODE=false
 CURSOR=false
 PROJECT_TYPE=""
+WITH_HOOKS=false
+FULL_SKILLS=false
+UPGRADE=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -36,6 +103,20 @@ while [[ $# -gt 0 ]]; do
             CURSOR=true
             shift
             ;;
+        --with-hooks)
+            WITH_HOOKS=true
+            shift
+            ;;
+        --full-skills)
+            FULL_SKILLS=true
+            shift
+            ;;
+        --upgrade)
+            UPGRADE=true
+            OVERWRITE_INSTRUCTIONS=true
+            OVERWRITE_STANDARDS=true
+            shift
+            ;;
         --project-type=*)
             PROJECT_TYPE="${1#*=}"
             shift
@@ -44,12 +125,15 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --no-base                   Install from GitHub (not from a base Agent OSinstallation on your system)"
-            echo "  --overwrite-instructions    Overwrite existing instruction files"
-            echo "  --overwrite-standards       Overwrite existing standards files"
-            echo "  --claude-code               Add Claude Code support"
+            echo "  --claude-code               Add Claude Code support (with embedded instructions)"
             echo "  --cursor                    Add Cursor support"
+            echo "  --full-skills               Install all skills including optional Tier 2 skills"
+            echo "  --upgrade                   Upgrade existing installation (overwrites all commands, agents, skills, standards)"
+            echo "  --with-hooks                Add optional validation hooks for state management"
             echo "  --project-type=TYPE         Use specific project type for installation"
+            echo "  --no-base                   Install from GitHub (not from a base installation)"
+            echo "  --overwrite-instructions    Overwrite existing instruction files only"
+            echo "  --overwrite-standards       Overwrite existing standards files only"
             echo "  -h, --help                  Show this help message"
             echo ""
             exit 0
@@ -99,7 +183,17 @@ fi
 echo ""
 echo "📁 Creating project directories..."
 echo ""
-mkdir -p "$INSTALL_DIR"
+
+# Mark installation as started for cleanup tracking
+INSTALL_STARTED=true
+
+# Create directories with tracking for rollback
+create_tracked_dir "$INSTALL_DIR"
+create_tracked_dir "$INSTALL_DIR/state"
+create_tracked_dir "$INSTALL_DIR/state/recovery"
+create_tracked_dir "$INSTALL_DIR/standards"
+create_tracked_dir "$INSTALL_DIR/progress"
+create_tracked_dir "$INSTALL_DIR/progress/archive"
 
 # Configure tools and project type based on installation type
 if [ "$IS_FROM_BASE" = true ]; then
@@ -167,14 +261,12 @@ if [ "$IS_FROM_BASE" = true ]; then
         fi
     fi
 
-    # Copy instructions and standards from determined sources
-    echo ""
-    echo "📥 Installing instruction files to $INSTALL_DIR/instructions/"
-    copy_directory "$INSTRUCTIONS_SOURCE" "$INSTALL_DIR/instructions" "$OVERWRITE_INSTRUCTIONS"
-
+    # Copy only standards from determined sources (instructions are now embedded in commands)
     echo ""
     echo "📥 Installing standards files to $INSTALL_DIR/standards/"
     copy_directory "$STANDARDS_SOURCE" "$INSTALL_DIR/standards" "$OVERWRITE_STANDARDS"
+    
+    # Note: Instructions are now embedded in commands, no need to copy separately
 else
     # Running directly from GitHub - download from GitHub
     if [ -z "$PROJECT_TYPE" ]; then
@@ -190,16 +282,28 @@ fi
 # Handle Claude Code installation for project
 if [ "$CLAUDE_CODE" = true ]; then
     echo ""
-    echo "📥 Installing Claude Code support..."
-    mkdir -p "./.claude/commands"
-    mkdir -p "./.claude/agents"
+    if [ "$UPGRADE" = true ]; then
+        echo "📥 Upgrading Claude Code support..."
+    else
+        echo "📥 Installing Claude Code support..."
+    fi
+    create_tracked_dir "./.claude"
+    create_tracked_dir "./.claude/commands"
+    create_tracked_dir "./.claude/agents"
+    create_tracked_dir "./.claude/skills"
+
+    # Determine overwrite setting for Claude Code files
+    OVERWRITE_CLAUDE="false"
+    if [ "$UPGRADE" = true ]; then
+        OVERWRITE_CLAUDE="true"
+    fi
 
     if [ "$IS_FROM_BASE" = true ]; then
         # Copy from base installation
         echo "  📂 Commands:"
-        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product; do
+        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
             if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
-                copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "false" "commands/${cmd}.md"
+                copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
             else
                 echo "  ⚠️  Warning: ${cmd}.md not found in base installation"
             fi
@@ -207,41 +311,286 @@ if [ "$CLAUDE_CODE" = true ]; then
 
         echo ""
         echo "  📂 Agents:"
-        for agent in context-fetcher date-checker file-creator git-workflow project-manager test-runner; do
+        for agent in git-workflow project-manager codebase-indexer; do
             if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
-                copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "false" "agents/${agent}.md"
+                copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             else
                 echo "  ⚠️  Warning: ${agent}.md not found in base installation"
             fi
         done
+
+        echo ""
+        echo "  📂 Shared Modules:"
+        create_tracked_dir "./.agent-os/shared"
+        for shared in error-recovery state-patterns progress-log task-json; do
+            if [ -f "$BASE_AGENT_OS/shared/${shared}.md" ]; then
+                copy_file "$BASE_AGENT_OS/shared/${shared}.md" "./.agent-os/shared/${shared}.md" "$OVERWRITE_CLAUDE" "shared/${shared}.md"
+            else
+                echo "  ⚠️  Warning: ${shared}.md not found in base installation"
+            fi
+        done
+
+        echo ""
+        echo "  📂 Skills (Tier 1 - Default):"
+        for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup; do
+            if [ -f "$BASE_AGENT_OS/claude-code/skills/${skill}.md" ]; then
+                copy_file "$BASE_AGENT_OS/claude-code/skills/${skill}.md" "./.claude/skills/${skill}.md" "$OVERWRITE_CLAUDE" "skills/${skill}.md"
+            else
+                echo "  ⚠️  Warning: ${skill}.md not found in base installation"
+            fi
+        done
+
+        # Install optional Tier 2 skills if --full-skills flag is set
+        if [ "$FULL_SKILLS" = true ]; then
+            echo ""
+            echo "  📂 Skills (Tier 2 - Optional):"
+            create_tracked_dir "./.claude/skills/optional"
+            for skill in code-review verification skill-creator mcp-builder; do
+                if [ -f "$BASE_AGENT_OS/claude-code/skills/optional/${skill}.md" ]; then
+                    copy_file "$BASE_AGENT_OS/claude-code/skills/optional/${skill}.md" "./.claude/skills/optional/${skill}.md" "$OVERWRITE_CLAUDE" "skills/optional/${skill}.md"
+                else
+                    echo "  ⚠️  Warning: ${skill}.md not found in base installation"
+                fi
+            done
+        fi
     else
         # Download from GitHub when using --no-base
         echo "  Downloading Claude Code files from GitHub..."
         echo ""
         echo "  📂 Commands:"
-        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product; do
+        for cmd in plan-product create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
             download_file "${BASE_URL}/commands/${cmd}.md" \
                 "./.claude/commands/${cmd}.md" \
-                "false" \
+                "$OVERWRITE_CLAUDE" \
                 "commands/${cmd}.md"
         done
 
         echo ""
         echo "  📂 Agents:"
-        for agent in context-fetcher date-checker file-creator git-workflow project-manager test-runner; do
+        for agent in git-workflow project-manager codebase-indexer; do
             download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
                 "./.claude/agents/${agent}.md" \
-                "false" \
+                "$OVERWRITE_CLAUDE" \
                 "agents/${agent}.md"
         done
+
+        echo ""
+        echo "  📂 Shared Modules:"
+        create_tracked_dir "./.agent-os/shared"
+        for shared in error-recovery state-patterns progress-log task-json; do
+            download_file "${BASE_URL}/shared/${shared}.md" \
+                "./.agent-os/shared/${shared}.md" \
+                "$OVERWRITE_CLAUDE" \
+                "shared/${shared}.md"
+        done
+
+        echo ""
+        echo "  📂 Skills (Tier 1 - Default):"
+        for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup; do
+            download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
+                "./.claude/skills/${skill}.md" \
+                "$OVERWRITE_CLAUDE" \
+                "skills/${skill}.md"
+        done
+
+        # Install optional Tier 2 skills if --full-skills flag is set
+        if [ "$FULL_SKILLS" = true ]; then
+            echo ""
+            echo "  📂 Skills (Tier 2 - Optional):"
+            create_tracked_dir "./.claude/skills/optional"
+            for skill in code-review verification skill-creator mcp-builder; do
+                download_file "${BASE_URL}/claude-code/skills/optional/${skill}.md" \
+                    "./.claude/skills/optional/${skill}.md" \
+                    "$OVERWRITE_CLAUDE" \
+                    "skills/optional/${skill}.md"
+            done
+        fi
     fi
+fi
+
+# Initialize state management
+echo ""
+echo "📥 Initializing state management..."
+cat > "$INSTALL_DIR/state/workflow.json" << 'EOF'
+{
+  "state_version": "1.0.0",
+  "current_workflow": null,
+  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
+# Initialize progress log (persistent cross-session memory)
+echo ""
+echo "📥 Initializing progress log..."
+if [ ! -f "$INSTALL_DIR/progress/progress.json" ]; then
+    PROGRESS_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    cat > "$INSTALL_DIR/progress/progress.json" << EOF
+{
+  "version": "1.0",
+  "project": "$PROJECT_NAME",
+  "entries": [
+    {
+      "id": "entry-init-001",
+      "timestamp": "$PROGRESS_TIMESTAMP",
+      "type": "milestone_reached",
+      "data": {
+        "description": "Agent OS installed",
+        "notes": "Progress logging initialized for cross-session memory"
+      }
+    }
+  ],
+  "metadata": {
+    "total_entries": 1,
+    "oldest_entry": "$PROGRESS_TIMESTAMP",
+    "last_updated": "$PROGRESS_TIMESTAMP",
+    "archived_through": null
+  }
+}
+EOF
+    echo "  ✓ Created progress log (progress.json)"
+
+    # Generate initial markdown
+    cat > "$INSTALL_DIR/progress/progress.md" << EOF
+# Agent OS Progress Log
+
+*Project: $PROJECT_NAME*
+*Total entries: 1*
+
+---
+
+## $(date +%Y-%m-%d)
+
+### $(date +%H:%M) - 🎯 Agent OS installed
+- **Details**: Progress logging initialized for cross-session memory
+
+---
+EOF
+    echo "  ✓ Created progress log (progress.md)"
+else
+    echo "  ✓ Progress log already exists (preserved)"
+fi
+
+# Create version tracking file
+echo ""
+echo "📥 Creating version tracking..."
+
+# Determine features installed
+FEATURES_ARRAY="[]"
+if [ "$CLAUDE_CODE" = true ] && [ "$CURSOR" = true ]; then
+    if [ "$WITH_HOOKS" = true ]; then
+        FEATURES_ARRAY='["claude-code", "cursor", "hooks"]'
+    else
+        FEATURES_ARRAY='["claude-code", "cursor"]'
+    fi
+elif [ "$CLAUDE_CODE" = true ]; then
+    if [ "$WITH_HOOKS" = true ]; then
+        FEATURES_ARRAY='["claude-code", "hooks"]'
+    else
+        FEATURES_ARRAY='["claude-code"]'
+    fi
+elif [ "$CURSOR" = true ]; then
+    FEATURES_ARRAY='["cursor"]'
+fi
+
+# Determine skills tier
+SKILLS_TIER="default"
+if [ "$FULL_SKILLS" = true ]; then
+    SKILLS_TIER="full"
+fi
+
+# Get installation timestamp
+INSTALL_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+cat > "$INSTALL_DIR/version.json" << EOF
+{
+  "agent_os_version": "$AGENT_OS_VERSION",
+  "release_date": "$AGENT_OS_RELEASE_DATE",
+  "installed_at": "$INSTALL_TIMESTAMP",
+  "project_type": "$PROJECT_TYPE",
+  "skills_tier": "$SKILLS_TIER",
+  "features": $FEATURES_ARRAY,
+  "installation_source": "$([ "$IS_FROM_BASE" = true ] && echo "base" || echo "github")",
+  "upgrade_info": {
+    "last_checked": null,
+    "available_version": null,
+    "breaking_changes": false
+  }
+}
+EOF
+echo "  ✓ Created version tracking file (v$AGENT_OS_VERSION)"
+
+# Handle optional hooks installation
+if [ "$WITH_HOOKS" = true ]; then
+    echo ""
+    echo "📥 Installing validation hooks..."
+    create_tracked_dir "./.claude/hooks"
+    
+    # Pre-write hook for JSON validation
+    cat > "./.claude/hooks/pre-write.sh" << 'EOF'
+#!/bin/bash
+# Validates JSON state files before writing
+if [[ "$1" == *".agent-os/state/"*.json ]]; then
+    jq empty "$1" 2>/dev/null || {
+        echo "ERROR: Invalid JSON in state file"
+        exit 1
+    }
+fi
+EOF
+    
+    # Post-command hook for cache cleanup
+    cat > "./.claude/hooks/post-command.sh" << 'EOF'
+#!/bin/bash
+# Clean expired caches after command execution
+find .agent-os/state -name "session-cache.json" -mmin +60 \
+    -exec rm {} \; 2>/dev/null
+EOF
+    
+    chmod +x ./.claude/hooks/*.sh
+    echo "  ✓ Installed pre-write validation hook"
+    echo "  ✓ Installed post-command cleanup hook"
+fi
+
+# Update .gitignore for state and cache files
+# NOTE: .agent-os/progress/ is NOT in gitignore - progress logs should be version controlled
+if [ -f .gitignore ]; then
+    # Check if Agent-OS section already exists
+    if ! grep -q "# Agent-OS cache and state files" .gitignore; then
+        echo "" >> .gitignore
+        echo "# Agent-OS cache and state files (excludes progress/ which is version controlled)" >> .gitignore
+        echo ".agent-os/state/session-cache.json" >> .gitignore
+        echo ".agent-os/state/command-state.json" >> .gitignore
+        echo ".agent-os/state/recovery/" >> .gitignore
+        echo ".agent-os/state/.lock" >> .gitignore
+        echo ".agent-os/cache/" >> .gitignore
+        echo ".agent-os/debugging/" >> .gitignore
+        echo ".agent-os/**/*.cache" >> .gitignore
+        echo ".agent-os/**/*.tmp" >> .gitignore
+        echo "  ✓ Updated .gitignore with state exclusions"
+        echo "  ℹ️  Note: .agent-os/progress/ is version controlled (cross-session memory)"
+    fi
+else
+    # Create new .gitignore with Agent-OS entries
+    cat > .gitignore << 'EOF'
+# Agent-OS cache and state files (excludes progress/ which is version controlled)
+.agent-os/state/session-cache.json
+.agent-os/state/command-state.json
+.agent-os/state/recovery/
+.agent-os/state/.lock
+.agent-os/cache/
+.agent-os/debugging/
+.agent-os/**/*.cache
+.agent-os/**/*.tmp
+EOF
+    echo "  ✓ Created .gitignore with state exclusions"
+    echo "  ℹ️  Note: .agent-os/progress/ is version controlled (cross-session memory)"
 fi
 
 # Handle Cursor installation for project
 if [ "$CURSOR" = true ]; then
     echo ""
     echo "📥 Installing Cursor support..."
-    mkdir -p "./.cursor/rules"
+    create_tracked_dir "./.cursor"
+    create_tracked_dir "./.cursor/rules"
 
     echo "  📂 Rules:"
 
@@ -268,17 +617,60 @@ if [ "$CURSOR" = true ]; then
     fi
 fi
 
-# Success message
+# Verify installation
 echo ""
-echo "✅ Agent OS has been installed in your project ($PROJECT_NAME)!"
-echo ""
-echo "📍 Project-level files installed to:"
-echo "   .agent-os/instructions/    - Agent OS instructions"
-echo "   .agent-os/standards/       - Development standards"
+echo "🔍 Verifying installation..."
+
+VERIFICATION_PASSED=true
+
+# Check critical files exist
+if [ ! -f "$INSTALL_DIR/version.json" ]; then
+    echo "  ⚠️  Warning: version.json not created"
+    VERIFICATION_PASSED=false
+fi
+
+if [ ! -f "$INSTALL_DIR/state/workflow.json" ]; then
+    echo "  ⚠️  Warning: workflow.json not created"
+    VERIFICATION_PASSED=false
+fi
 
 if [ "$CLAUDE_CODE" = true ]; then
-    echo "   .claude/commands/          - Claude Code commands"
-    echo "   .claude/agents/            - Claude Code specialized agents"
+    # Verify at least one command exists
+    if [ ! -f "./.claude/commands/execute-tasks.md" ]; then
+        echo "  ⚠️  Warning: Claude Code commands not fully installed"
+        VERIFICATION_PASSED=false
+    fi
+fi
+
+if [ "$VERIFICATION_PASSED" = true ]; then
+    echo "  ✓ All critical files verified"
+fi
+
+# Mark installation as complete (prevents cleanup on exit)
+INSTALL_STARTED=false
+
+# Success message
+echo ""
+echo "✅ Agent OS v$AGENT_OS_VERSION has been installed in your project ($PROJECT_NAME)!"
+echo ""
+echo "📍 Project-level files installed to:"
+echo "   .agent-os/version.json     - Installation version and metadata"
+echo "   .agent-os/standards/       - Development standards"
+echo "   .agent-os/state/           - State management and caching"
+echo "   .agent-os/progress/        - Persistent progress log (cross-session memory)"
+echo "   .agent-os/shared/          - Shared modules (error recovery, state patterns, progress log)"
+
+if [ "$CLAUDE_CODE" = true ]; then
+    echo "   .claude/commands/          - Claude Code commands (with embedded instructions)"
+    echo "   .claude/agents/            - Claude Code specialized subagents"
+    echo "   .claude/skills/            - Claude Code skills (8 default skills)"
+    if [ "$FULL_SKILLS" = true ]; then
+        echo "   .claude/skills/optional/   - Optional Tier 2 skills (4 additional)"
+    fi
+fi
+
+if [ "$WITH_HOOKS" = true ]; then
+    echo "   .claude/hooks/             - Validation and cleanup hooks"
 fi
 
 if [ "$CURSOR" = true ]; then
