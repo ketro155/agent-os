@@ -6,8 +6,8 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="1.8.0"
-AGENT_OS_RELEASE_DATE="2025-12-08"
+AGENT_OS_VERSION="1.9.0"
+AGENT_OS_RELEASE_DATE="2025-12-09"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -311,7 +311,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
         echo ""
         echo "  📂 Agents:"
-        for agent in git-workflow project-manager codebase-indexer; do
+        for agent in git-workflow project-manager codebase-indexer task-orchestrator; do
             if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
                 copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             else
@@ -320,9 +320,20 @@ if [ "$CLAUDE_CODE" = true ]; then
         done
 
         echo ""
+        echo "  📂 Phases (execute-tasks):"
+        create_tracked_dir "./.claude/commands/phases"
+        for phase in execute-phase0 execute-phase1 execute-phase2 execute-phase3; do
+            if [ -f "$BASE_AGENT_OS/commands/phases/${phase}.md" ]; then
+                copy_file "$BASE_AGENT_OS/commands/phases/${phase}.md" "./.claude/commands/phases/${phase}.md" "$OVERWRITE_CLAUDE" "phases/${phase}.md"
+            else
+                echo "  ⚠️  Warning: ${phase}.md not found in base installation"
+            fi
+        done
+
+        echo ""
         echo "  📂 Shared Modules:"
         create_tracked_dir "./.agent-os/shared"
-        for shared in error-recovery state-patterns progress-log task-json; do
+        for shared in error-recovery state-patterns progress-log task-json context-summary; do
             if [ -f "$BASE_AGENT_OS/shared/${shared}.md" ]; then
                 copy_file "$BASE_AGENT_OS/shared/${shared}.md" "./.agent-os/shared/${shared}.md" "$OVERWRITE_CLAUDE" "shared/${shared}.md"
             else
@@ -367,7 +378,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
         echo ""
         echo "  📂 Agents:"
-        for agent in git-workflow project-manager codebase-indexer; do
+        for agent in git-workflow project-manager codebase-indexer task-orchestrator; do
             download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
                 "./.claude/agents/${agent}.md" \
                 "$OVERWRITE_CLAUDE" \
@@ -375,9 +386,19 @@ if [ "$CLAUDE_CODE" = true ]; then
         done
 
         echo ""
+        echo "  📂 Phases (execute-tasks):"
+        create_tracked_dir "./.claude/commands/phases"
+        for phase in execute-phase0 execute-phase1 execute-phase2 execute-phase3; do
+            download_file "${BASE_URL}/commands/phases/${phase}.md" \
+                "./.claude/commands/phases/${phase}.md" \
+                "$OVERWRITE_CLAUDE" \
+                "phases/${phase}.md"
+        done
+
+        echo ""
         echo "  📂 Shared Modules:"
         create_tracked_dir "./.agent-os/shared"
-        for shared in error-recovery state-patterns progress-log task-json; do
+        for shared in error-recovery state-patterns progress-log task-json context-summary; do
             download_file "${BASE_URL}/shared/${shared}.md" \
                 "./.agent-os/shared/${shared}.md" \
                 "$OVERWRITE_CLAUDE" \

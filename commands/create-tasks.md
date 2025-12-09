@@ -28,7 +28,9 @@ Create a tasks list with sub-tasks to execute a feature based on its spec. This 
 - `.agent-os/standards/` (coding standards)
 
 **Creates Files:**
-- `.agent-os/specs/[spec-folder]/tasks.md` (task breakdown)
+- `.agent-os/specs/[spec-folder]/tasks.md` (human-readable task breakdown)
+- `.agent-os/specs/[spec-folder]/tasks.json` (machine-readable, primary format)
+- `.agent-os/specs/[spec-folder]/context-summary.json` (pre-computed context per task)
 
 ## Task Tracking
 **IMPORTANT: Use Claude's TodoWrite tool throughout execution:**
@@ -38,7 +40,8 @@ const todos = [
   { content: "Read and analyze specification documents", status: "pending", activeForm: "Reading and analyzing specification documents" },
   { content: "Analyze codebase references if available", status: "pending", activeForm: "Analyzing codebase references if available" },
   { content: "Generate task breakdown structure", status: "pending", activeForm: "Generating task breakdown structure" },
-  { content: "Create tasks.md file", status: "pending", activeForm: "Creating tasks.md file" },
+  { content: "Create tasks.md and tasks.json files", status: "pending", activeForm: "Creating tasks.md and tasks.json files" },
+  { content: "Generate context-summary.json", status: "pending", activeForm: "Generating context-summary.json" },
   { content: "Present first task summary", status: "pending", activeForm: "Presenting first task summary" },
   { content: "Request execution confirmation", status: "pending", activeForm: "Requesting execution confirmation" }
 ];
@@ -68,9 +71,9 @@ With the user's approval, proceed to creating a tasks list based on the current 
 
 ## Process Flow
 
-### Step 1: Create tasks.md (writing-plans + tdd skills)
+### Step 1: Create tasks.md and tasks.json (writing-plans + tdd skills)
 
-Use the writing-plans skill to create detailed micro-tasks and the tdd skill to enforce test-first structure.
+Use the writing-plans skill to create detailed micro-tasks and the tdd skill to enforce test-first structure. Generate both human-readable (tasks.md) and machine-readable (tasks.json) formats.
 
 **Core Principle:** DOCUMENT EVERYTHING THE EXECUTOR NEEDS TO KNOW
 
@@ -94,12 +97,7 @@ FOR each behavior/component:
   5. Commit
 ```
 
-Create the file: tasks.md inside of the current feature's spec folder using the Write tool.
-
-**File Template:**
-```markdown
-# Spec Tasks
-```
+Create BOTH files inside of the current feature's spec folder using the Write tool.
 
 **Task Structure:**
 - **Major Tasks**:
@@ -113,8 +111,10 @@ Create the file: tasks.md inside of the current feature's spec folder using the 
   - Implementation subtask: minimal code (TDD GREEN phase)
   - Last subtask: verify all tests pass
 
-**Task Template:**
+**tasks.md Template (Human-Readable):**
 ```markdown
+# Spec Tasks
+
 ## Tasks
 
 - [ ] 1. [MAJOR_TASK_DESCRIPTION]
@@ -127,6 +127,43 @@ Create the file: tasks.md inside of the current feature's spec folder using the 
 - [ ] 2. [MAJOR_TASK_DESCRIPTION]
   - [ ] 2.1 Write failing tests for [COMPONENT] (TDD RED)
   - [ ] 2.2 Implement [COMPONENT] (TDD GREEN)
+```
+
+**tasks.json Template (Machine-Readable):**
+```json
+{
+  "version": "1.0",
+  "spec": "[SPEC_FOLDER_NAME]",
+  "spec_path": ".agent-os/specs/[SPEC_FOLDER]/",
+  "created": "[ISO_TIMESTAMP]",
+  "updated": "[ISO_TIMESTAMP]",
+  "tasks": [
+    {
+      "id": "1",
+      "type": "parent",
+      "description": "[MAJOR_TASK_DESCRIPTION]",
+      "status": "pending",
+      "subtasks": ["1.1", "1.2", "1.3", "1.4", "1.5"],
+      "progress_percent": 0
+    },
+    {
+      "id": "1.1",
+      "type": "subtask",
+      "parent": "1",
+      "description": "Write failing tests for [COMPONENT] (TDD RED)",
+      "status": "pending",
+      "attempts": 0
+    }
+  ],
+  "summary": {
+    "total_tasks": 0,
+    "parent_tasks": 0,
+    "subtasks": 0,
+    "completed": 0,
+    "pending": 0,
+    "overall_percent": 0
+  }
+}
 ```
 
 **Ordering Principles:**
@@ -154,6 +191,76 @@ ELSE:
 - Adjust complexity estimates based on code reuse opportunities
 - Include integration tasks for existing components
 - Consider refactoring needs for legacy code integration
+
+### Step 1.5: Generate context-summary.json (NEW)
+
+After creating tasks, pre-compute context summaries for efficient execution.
+
+**Purpose:** Reduce context overhead during execute-tasks by pre-computing what each task needs.
+
+**Instructions:**
+```
+ACTION: Generate context summary
+USE_PATTERN: GENERATE_CONTEXT_SUMMARY_PATTERN from @shared/context-summary.md
+
+FOR each task in tasks.json:
+  EXTRACT:
+    - Relevant spec sections (by keyword matching task description)
+    - Files likely to be modified (from technical-spec.md)
+    - Codebase references for those files (if .agent-os/codebase/ exists)
+    - Applicable standards (coding style, patterns)
+  ESTIMATE: Token count for this task's context
+  STORE: In context-summary.json
+
+CALCULATE: Total estimated tokens, average per task
+```
+
+**context-summary.json Template:**
+```json
+{
+  "version": "1.0",
+  "spec": "[SPEC_FOLDER_NAME]",
+  "generated": "[ISO_TIMESTAMP]",
+  "source_hashes": {
+    "spec.md": "[HASH]",
+    "technical-spec.md": "[HASH]",
+    "tasks.md": "[HASH]"
+  },
+  "global_context": {
+    "product_pitch": "[FROM_MISSION]",
+    "tech_stack": ["[TECH1]", "[TECH2]"],
+    "branch_name": "[DERIVED_FROM_SPEC_FOLDER]"
+  },
+  "tasks": {
+    "1": {
+      "summary": "[TASK_DESCRIPTION]",
+      "spec_sections": ["[SECTION1]", "[SECTION2]"],
+      "relevant_files": ["[FILE1]", "[FILE2]"],
+      "codebase_refs": {
+        "functions": [],
+        "imports": [],
+        "schemas": []
+      },
+      "standards": {
+        "patterns": [],
+        "testing": []
+      },
+      "estimated_tokens": 0
+    }
+  },
+  "metadata": {
+    "total_tasks": 0,
+    "total_estimated_tokens": 0,
+    "average_tokens_per_task": 0
+  }
+}
+```
+
+**Benefits:**
+- ~73% reduction in per-task context tokens during execution
+- Enables orchestrator pattern for multi-task sessions
+- Pre-filters codebase references to relevant files only
+- Workers receive exactly what they need, nothing more
 
 ### Step 2: Execution Readiness Check
 

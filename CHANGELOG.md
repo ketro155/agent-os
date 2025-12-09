@@ -5,6 +5,104 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2025-12-09
+
+### Context Efficiency Architecture
+
+Major update based on Anthropic's "Effective Harnesses for Long-Running Agents" research. This release introduces architectural changes to prevent context window bloat during long task execution sessions.
+
+### New: Task Orchestrator Pattern
+
+For multi-task sessions, a new orchestrator subagent delegates to worker agents:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ TASK ORCHESTRATOR (minimal state, coordinates)          │
+└─────────────────────────────────────────────────────────┘
+        ↓ spawns
+┌─────────────────────────────────────────────────────────┐
+│ TASK WORKER (full context for ONE task, terminates)     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Workers start with fresh context (no accumulation)
+- Scalable to arbitrarily long task lists
+- Consistent code quality throughout session
+
+**New Files:**
+- `.claude/agents/task-orchestrator.md` - Multi-task coordination
+
+### New: Phase-Based Instruction Loading
+
+The `execute-tasks` command now loads instructions on-demand:
+
+```
+execute-tasks.md (~360 lines, shell)
+├── phases/execute-phase0.md (~50 lines) - Session startup
+├── phases/execute-phase1.md (~150 lines) - Task discovery
+├── phases/execute-phase2.md (~200 lines) - Implementation
+└── phases/execute-phase3.md (~150 lines) - Completion
+```
+
+**Savings:** Only ~500 lines loaded at any time vs ~636 all at once
+
+### New: Pre-Computed Context Summaries
+
+`create-tasks` now generates `context-summary.json` alongside `tasks.json`:
+
+| Approach | Tokens per Task |
+|----------|-----------------|
+| Full spec discovery | ~3,000 |
+| Pre-computed summary | ~800 |
+| **Savings** | **~73%** |
+
+**New Files Created by `/create-tasks`:**
+- `tasks.json` - Machine-readable task status (primary format)
+- `context-summary.json` - Pre-computed per-task context
+
+### New: Stricter Single-Task Default
+
+Research shows single-task focus dramatically improves completion rates:
+
+```
+IF 2+ tasks selected:
+  OFFER:
+    1. Single task focus - RECOMMENDED (was: warning only)
+    2. Orchestrated execution - NEW
+    3. Direct multi-task - requires explicit override
+```
+
+### Three Execution Modes
+
+| Mode | Tasks | Strategy | Recommendation |
+|------|-------|----------|----------------|
+| Direct Single | 1 | Full instructions | DEFAULT |
+| Orchestrated | 2+ | Workers per task | For long sessions |
+| Direct Multi | 2+ | All in session | Not recommended |
+
+### New Shared Modules
+
+- `shared/context-summary.md` - Patterns for pre-computed task context
+- `shared/task-json.md` - Patterns for machine-readable task tracking (enhanced)
+
+### Updated Commands
+
+- **execute-tasks.md**: Now lightweight shell (~360 lines vs ~636)
+- **create-tasks.md**: Generates tasks.json + context-summary.json
+
+### Migration Notes
+
+**For existing projects:**
+- Existing `tasks.md` files continue to work (markdown is still source of truth)
+- `tasks.json` and `context-summary.json` are generated alongside
+- Orchestrator mode is optional (direct mode still available)
+- Phase files are loaded automatically when needed
+
+**No breaking changes** - all v1.8.0 workflows continue to function.
+
+---
+
 ## [1.8.0] - 2025-12-08
 
 ### Upstream Integration from buildermethods/agent-os
