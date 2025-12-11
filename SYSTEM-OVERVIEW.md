@@ -662,14 +662,18 @@ Based on Anthropic's "Effective Harnesses for Long-Running Agents" research:
 
 **Phase-Based Instruction Loading:**
 ```
-execute-tasks.md (shell: ~360 lines)
+execute-tasks.md (shell: ~430 lines)
 ├── Phase 0: execute-phase0.md (~50 lines) - Session startup
-├── Phase 1: execute-phase1.md (~150 lines) - Task discovery
-├── Phase 2: execute-phase2.md (~200 lines) - Implementation
-└── Phase 3: execute-phase3.md (~150 lines) - Completion
+├── Phase 1: execute-phase1.md (~150 lines) - Task discovery + git branch setup
+├── Phase 2: execute-phase2.md (~200 lines) - TDD implementation
+└── Phase 3: execute-phase3.md (~150 lines) - Completion + git commit/PR
 
 Total loaded at any time: ~500 lines (vs ~636 all at once)
 ```
+
+**⚠️ CRITICAL**: Phase files MUST be read with the Read tool before execution.
+Each phase contains subagent invocations (git-workflow) that will be skipped if phases are bypassed.
+See `execute-tasks.md` for mandatory enforcement gates.
 
 **Pre-Computed Context (context-summary.json):**
 | Approach | Tokens per Task | Overhead |

@@ -1,5 +1,14 @@
 # Execute Tasks
 
+> ⚠️ **CRITICAL WORKFLOW REQUIREMENT** ⚠️
+>
+> This command uses **phase-based instruction loading**. You MUST read each phase file
+> with the Read tool BEFORE executing that phase. **DO NOT** skip directly to implementation.
+>
+> Phase files location: `.claude/commands/phases/execute-phase[0-3].md`
+>
+> Skipping phases will result in incomplete execution (e.g., missing git workflow, no PR created).
+
 ## Quick Navigation
 - [Description](#description)
 - [Parameters](#parameters)
@@ -176,22 +185,26 @@ This is the lightweight shell that coordinates phases. Full instructions are loa
 
 ## Phase Loading Protocol
 
-Load phase instructions on-demand to conserve context:
+⚠️ **MANDATORY**: Use the Read tool to load each phase file. Do NOT skip phases.
 
 ```
 PHASE_INSTRUCTIONS = {
-  "phase0": "@commands/phases/execute-phase0.md",
-  "phase1": "@commands/phases/execute-phase1.md",
-  "phase2": "@commands/phases/execute-phase2.md",
-  "phase3": "@commands/phases/execute-phase3.md"
+  "phase0": ".claude/commands/phases/execute-phase0.md",
+  "phase1": ".claude/commands/phases/execute-phase1.md",
+  "phase2": ".claude/commands/phases/execute-phase2.md",
+  "phase3": ".claude/commands/phases/execute-phase3.md"
 }
 
 FOR each phase needed:
-  READ: Phase instruction file
-  EXECUTE: Instructions in that phase
-  RELEASE: Phase context when complete (conceptually)
-  PROCEED: To next phase
+  MUST DO: Use Read tool on the phase file path above
+  GATE: Cannot proceed until file is actually read
+  EXECUTE: ALL instructions in that phase (including subagent calls)
+  PROCEED: To next phase only after completion
 ```
+
+**Why This Matters**: Phase files contain critical subagent invocations (git-workflow for
+branches and PRs). Skipping phases means skipping these invocations, resulting in
+incomplete execution.
 
 ## Quick Reference: Key Changes from v1.7
 
@@ -205,17 +218,32 @@ FOR each phase needed:
 
 ## Execution Entry Point
 
-### Step 0: Load and Execute Phase 0
+⚠️ **CRITICAL: PHASE FILES ARE MANDATORY** ⚠️
+
+You MUST use the Read tool to load each phase file BEFORE executing that phase.
+DO NOT skip phases or proceed to implementation without reading the phase instructions.
+This is a BLOCKING requirement - violation results in incomplete execution.
+
+### Step 0: Load and Execute Phase 0 (MANDATORY)
 ```
-ACTION: Read @commands/phases/execute-phase0.md
-EXECUTE: Session startup protocol
+MUST DO: Use Read tool on ".claude/commands/phases/execute-phase0.md"
+         (This file MUST be read - do not skip)
+
+GATE: You cannot proceed until you have READ this file with the Read tool
+
+EXECUTE: All instructions from the file you just read
 OUTPUT: Environment verified, task suggestion ready
 ```
 
-### Step 1: Load and Execute Phase 1
+### Step 1: Load and Execute Phase 1 (MANDATORY)
 ```
-ACTION: Read @commands/phases/execute-phase1.md
-EXECUTE: Task discovery and mode selection
+MUST DO: Use Read tool on ".claude/commands/phases/execute-phase1.md"
+         (This file MUST be read - do not skip)
+
+GATE: You cannot proceed until you have READ this file with the Read tool
+
+EXECUTE: All instructions from the file you just read
+         - This includes git-workflow subagent for branch setup!
 OUTPUT: execution_mode determined (direct/orchestrated)
 ```
 
@@ -252,17 +280,34 @@ ELSE IF execution_mode == "orchestrated_sequential":
   SKIP: To Phase 3 completion steps (Step 10+)
 
 ELSE (direct modes):
-  ACTION: Read @commands/phases/execute-phase2.md
-  EXECUTE: Task execution loop
+  MUST DO: Use Read tool on ".claude/commands/phases/execute-phase2.md"
+           (This file MUST be read - do not skip)
+  GATE: You cannot proceed until you have READ this file with the Read tool
+  EXECUTE: Task execution loop from the file you just read
   OUTPUT: All tasks completed
 ```
 
-### Step 3: Load and Execute Phase 3
+### Step 3: Load and Execute Phase 3 (MANDATORY)
 ```
-ACTION: Read @commands/phases/execute-phase3.md
-EXECUTE: Completion and delivery workflow
+MUST DO: Use Read tool on ".claude/commands/phases/execute-phase3.md"
+         (This file MUST be read - do not skip)
+
+GATE: You cannot proceed until you have READ this file with the Read tool
+
+EXECUTE: Completion and delivery workflow from the file you just read
+         - This includes git-workflow subagent for commit/PR!
 OUTPUT: PR created, documentation done
 ```
+
+### Phase Enforcement Checklist
+Before claiming task completion, verify ALL phases were executed:
+
+☐ Phase 0: session-startup invoked, environment verified
+☐ Phase 1: git-workflow subagent invoked for branch setup
+☐ Phase 2: TDD cycle completed with test evidence
+☐ Phase 3: git-workflow subagent invoked for commit AND PR creation
+
+If any checkbox is uncompleted, GO BACK and complete that phase.
 
 ## Skills Auto-Invoked
 

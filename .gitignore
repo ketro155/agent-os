@@ -32,3 +32,13 @@ node_modules/
 # Temporary files
 *.tmp
 *.temp
+
+# Agent-OS cache and state files (excludes progress/ which is version controlled)
+.agent-os/state/session-cache.json
+.agent-os/state/command-state.json
+.agent-os/state/recovery/
+.agent-os/state/.lock
+.agent-os/cache/
+.agent-os/debugging/
+.agent-os/**/*.cache
+.agent-os/**/*.tmp

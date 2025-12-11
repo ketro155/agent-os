@@ -77,6 +77,22 @@ Command is now optional, recommended only for:
 - `QUERY_PREDECESSOR_ARTIFACTS_PATTERN`: Get artifacts from predecessor tasks
 - `VERIFY_PREDECESSOR_OUTPUTS_PATTERN`: Verify predecessors' outputs exist
 
+### Fixed: Phase File Loading Enforcement
+
+Strengthened phase-based execution to prevent agents from skipping critical workflow steps:
+
+**Problem**: Agents could bypass phase file loading and skip directly to implementation, missing git-workflow subagent calls (no branch setup, no commit, no PR).
+
+**Solution**: Added mandatory enforcement language throughout `execute-tasks.md`:
+- Prominent warning banner at top of file
+- `MUST DO:` and `GATE:` language for each phase
+- Explicit Read tool instructions (not just `@` references)
+- Phase Enforcement Checklist before task completion
+- Clear explanation of consequences (missing git workflow)
+
+**Changed Files**:
+- `commands/execute-tasks.md`: Added enforcement sections at lines 3-10, 186-207, 214-306
+
 ---
 
 ## [2.0.0] - 2025-12-11
