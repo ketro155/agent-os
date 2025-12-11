@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v2.1.0 Task Artifacts**: Tasks now record their outputs (files created, functions exported) in tasks.json. This enables cross-task verification without maintaining a separate codebase index. The codebase-names skill uses live Grep + task artifacts for reliable name validation.
+
 **v2.0.0 Parallel Async Execution**: Leverages Claude Code's async agent capabilities (`run_in_background`, `AgentOutputTool`) for true parallel task execution. Independent tasks now run simultaneously via wave-based orchestration, providing 1.5-3x speedup.
 
 **v1.9.0+ Context Efficiency**: Based on Anthropic's "Effective Harnesses for Long-Running Agents" research, execute-tasks now uses phase-based loading, pre-computed context summaries, and an orchestrator pattern for multi-task sessions. See CHANGELOG.md for details.
@@ -50,7 +52,7 @@ agent-os/
 **Commands** (source: `commands/*.md`):
 - `plan-product` / `analyze-product` - Product initialization
 - `shape-spec` → `create-spec` → `create-tasks` → `execute-tasks` - Feature development pipeline
-- `index-codebase` - Code reference management
+- `index-codebase` - Code reference management (legacy - replaced by task artifacts)
 - `debug` - Context-aware debugging with git integration
 
 **Subagents** (source: `claude-code/agents/*.md`):
@@ -58,7 +60,7 @@ agent-os/
 | Subagent | Purpose |
 |----------|---------|
 | git-workflow | Branch management, commits, PRs |
-| codebase-indexer | Code reference updates |
+| codebase-indexer | Code reference updates (deprecated v2.1 - use task artifacts) |
 | project-manager | Task/roadmap updates |
 | task-orchestrator | Multi-task coordination with workers (v1.9.0+) |
 
@@ -77,7 +79,7 @@ agent-os/
 |-------|---------|
 | build-check | Auto-invoke before commits to verify build and classify errors |
 | test-check | Auto-invoke after code changes to run and analyze tests |
-| codebase-names | Auto-invoke when writing code to validate existing function/variable names |
+| codebase-names | Auto-invoke when writing code to validate names via live Grep + task artifacts (v2.1) |
 | systematic-debugging | Auto-invoke when debugging to enforce 4-phase root cause analysis |
 | tdd | Auto-invoke before implementing features to enforce RED-GREEN-REFACTOR |
 | brainstorming | Invoke during spec creation for Socratic design refinement |

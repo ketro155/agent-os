@@ -253,8 +253,10 @@ Target Project/
 
 ---
 
-### 6. `/index-codebase` - Code Reference Management
-**Purpose**: Create searchable index of codebase
+### 6. `/index-codebase` - Code Reference Management (Legacy v2.1)
+**Purpose**: Create searchable index of codebase (optional/legacy)
+
+**Note (v2.1)**: This command is now optional. Task artifacts in tasks.json combined with live Grep searches provide more reliable cross-task verification. Use this command only for initial project exploration or generating human-readable documentation.
 
 **Workflow**:
 1. Scan all source files
@@ -269,6 +271,11 @@ Target Project/
   - `functions.md` - All function signatures
   - `imports.md` - Import/export mappings
   - `schemas.md` - Data structures
+
+**Recommended Alternative (v2.1)**:
+- For task execution: Task artifacts are automatically collected and stored in tasks.json
+- For name verification: codebase-names skill uses live Grep + task artifacts
+- For exploration: Use Claude Code's native Explore agent
 
 **Dependencies**: Source code files
 
@@ -328,7 +335,7 @@ Commands leverage a hybrid approach of native Claude Code features and specializ
 | Subagent | Purpose | Used By |
 |----------|---------|---------|
 | **git-workflow** | Branch management, commits, PRs | execute-tasks, debug |
-| **codebase-indexer** | Code reference updates | execute-tasks, index-codebase, debug |
+| **codebase-indexer** | Code reference updates (deprecated v2.1 - use task artifacts) | index-codebase (legacy) |
 | **project-manager** | Task/roadmap updates, notifications | execute-tasks, create-spec |
 | **task-orchestrator** | Multi-task coordination with workers (v1.9.0+) | execute-tasks (orchestrated mode) |
 
@@ -383,6 +390,41 @@ Wave 2: Dependent Tasks (after Wave 1 completes)
 - Consistent quality throughout session
 - **1.5-3x speedup for parallel-friendly specs (v2.0)**
 
+### Task Artifacts (v2.1)
+
+Tasks now record their outputs for cross-task verification:
+
+```json
+// In tasks.json - each completed task includes:
+{
+  "id": "1",
+  "status": "pass",
+  "artifacts": {
+    "files_modified": ["src/auth/middleware.ts"],
+    "files_created": ["src/auth/login.ts", "src/auth/token.ts"],
+    "functions_created": ["login", "validateToken", "refreshToken"],
+    "exports_added": ["login", "validateToken", "refreshToken", "AuthError"],
+    "test_files": ["tests/auth/login.test.ts"]
+  }
+}
+```
+
+**How artifacts are used:**
+1. **Collection** (Step 7.7): After task completion, git diff extracts file changes and Grep extracts exports
+2. **Persistence** (Step 7.10): Artifacts stored in tasks.json via UPDATE_TASK_METADATA_PATTERN
+3. **Verification** (Step 7.3): Subsequent tasks query predecessor artifacts and verify with live Grep
+
+**Benefits over static codebase index:**
+- Always fresh (collected after each task)
+- Task-scoped (know exactly what each task created)
+- No maintenance (automatic collection)
+- Supports parallel execution (workers report artifacts)
+
+**Replaces:**
+- `codebase-indexer` subagent (deprecated)
+- `index-codebase` command for task execution (now optional/legacy)
+- Step 7.7's conditional index updates
+
 ### Skills (Auto-Invoked)
 
 Skills handle functionality that was previously subagent-based:
@@ -403,7 +445,7 @@ Skills are auto-invoked by Claude based on context. They live in `.claude/skills
 |-------|---------|---------------------|
 | **build-check** | Verify build, classify errors | Before git commits |
 | **test-check** | Run tests, analyze failures | After code implementation |
-| **codebase-names** | Validate names against codebase index | Before writing code |
+| **codebase-names** | Validate names via live Grep + task artifacts (v2.1) | Before writing code |
 | **systematic-debugging** | 4-phase root cause analysis | When debugging issues |
 | **tdd** | Enforce RED-GREEN-REFACTOR cycle | Before implementing features |
 | **brainstorming** | Socratic design refinement | During spec creation |

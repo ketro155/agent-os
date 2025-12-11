@@ -1,5 +1,24 @@
 # Index Codebase
 
+## ⚠️ Legacy Command (v2.1)
+
+**This command is now optional/legacy.** As of v2.1, Agent OS uses:
+- **Task Artifacts** in tasks.json for cross-task verification
+- **Live Grep searches** for name validation
+- **codebase-names skill** for real-time verification
+
+**When to still use this command:**
+- Initial project onboarding (optional baseline documentation)
+- Large codebase exploration before starting specs
+- Generating human-readable reference documentation
+
+**Recommended alternative:**
+- For task execution: Task artifacts are automatically collected
+- For name verification: codebase-names skill uses live Grep
+- For exploration: Use Claude Code's native Explore agent
+
+---
+
 ## Quick Navigation
 - [Description](#description)
 - [Parameters](#parameters)
@@ -11,7 +30,9 @@
 - [Subagent Integration](#subagent-integration)
 
 ## Description
-Initialize codebase reference documentation for an existing project. This is a one-time setup that creates the initial reference index, which is then maintained incrementally during task execution. Creates comprehensive documentation of function signatures, exports, imports, and schemas.
+Initialize codebase reference documentation for an existing project. This creates a static snapshot of function signatures, exports, imports, and schemas.
+
+**Note (v2.1):** The static index created by this command may become stale during task execution. For dynamic verification, use the codebase-names skill which performs live Grep searches and queries task artifacts.
 
 ## Parameters
 - `force_rebuild` (optional): Boolean to force complete rebuild of existing references

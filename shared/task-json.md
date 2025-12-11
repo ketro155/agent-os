@@ -2,7 +2,7 @@
 
 Canonical patterns for machine-readable task tracking alongside markdown. JSON provides programmatic access while markdown remains the human-editable source of truth.
 
-**Version**: 2.0 - Adds parallelization schema for async agent execution.
+**Version**: 2.1 - Adds artifacts tracking for cross-task verification (replaces codebase-indexer).
 
 ---
 
@@ -13,6 +13,7 @@ Canonical patterns for machine-readable task tracking alongside markdown. JSON p
 3. **Metadata Preserved**: JSON stores additional metadata not in markdown
 4. **Bidirectional Sync**: Changes sync from markdown to JSON (not reverse)
 5. **Parallel-Aware**: JSON includes dependency graph and execution waves (v2.0)
+6. **Artifact Tracking**: JSON records outputs (files, functions, exports) for cross-task verification (v2.1)
 
 ---
 
@@ -28,12 +29,12 @@ Canonical patterns for machine-readable task tracking alongside markdown. JSON p
 
 ## JSON Schema
 
-### tasks.json Structure (v2.0)
+### tasks.json Structure (v2.1)
 
 ```json
 {
-  "$schema": "https://agent-os.dev/schemas/tasks-v2.json",
-  "version": "2.0",
+  "$schema": "https://agent-os.dev/schemas/tasks-v2.1.json",
+  "version": "2.1",
   "spec": "feature-name",
   "spec_path": ".agent-os/specs/feature-name/",
   "created": "2025-12-08T10:00:00Z",
@@ -64,11 +65,11 @@ Canonical patterns for machine-readable task tracking alongside markdown. JSON p
       "id": "1",
       "type": "parent",
       "description": "Implement authentication endpoints",
-      "status": "in_progress",
+      "status": "pass",
       "subtasks": ["1.1", "1.2", "1.3"],
-      "progress_percent": 66,
+      "progress_percent": 100,
       "started_at": "2025-12-08T10:30:00Z",
-      "completed_at": null,
+      "completed_at": "2025-12-08T14:00:00Z",
       "parallelization": {
         "wave": 1,
         "can_parallel_with": ["2"],
@@ -76,6 +77,13 @@ Canonical patterns for machine-readable task tracking alongside markdown. JSON p
         "blocks": ["3"],
         "shared_files": ["src/auth/middleware.ts"],
         "isolation_score": 0.85
+      },
+      "artifacts": {
+        "files_modified": ["src/auth/middleware.ts"],
+        "files_created": ["src/auth/login.ts", "src/auth/token.ts", "tests/auth/login.test.ts"],
+        "functions_created": ["login", "validateToken", "refreshToken", "hashPassword"],
+        "exports_added": ["login", "validateToken", "refreshToken", "hashPassword", "AuthError"],
+        "test_files": ["tests/auth/login.test.ts", "tests/auth/token.test.ts"]
       }
     },
     {
@@ -217,6 +225,17 @@ Canonical patterns for machine-readable task tracking alongside markdown. JSON p
 | `duration_minutes` | number | Total time spent |
 | `notes` | string | Additional context |
 | `blocker` | string | Blocker description if blocked |
+| `artifacts` | object | Output tracking for cross-task verification (v2.1, parent tasks only) |
+
+**Artifacts fields (v2.1, parent tasks only):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `files_modified` | array | Files that existed and were changed |
+| `files_created` | array | New files created by this task |
+| `functions_created` | array | New function/method names added |
+| `exports_added` | array | New exports (functions, classes, constants) |
+| `test_files` | array | Test files created or modified |
 
 **Parallelization fields (v2.0, parent tasks only):**
 
@@ -442,11 +461,22 @@ function updateTaskMetadata(specFolder, taskId, metadata) {
     task.blocker = metadata.blocker;
   }
 
-  // 4. Recalculate summary
+  // 4. Record artifacts on completion (v2.1)
+  if (metadata.status === 'pass' && metadata.artifacts) {
+    task.artifacts = {
+      files_modified: metadata.artifacts.files_modified || [],
+      files_created: metadata.artifacts.files_created || [],
+      functions_created: metadata.artifacts.functions_created || [],
+      exports_added: metadata.artifacts.exports_added || [],
+      test_files: metadata.artifacts.test_files || []
+    };
+  }
+
+  // 5. Recalculate summary
   tasksJson.summary = calculateSummary(tasksJson.tasks);
   tasksJson.updated = new Date().toISOString();
 
-  // 5. Write JSON (atomic)
+  // 6. Write JSON (atomic)
   const tempPath = `${jsonPath}.tmp`;
   writeFileSync(tempPath, JSON.stringify(tasksJson, null, 2));
   renameSync(tempPath, jsonPath);
@@ -760,6 +790,200 @@ function getParallelStatus(specFolder) {
 
 ---
 
+## Pattern: Collect Task Artifacts (v2.1)
+
+Collect artifacts from git diff and code analysis after task completion.
+
+```javascript
+// COLLECT_ARTIFACTS_PATTERN
+function collectTaskArtifacts(taskStartCommit) {
+  const artifacts = {
+    files_modified: [],
+    files_created: [],
+    functions_created: [],
+    exports_added: [],
+    test_files: []
+  };
+
+  // 1. Get modified and created files from git
+  // git diff --name-status <start_commit> HEAD
+  const diffOutput = execSync(
+    `git diff --name-status ${taskStartCommit} HEAD`
+  ).toString();
+
+  for (const line of diffOutput.split('\n')) {
+    if (!line.trim()) continue;
+    const [status, ...pathParts] = line.split('\t');
+    const filePath = pathParts.join('\t');
+
+    if (status === 'A') {
+      artifacts.files_created.push(filePath);
+      if (filePath.includes('.test.') || filePath.includes('.spec.')) {
+        artifacts.test_files.push(filePath);
+      }
+    } else if (status === 'M') {
+      artifacts.files_modified.push(filePath);
+      if (filePath.includes('.test.') || filePath.includes('.spec.')) {
+        artifacts.test_files.push(filePath);
+      }
+    }
+  }
+
+  // 2. Extract exports from created files
+  for (const file of artifacts.files_created) {
+    if (file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.jsx')) {
+      const exports = extractExportsFromFile(file);
+      artifacts.exports_added.push(...exports);
+      artifacts.functions_created.push(...exports.filter(e => !e.includes('Type') && !e.includes('Interface')));
+    } else if (file.endsWith('.py')) {
+      const exports = extractPythonExportsFromFile(file);
+      artifacts.exports_added.push(...exports);
+      artifacts.functions_created.push(...exports);
+    }
+  }
+
+  return artifacts;
+}
+
+function extractExportsFromFile(filePath) {
+  // Use grep to find export statements
+  // grep -E "export (const|function|class|type|interface)" <file>
+  const exports = [];
+  try {
+    const content = readFileSync(filePath, 'utf8');
+    const exportPattern = /export\s+(?:const|function|class|type|interface|enum)\s+(\w+)/g;
+    const defaultPattern = /export\s+default\s+(?:function\s+)?(\w+)/g;
+
+    let match;
+    while ((match = exportPattern.exec(content)) !== null) {
+      exports.push(match[1]);
+    }
+    while ((match = defaultPattern.exec(content)) !== null) {
+      exports.push(match[1]);
+    }
+  } catch (e) {
+    // File may not exist or be readable
+  }
+  return exports;
+}
+
+function extractPythonExportsFromFile(filePath) {
+  const exports = [];
+  try {
+    const content = readFileSync(filePath, 'utf8');
+    // Match function and class definitions
+    const funcPattern = /^def\s+(\w+)\s*\(/gm;
+    const classPattern = /^class\s+(\w+)/gm;
+
+    let match;
+    while ((match = funcPattern.exec(content)) !== null) {
+      if (!match[1].startsWith('_')) { // Skip private functions
+        exports.push(match[1]);
+      }
+    }
+    while ((match = classPattern.exec(content)) !== null) {
+      exports.push(match[1]);
+    }
+  } catch (e) {
+    // File may not exist or be readable
+  }
+  return exports;
+}
+```
+
+---
+
+## Pattern: Query Predecessor Artifacts (v2.1)
+
+Get artifacts from tasks that this task depends on.
+
+```javascript
+// QUERY_PREDECESSOR_ARTIFACTS_PATTERN
+function getPredecessorArtifacts(specFolder, taskId) {
+  const jsonPath = `${specFolder}/tasks.json`;
+  const tasksJson = JSON.parse(readFileSync(jsonPath, 'utf8'));
+
+  const task = tasksJson.tasks.find(t => t.id === taskId);
+  if (!task || !task.parallelization) {
+    return { predecessors: [], all_exports: [], all_files: [] };
+  }
+
+  const predecessorIds = task.parallelization.blocked_by || [];
+  const predecessors = [];
+  const allExports = [];
+  const allFiles = [];
+
+  for (const predId of predecessorIds) {
+    const predTask = tasksJson.tasks.find(t => t.id === predId);
+    if (predTask && predTask.artifacts) {
+      predecessors.push({
+        task_id: predId,
+        description: predTask.description,
+        artifacts: predTask.artifacts
+      });
+      allExports.push(...(predTask.artifacts.exports_added || []));
+      allFiles.push(
+        ...(predTask.artifacts.files_created || []),
+        ...(predTask.artifacts.files_modified || [])
+      );
+    }
+  }
+
+  return {
+    predecessors,
+    all_exports: [...new Set(allExports)],
+    all_files: [...new Set(allFiles)]
+  };
+}
+```
+
+---
+
+## Pattern: Verify Predecessor Outputs (v2.1)
+
+Verify that expected outputs from predecessor tasks actually exist.
+
+```javascript
+// VERIFY_PREDECESSOR_OUTPUTS_PATTERN
+function verifyPredecessorOutputs(specFolder, taskId) {
+  const { predecessors, all_exports, all_files } = getPredecessorArtifacts(specFolder, taskId);
+
+  const verification = {
+    verified: true,
+    missing_files: [],
+    missing_exports: [],
+    warnings: []
+  };
+
+  // 1. Verify files exist
+  for (const file of all_files) {
+    if (!existsSync(file)) {
+      verification.verified = false;
+      verification.missing_files.push(file);
+    }
+  }
+
+  // 2. Verify exports exist (grep for them in files)
+  for (const exportName of all_exports) {
+    // Quick grep to verify export exists
+    try {
+      const result = execSync(
+        `grep -r "export.*${exportName}" --include="*.ts" --include="*.js" --include="*.py" src/ 2>/dev/null || true`
+      ).toString();
+      if (!result.trim()) {
+        verification.warnings.push(`Export '${exportName}' not found in codebase - may need live verification`);
+      }
+    } catch (e) {
+      verification.warnings.push(`Could not verify export '${exportName}'`);
+    }
+  }
+
+  return verification;
+}
+```
+
+---
+
 ## Usage in Commands
 
 Reference these patterns:
@@ -774,14 +998,23 @@ Use patterns from @shared/task-json.md:
 - Query status: QUERY_TASKS_PATTERN
 - Analyze parallelization: ANALYZE_PARALLELIZATION_PATTERN (v2.0)
 - Query parallel status: QUERY_PARALLEL_STATUS_PATTERN (v2.0)
+- Collect artifacts: COLLECT_ARTIFACTS_PATTERN (v2.1)
+- Query predecessors: QUERY_PREDECESSOR_ARTIFACTS_PATTERN (v2.1)
+- Verify outputs: VERIFY_PREDECESSOR_OUTPUTS_PATTERN (v2.1)
 
 Sync triggers:
 - After checkbox change in tasks.md
 - At session startup (validation)
-- After task completion (with metadata)
+- After task completion (with metadata and artifacts)
 
 Parallel execution (v2.0):
 - Generate waves at create-tasks time
 - Query ready tasks at execute-tasks time
 - Update wave status after each task completion
+
+Artifact tracking (v2.1):
+- Collect artifacts after task completion via git diff
+- Query predecessor artifacts before starting dependent tasks
+- Verify predecessor outputs exist before coding
+- Replaces need for separate codebase-indexer
 ```

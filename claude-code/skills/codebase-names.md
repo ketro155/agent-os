@@ -1,12 +1,14 @@
 ---
 name: codebase-names
-description: "Validate function, variable, and component names against the codebase index before writing code. Auto-invoke this skill when referencing existing functions, importing components, or modifying files with existing code."
+description: "Validate function, variable, and component names using live codebase search and task artifacts before writing code. Auto-invoke this skill when referencing existing functions, importing components, or modifying files with existing code."
 allowed-tools: Read, Grep, Glob
 ---
 
-# Codebase Names Validation Skill
+# Codebase Names Validation Skill (v2.1)
 
-Automatically validate exact names from the codebase index to prevent naming errors when writing code that integrates with existing functions, components, or variables.
+Automatically validate exact names using **live Grep searches** and **task artifacts** to prevent naming errors when writing code that integrates with existing functions, components, or variables.
+
+**Version 2.1 Change**: Replaces static codebase index with live search + task artifact verification.
 
 ## When to Use This Skill
 
@@ -16,96 +18,167 @@ Claude should automatically invoke this skill:
 - **Before modifying existing files** with function references
 - **When referencing existing variables/classes/types**
 - **When using database table or API endpoint names**
+- **When a task depends on outputs from a previous task**
 
-## Codebase Reference Files
+## Data Sources (Priority Order)
 
-Look for these files in `.agent-os/codebase/`:
-- `functions.md` - Function signatures with parameters and return types
-- `imports.md` - Component and utility import paths
-- `schemas.md` - Database tables and API endpoints
+### 1. Task Artifacts (Most Reliable for Recent Tasks)
+
+Check `tasks.json` for artifacts from completed predecessor tasks:
+
+```bash
+# Read task artifacts from tasks.json
+grep -A 20 '"artifacts"' .agent-os/specs/[spec-name]/tasks.json
+```
+
+Task artifacts contain:
+- `exports_added`: Functions/classes created by predecessor tasks
+- `files_created`: New files that can be imported from
+- `functions_created`: Function names available for calling
+
+**Why artifacts are reliable**: They record actual outputs from just-completed tasks, not predictions.
+
+### 2. Live Codebase Search (Always Fresh)
+
+Use Grep to search the actual codebase:
+
+```bash
+# Find function definition
+grep -r "export.*functionName" src/
+
+# Find component export
+grep -r "export.*ComponentName" --include="*.tsx" --include="*.ts" src/
+
+# Find class definition
+grep -r "class ClassName" --include="*.ts" --include="*.py" src/
+
+# Find type/interface
+grep -r "export type\|export interface" --include="*.ts" src/types/
+```
+
+### 3. Static Index (Optional Fallback - May Be Stale)
+
+If `.agent-os/codebase/` exists, it can serve as a hint but **should be verified**:
+- `functions.md` - May have outdated line numbers
+- `imports.md` - May miss recent additions
+- `schemas.md` - Database/API definitions
+
+**Warning**: Static index may be outdated. Always verify critical names with live search.
 
 ## Workflow
 
-### 1. Identify Target Modules
-From the current task, determine which modules/areas need name validation.
+### Step 1: Check Task Dependencies
 
-### 2. Search Codebase References
-```bash
-# For function names
-grep "functionName" .agent-os/codebase/functions.md
+If working on a task with dependencies:
 
-# For component imports
-grep "ComponentName" .agent-os/codebase/imports.md
-
-# For schemas
-grep "table_name" .agent-os/codebase/schemas.md
+```
+READ: tasks.json for current spec
+FIND: Current task's parallelization.blocked_by list
+FOR each predecessor task:
+  EXTRACT: artifacts.exports_added, artifacts.files_created
+  ADD: To verified names list
 ```
 
-### 3. Provide Exact Names Reference
+### Step 2: Live Search for Other Names
+
+For names not from predecessor artifacts:
+
+```bash
+# Search for function
+grep -rn "export function ${name}\|export const ${name}" src/
+
+# Search for component
+grep -rn "export default.*${name}\|export { ${name}" src/
+
+# Search for type
+grep -rn "export type ${name}\|export interface ${name}" src/
+```
+
+### Step 3: Verify and Format
+
+Build reference sheet with verified names only.
 
 ## Output Format
 
 ```markdown
-📚 Existing Names Reference
+📚 Verified Names Reference
 
-Functions (from [file-path]):
-- exactFunctionName(param1, param2): ReturnType ::line:42
-- anotherFunction(param): ReturnType ::line:87
+### From Predecessor Tasks (Task 1 artifacts):
+✓ validateUser - from src/auth/validate.ts (Task 1)
+✓ hashPassword - from src/auth/validate.ts (Task 1)
+✓ AuthError - from src/auth/errors.ts (Task 1)
 
-Components/Imports:
-- import { ExactComponentName } from '@/exact/path'
-- import { useExactHook } from '@/hooks/exact-name'
+### From Live Codebase Search:
+✓ UserService (grep: src/services/user.ts:15)
+✓ DatabaseConnection (grep: src/lib/database.ts:8)
 
-Variables (in [file-path]):
-- exactVariableName: Type
-- anotherVariable: Type
+### Import Paths (verified):
+import { validateUser, hashPassword } from '@/auth/validate'
+import { UserService } from '@/services/user'
 
-Schemas:
-- table_name (columns: id, name, created_at)
-- api/exact/endpoint
-
-⚠️  USE THESE EXACT NAMES - DO NOT GUESS OR APPROXIMATE
+⚠️  USE THESE EXACT NAMES - VERIFIED VIA ARTIFACTS OR LIVE SEARCH
 ```
 
-## Smart Module Detection
+## Smart Search Patterns
 
-Based on task context, automatically search for:
+Based on task context, use targeted searches:
 
 **Auth-related tasks:**
-- Grep "## src/auth/" or "## lib/auth/" in functions.md
-- Find auth utilities, validation functions, token handlers
+```bash
+grep -rn "export.*auth\|export.*token\|export.*session" src/
+```
 
 **Component tasks:**
-- Grep component names in imports.md
-- Find related hooks and utilities
+```bash
+grep -rn "export default\|export function" --include="*.tsx" src/components/
+```
 
 **API/Backend tasks:**
-- Grep API-related functions in functions.md
-- Extract schemas from schemas.md
+```bash
+grep -rn "export.*router\|export.*handler\|export.*controller" src/
+```
 
 **Database tasks:**
-- Grep table names in schemas.md
-- Find model functions in functions.md
+```bash
+grep -rn "schema\|model\|table" --include="*.ts" --include="*.py" src/
+```
 
 ## Missing Names Protocol
 
 If requested names are not found:
-```
-❌ Not Found in Codebase Index
+
+```markdown
+❌ Name Not Found
 
 Could not locate: [function/component/variable name]
 
-Options:
-1. Name may not exist - needs to be created
-2. Codebase index may be outdated - run /index-codebase
-3. Name may be in different module - specify alternate location
+Searched:
+1. ✗ Task artifacts (no predecessor with this export)
+2. ✗ Live grep: grep -r "export.*${name}" src/
+3. ✗ Static index (if exists): .agent-os/codebase/
 
-DO NOT proceed with guessed names. Clarify with user.
+Possible reasons:
+1. Name doesn't exist yet - needs to be created
+2. Name uses different casing or spelling
+3. Name is in unexpected location
+
+DO NOT proceed with guessed names.
+ACTION: Create the function/component, or clarify with user.
 ```
 
 ## Key Principles
 
-1. **Exact Names Only**: Never guess or approximate - use exact names from index
-2. **Proactive Validation**: Provide names before code is written, not after
-3. **Copy-Paste Ready**: Format names for easy use in code
-4. **Clear Warnings**: Alert when names are missing or potentially outdated
+1. **Live Search First**: Always use Grep for verification - it's always current
+2. **Trust Task Artifacts**: Predecessor task artifacts are reliable (just created)
+3. **Verify Static Index**: If using .agent-os/codebase/, verify critical names
+4. **Exact Names Only**: Never guess or approximate - search and confirm
+5. **Copy-Paste Ready**: Format names for easy use in code
+6. **Clear Sources**: Always indicate where the name was found
+
+## Migration from Static Index
+
+The static codebase index (`.agent-os/codebase/`) is deprecated in v2.1:
+- **Before**: Search static index files → risk of stale data
+- **After**: Live Grep + task artifacts → always current
+
+If the static index exists, it can still be used as a hint, but live verification is required for critical names.

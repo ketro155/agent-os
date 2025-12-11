@@ -5,6 +5,80 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2025-12-11
+
+### Task Artifacts for Cross-Task Verification
+
+Major update replacing the static codebase-indexer with dynamic task artifacts. Tasks now record their outputs (files created, functions exported) in tasks.json, enabling reliable cross-task verification without maintaining a separate codebase index.
+
+### New: Task Artifacts Schema (v2.1)
+
+Each completed task now includes an `artifacts` object:
+
+```json
+{
+  "id": "1",
+  "status": "pass",
+  "artifacts": {
+    "files_modified": ["src/auth/middleware.ts"],
+    "files_created": ["src/auth/login.ts", "src/auth/token.ts"],
+    "functions_created": ["login", "validateToken", "refreshToken"],
+    "exports_added": ["login", "validateToken", "refreshToken", "AuthError"],
+    "test_files": ["tests/auth/login.test.ts"]
+  }
+}
+```
+
+### New: Enhanced Name Verification (Step 7.3)
+
+Tasks now verify names using a multi-source approach:
+1. **Predecessor Artifacts**: Trust exports_added from completed predecessor tasks
+2. **Live Grep Search**: Always-fresh verification against actual codebase
+3. **Context Summary** (fallback): Pre-computed refs for initial guidance
+
+### Changed: Artifact Collection (Step 7.7)
+
+Step 7.7 now uses `COLLECT_ARTIFACTS_PATTERN` instead of codebase-indexer:
+- Captures git diff for file changes
+- Extracts exports via Grep from new files
+- Persists to tasks.json via `UPDATE_TASK_METADATA_PATTERN`
+
+### Changed: Worker Result Format (task-orchestrator)
+
+Workers now return artifact fields:
+- `functions_created`: New function/class names
+- `exports_added`: All new exports
+- `test_files`: Test files created/modified
+
+### Changed: codebase-names Skill (v2.1)
+
+Skill now uses live Grep + task artifacts instead of static index:
+- Queries tasks.json for predecessor artifacts
+- Performs live Grep for verification
+- Falls back to static index only as hint (if exists)
+
+### Deprecated: codebase-indexer Subagent
+
+The codebase-indexer subagent is now deprecated:
+- Static index becomes stale during task execution
+- No automatic update mechanism was implemented
+- Live search + task artifacts are more reliable
+
+### Deprecated: /index-codebase Command (Optional/Legacy)
+
+Command is now optional, recommended only for:
+- Initial project exploration
+- Generating human-readable documentation
+- Legacy compatibility
+
+### New Patterns in task-json.md
+
+- `COLLECT_ARTIFACTS_PATTERN`: Collect artifacts from git diff
+- `QUERY_PREDECESSOR_ARTIFACTS_PATTERN`: Get artifacts from predecessor tasks
+- `VERIFY_PREDECESSOR_OUTPUTS_PATTERN`: Verify predecessors' outputs exist
+
+---
+
 ## [2.0.0] - 2025-12-11
 
 ### Parallel Async Agent Execution

@@ -163,7 +163,8 @@ IF execution_strategy.mode == "parallel_waves":
            wait_up_to: 300  # 5 minute timeout per worker
          })
          PROCESS: result
-         UPDATE: tasks.json with completion status
+         UPDATE: tasks.json with completion status AND artifacts (v2.1)
+         PERSIST: files_modified, files_created, functions_created, exports_added, test_files
 
     4. VERIFY wave completion
        - All workers in wave must complete before next wave
@@ -195,8 +196,11 @@ ELSE:
        - Worker returns structured result
        - Do NOT re-process worker's implementation context
 
-    4. PROCESS worker result
+    4. PROCESS worker result (v2.1 - persist artifacts)
        - Update tasks.json status
+       - PERSIST artifacts from worker result:
+         USE_PATTERN: UPDATE_TASK_METADATA_PATTERN from @shared/task-json.md
+         INCLUDE: files_modified, files_created, functions_created, exports_added, test_files
        - Log task_completed or task_blocked
        - Aggregate test results
 
@@ -257,13 +261,16 @@ You are a task worker agent. Execute the following single task and return a stru
 ### Standards to Follow
 {Relevant standards sections only}
 
-### Expected Output Format
+### Expected Output Format (v2.1 - includes artifacts)
 Return JSON with:
 ```json
 {
   "status": "pass|fail|blocked",
   "files_modified": ["path/to/file.ts"],
   "files_created": ["path/to/new.ts"],
+  "functions_created": ["functionName", "ClassName"],
+  "exports_added": ["functionName", "ClassName", "TypeName"],
+  "test_files": ["tests/path/to/test.ts"],
   "test_results": {
     "ran": 5,
     "passed": 5,
@@ -274,6 +281,14 @@ Return JSON with:
   "duration_minutes": 15
 }
 ```
+
+**Artifact fields (v2.1):**
+- `functions_created`: Names of new functions/methods/classes added
+- `exports_added`: All new exports (functions, classes, types, constants)
+- `test_files`: Test files created or modified
+
+These artifacts are persisted to tasks.json and used by subsequent tasks
+for cross-task name verification (replaces codebase-indexer).
 
 ### Constraints
 - Focus ONLY on this task

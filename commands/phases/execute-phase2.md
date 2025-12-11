@@ -38,17 +38,27 @@ Use pre-computed context from context-summary.json.
 
 **Instructions:**
 ```
-IF context-summary.json exists:
-  LOAD: Task-specific context for current task ID
-  EXTRACT:
-    - spec_sections (relevant only)
-    - codebase_refs (filtered to task files)
-    - standards (applicable only)
-  TOKENS: ~800 (vs ~3000 for full discovery)
+1. CAPTURE task start commit for artifact collection:
+   COMMAND: git rev-parse HEAD
+   STORE: As task_start_commit (used in Step 7.7)
 
-ELSE (fallback):
-  ACTION: Use Explore agent for batched context retrieval
-  REQUEST: Full context for task (original Step 7.3)
+2. IF context-summary.json exists:
+     LOAD: Task-specific context for current task ID
+     EXTRACT:
+       - spec_sections (relevant only)
+       - codebase_refs (filtered to task files)
+       - standards (applicable only)
+     TOKENS: ~800 (vs ~3000 for full discovery)
+
+   ELSE (fallback):
+     ACTION: Use Explore agent for batched context retrieval
+     REQUEST: Full context for task (original Step 7.3)
+
+3. LOAD predecessor artifacts (v2.1):
+   USE_PATTERN: QUERY_PREDECESSOR_ARTIFACTS_PATTERN from @shared/task-json.md
+   IF task has dependencies (parallelization.blocked_by):
+     QUERY: tasks.json for predecessor task artifacts
+     EXTRACT: exports_added, files_created from completed predecessors
 ```
 
 ### Step 7.2: Task Understanding
@@ -68,39 +78,56 @@ FROM context-summary:
   - Patterns to follow
 ```
 
-### Step 7.3: Verify Names (MANDATORY Gate)
+### Step 7.3: Verify Names (MANDATORY Gate) - Enhanced v2.1
 
-Create reference sheet before any coding.
+Create reference sheet before any coding using predecessor artifacts + live verification.
 
-**Name Verification Protocol:**
+**Name Verification Protocol (v2.1):**
 ```
-IF codebase_refs exist in task context:
+USE_PATTERN: VERIFY_PREDECESSOR_OUTPUTS_PATTERN from @shared/task-json.md
 
-  CREATE reference sheet:
+STEP 1: Verify predecessor outputs exist
+IF task has dependencies (from Step 7.1):
+  FOR each predecessor in blocked_by:
+    CHECK: predecessor.artifacts in tasks.json
+    VERIFY: files_created actually exist on disk
+    VERIFY: exports_added are grep-able in codebase
+  IF verification fails:
+    HALT: "Predecessor task [ID] outputs missing - may need re-execution"
 
-  1. Functions to call:
-     - Exact spelling and casing
-     - Expected parameters
-     - Return types
+STEP 2: Build reference sheet from artifacts + live search
+CREATE reference sheet:
 
-  2. Components/modules to import:
-     - Exact import paths
-     - Named vs default exports
+  1. From predecessor artifacts (trusted cache):
+     - exports_added: Known function/class names from completed tasks
+     - files_created: Known file paths to import from
 
-  3. Variables/classes to reference:
-     - Exact names
-     - Types and interfaces
+  2. From existing codebase (live Grep verification):
+     - Functions to call: GREP for exact names in relevant directories
+     - Import paths: GREP for export statements to find exact paths
+     - Types/interfaces: GREP for type definitions
 
-  4. Schemas/models to use:
-     - Table/column names
-     - API endpoints
-     - Data structures
+  3. From context-summary codebase_refs (predicted, verify if critical):
+     - Pre-computed refs may be stale
+     - ALWAYS verify critical names with live Grep
 
+STEP 3: Validation gate
   VALIDATION GATE:
-  ✓ Do NOT guess names
+  ✓ Do NOT guess names - use artifacts or live search
   ✓ Do NOT write code until names verified
-  ✓ If unsure, search codebase first
-  ✗ HALT if critical names missing
+  ✓ Predecessor artifacts are trusted (just completed)
+  ✓ Pre-computed refs should be verified for critical items
+  ✗ HALT if critical names missing after search
+
+VERIFICATION COMMANDS:
+  # Find function definition
+  grep -r "export.*functionName" src/
+
+  # Find exact import path
+  grep -r "export.*ComponentName" --include="*.ts" --include="*.tsx" src/
+
+  # Verify predecessor export exists
+  grep "export.*${export_name}" [predecessor_file]
 ```
 
 ### Step 7.4: Approach Design
@@ -206,23 +233,42 @@ CACHE: Results in session-cache.json
 VERIFY: 100% pass rate for task tests
 ```
 
-### Step 7.7: Update Codebase References (Conditional)
+### Step 7.7: Collect Task Artifacts (v2.1)
 
-Update references if production code changed.
+Collect and record what this task created for cross-task verification.
 
-**Smart Skip Logic:**
+**Artifact Collection:**
 ```
-CHECK: Git diff for actual code changes
+USE_PATTERN: COLLECT_ARTIFACTS_PATTERN from @shared/task-json.md
 
-IF only test files or docs changed:
-  SKIP: No production code to index
+1. GET task start commit (stored at Step 7.1)
+   COMMAND: git rev-parse HEAD (captured before task began)
 
-ELSE IF only minor changes (< 5 lines):
-  CONSIDER: Skip if no signature changes
+2. COLLECT file changes via git diff:
+   COMMAND: git diff --name-status [start_commit] HEAD
+   EXTRACT:
+     - files_modified: Lines starting with 'M'
+     - files_created: Lines starting with 'A'
+     - test_files: Any file matching *.test.* or *.spec.*
 
-ELSE:
-  ACTION: Use codebase-indexer subagent
-  REQUEST: Update for modified files only
+3. EXTRACT exports from new files:
+   FOR each file in files_created:
+     IF .ts/.js/.tsx/.jsx:
+       GREP: "export (const|function|class|type)" [file]
+     IF .py:
+       GREP: "^def |^class " [file]
+     ADD: Matching names to exports_added and functions_created
+
+4. BUILD artifacts object:
+   {
+     "files_modified": [...],
+     "files_created": [...],
+     "functions_created": [...],
+     "exports_added": [...],
+     "test_files": [...]
+   }
+
+NOTE: This replaces the codebase-indexer subagent (deprecated v2.1)
 ```
 
 ### Step 7.8: Task Status Updates
@@ -274,12 +320,26 @@ VALID:   "Tests pass: npm test exit code 0"
 
 ### Step 7.10: Mark Complete and Log Progress
 
-After validation passes, mark complete and log.
+After validation passes, mark complete and log with artifacts.
 
-**Task Completion:**
+**Task Completion (v2.1 - includes artifacts):**
 ```
-1. UPDATE: tasks.json with status = "pass"
+USE_PATTERN: UPDATE_TASK_METADATA_PATTERN from @shared/task-json.md
+
+1. UPDATE tasks.json with:
+   - status = "pass"
+   - completed_at = now
+   - artifacts = (from Step 7.7)
+     {
+       files_modified: [...],
+       files_created: [...],
+       functions_created: [...],
+       exports_added: [...],
+       test_files: [...]
+     }
+
 2. SYNC: tasks.md checkboxes
+
 3. LOG: task_completed to progress log
 ```
 
@@ -292,8 +352,15 @@ DATA:
   description: [TASK_DESCRIPTION]
   duration_minutes: [ESTIMATED]
   notes: [KEY_ACCOMPLISHMENTS]
+  files_created: [COUNT] new files
+  exports_added: [LIST of key exports]
   next_steps: [NEXT_TASK_OR_PHASE]
 ```
+
+**Why artifacts matter:**
+- Enables subsequent tasks to verify predecessor outputs
+- Replaces stale codebase-indexer with fresh data
+- Supports cross-task name verification via QUERY_PREDECESSOR_ARTIFACTS_PATTERN
 
 ---
 
