@@ -2,6 +2,8 @@
 
 Core implementation workflow with TDD. Loaded only when actively implementing tasks.
 
+**Note**: This phase is for **direct execution mode** only. For parallel wave execution (v2.0), the task-orchestrator handles worker spawning and coordination via async agents.
+
 ---
 
 ## Phase 2: Task Execution Loop
@@ -304,3 +306,39 @@ After all tasks in loop complete:
 - Progress logged
 
 **Next Phase**: Load `execute-phase3.md` for completion and delivery
+
+---
+
+## Parallel Execution Alternative (v2.0)
+
+If `execution_strategy.mode == "parallel_waves"` was selected, Phase 2 is handled by the task-orchestrator subagent instead:
+
+```
+PARALLEL EXECUTION FLOW (handled by task-orchestrator):
+
+FOR each wave in execution_strategy.waves:
+  1. SPAWN all workers in wave simultaneously
+     - Use Task tool with run_in_background: true
+     - Each worker receives parallel_context from context-summary.json
+     - Workers execute independently with no shared state
+
+  2. COLLECT results via AgentOutputTool
+     - Wait for all workers in wave to complete
+     - Aggregate test results
+     - Update tasks.json with completion status
+
+  3. VERIFY wave completion
+     - All workers must pass before next wave
+     - Failed tasks block dependent waves
+
+  CONTINUE to next wave
+END FOR
+
+RETURN: Aggregate results to main flow for Phase 3
+```
+
+**Benefits of Parallel Execution:**
+- 1.5-3x speedup for specs with independent tasks
+- Fresh context per worker (no accumulation)
+- Automatic dependency handling via pre-computed waves
+- Graceful fallback to sequential if needed

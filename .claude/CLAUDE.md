@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v2.0.0 Parallel Async Execution**: Leverages Claude Code's async agent capabilities (`run_in_background`, `AgentOutputTool`) for true parallel task execution. Independent tasks now run simultaneously via wave-based orchestration, providing 1.5-3x speedup.
+
 **v1.9.0+ Context Efficiency**: Based on Anthropic's "Effective Harnesses for Long-Running Agents" research, execute-tasks now uses phase-based loading, pre-computed context summaries, and an orchestrator pattern for multi-task sessions. See CHANGELOG.md for details.
 
 **Critical**: This is the Agent OS **source repository**. Changes here affect all projects that install Agent OS. This is a meta-repository - files here are templates that get copied to target projects during installation.

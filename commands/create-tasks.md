@@ -11,7 +11,9 @@
 - [Subagent Integration](#subagent-integration)
 
 ## Description
-Create a tasks list with sub-tasks to execute a feature based on its spec. This command analyzes an approved specification and generates an actionable task breakdown with proper sequencing and dependency management.
+Create a tasks list with sub-tasks to execute a feature based on its spec. This command analyzes an approved specification and generates an actionable task breakdown with proper sequencing, dependency management, and **parallel execution analysis** (v2.0).
+
+**v2.0 Feature**: Automatically analyzes task dependencies and generates execution waves for parallel async agent execution.
 
 ## Parameters
 - `spec_folder_path` (required): Path to the approved specification folder
@@ -35,14 +37,15 @@ Create a tasks list with sub-tasks to execute a feature based on its spec. This 
 ## Task Tracking
 **IMPORTANT: Use Claude's TodoWrite tool throughout execution:**
 ```javascript
-// Example todos for this command workflow
+// Example todos for this command workflow (v2.0)
 const todos = [
   { content: "Read and analyze specification documents", status: "pending", activeForm: "Reading and analyzing specification documents" },
   { content: "Analyze codebase references if available", status: "pending", activeForm: "Analyzing codebase references if available" },
   { content: "Generate task breakdown structure", status: "pending", activeForm: "Generating task breakdown structure" },
   { content: "Create tasks.md and tasks.json files", status: "pending", activeForm: "Creating tasks.md and tasks.json files" },
-  { content: "Generate context-summary.json", status: "pending", activeForm: "Generating context-summary.json" },
-  { content: "Present first task summary", status: "pending", activeForm: "Presenting first task summary" },
+  { content: "Analyze parallel execution opportunities", status: "pending", activeForm: "Analyzing parallel execution opportunities" },
+  { content: "Generate context-summary.json with parallel context", status: "pending", activeForm: "Generating context-summary.json with parallel context" },
+  { content: "Present execution strategy summary", status: "pending", activeForm: "Presenting execution strategy summary" },
   { content: "Request execution confirmation", status: "pending", activeForm: "Requesting execution confirmation" }
 ];
 // Update status to "in_progress" when starting each task
@@ -192,16 +195,76 @@ ELSE:
 - Include integration tasks for existing components
 - Consider refactoring needs for legacy code integration
 
-### Step 1.5: Generate context-summary.json (NEW)
+### Step 1.5: Analyze Parallel Execution Opportunities (NEW v2.0)
 
-After creating tasks, pre-compute context summaries for efficient execution.
+After creating tasks, analyze dependencies to identify parallel execution opportunities.
 
-**Purpose:** Reduce context overhead during execute-tasks by pre-computing what each task needs.
+**Purpose:** Enable async agent execution by pre-computing which tasks can run in parallel.
 
 **Instructions:**
 ```
-ACTION: Generate context summary
+ACTION: Analyze task dependencies for parallel execution
+USE_PATTERN: ANALYZE_PARALLELIZATION_PATTERN from @shared/task-json.md
+
+FOR each parent task:
+  EXTRACT from technical-spec.md:
+    - Files to be created/modified
+    - Dependencies on other components
+    - Shared state (database tables, config, etc.)
+
+  CLASSIFY dependencies:
+    - HARD: Must complete before next (shared file writes)
+    - SOFT: Could parallelize with careful coordination
+    - NONE: Fully independent
+
+BUILD dependency graph:
+  FOR each task pair (A, B):
+    IF A modifies files that B reads/modifies:
+      A blocks B (sequential required)
+    ELSE IF A.output IS B.input (logical dependency):
+      A blocks B
+    ELSE:
+      A can_parallel_with B
+
+GENERATE execution waves:
+  Wave 1 = tasks with no blocked_by
+  Wave N = tasks whose blocked_by are all in waves < N
+
+CALCULATE metrics:
+  - estimated_parallel_speedup = sequential_time / parallel_time
+  - max_concurrent_workers = max(tasks in any wave)
+  - isolation_scores per task
+
+ADD to tasks.json:
+  - execution_strategy (top-level)
+  - parallelization (per parent task)
+```
+
+**Output Format:**
+```json
+{
+  "execution_strategy": {
+    "mode": "sequential|parallel_waves|fully_parallel",
+    "waves": [
+      { "wave_id": 1, "tasks": ["1", "2"], "rationale": "..." }
+    ],
+    "estimated_parallel_speedup": 1.5,
+    "max_concurrent_workers": 2
+  }
+}
+```
+
+### Step 1.6: Generate context-summary.json with Parallel Context (UPDATED v2.0)
+
+After creating tasks and analyzing parallelization, pre-compute context summaries.
+
+**Purpose:** Reduce context overhead during execute-tasks by pre-computing what each task needs, including parallel coordination instructions.
+
+**Instructions:**
+```
+ACTION: Generate context summary with parallel context
 USE_PATTERN: GENERATE_CONTEXT_SUMMARY_PATTERN from @shared/context-summary.md
+USE_PATTERN: GENERATE_PARALLEL_CONTEXT_PATTERN from @shared/context-summary.md
 
 FOR each task in tasks.json:
   EXTRACT:
@@ -210,9 +273,19 @@ FOR each task in tasks.json:
     - Codebase references for those files (if .agent-os/codebase/ exists)
     - Applicable standards (coding style, patterns)
   ESTIMATE: Token count for this task's context
+
+  IF task is parent AND has parallelization data:
+    ADD parallel_context:
+      - wave number
+      - concurrent_tasks list
+      - conflict_risk (low/medium/high)
+      - shared_resources
+      - prerequisite_outputs (for dependent tasks)
+      - worker_instructions (coordination guidance)
+
   STORE: In context-summary.json
 
-CALCULATE: Total estimated tokens, average per task
+CALCULATE: Total estimated tokens, average per task, parallel summary
 ```
 
 **context-summary.json Template:**
@@ -262,35 +335,67 @@ CALCULATE: Total estimated tokens, average per task
 - Pre-filters codebase references to relevant files only
 - Workers receive exactly what they need, nothing more
 
-### Step 2: Execution Readiness Check
+### Step 2: Execution Readiness Check (UPDATED v2.0)
 
-Evaluate readiness to begin implementation by presenting the first task summary and requesting user confirmation to proceed.
+Evaluate readiness to begin implementation by presenting task summary with parallel execution strategy.
 
 **Readiness Summary:**
 - **Present to User**:
   - Spec name and description
-  - First task summary from tasks.md
-  - Estimated complexity/scope
-  - Key deliverables for task 1
+  - Total tasks and parallel execution strategy
+  - Estimated speedup from parallelization
+  - First wave tasks (if parallel mode)
+  - Key deliverables
 
-**Execution Prompt:**
+**Execution Prompt (Parallel Mode):**
 ```
-PROMPT: "The spec planning is complete. The first task is:
+PROMPT: "The spec planning is complete with parallel execution analysis.
+
+**Execution Strategy:** [MODE: sequential|parallel_waves]
+**Total Tasks:** [N] parent tasks across [W] execution waves
+**Estimated Parallel Speedup:** [X]x faster than sequential
+
+**Wave 1 Tasks (can run in parallel):**
+- Task 1: [TITLE]
+- Task 2: [TITLE] (if applicable)
+
+**Estimated Time:**
+- Sequential: ~[X] minutes
+- Parallel: ~[Y] minutes
+
+Would you like me to proceed? Options:
+1. **Execute Wave 1** - Run all Wave 1 tasks in parallel (recommended)
+2. **Execute Task 1 only** - Single task focus
+3. **Review plan** - Examine parallel analysis before proceeding
+
+Type '1', '2', or '3' (or describe your preference)."
+```
+
+**Execution Prompt (Sequential Mode):**
+```
+PROMPT: "The spec planning is complete.
+
+**Execution Strategy:** Sequential (tasks have dependencies)
+**Total Tasks:** [N] parent tasks
 
 **Task 1:** [FIRST_TASK_TITLE]
 [BRIEF_DESCRIPTION_OF_TASK_1_AND_SUBTASKS]
 
-Would you like me to proceed with implementing Task 1? I will focus only on this first task and its subtasks unless you specify otherwise.
+Would you like me to proceed with implementing Task 1?
 
 Type 'yes' to proceed with Task 1, or let me know if you'd like to review or modify the plan first."
 ```
 
 **Execution Flow:**
 ```
-IF user_confirms_yes:
+IF parallel_mode AND user_chooses_wave:
   REFERENCE: @.agent-os/instructions/core/execute-tasks.md
+  MODE: parallel_waves
+  EXECUTE: All tasks in Wave 1 using async agents
+ELSE IF user_chooses_single_task:
+  REFERENCE: @.agent-os/instructions/core/execute-tasks.md
+  MODE: direct_single
   FOCUS: Only Task 1 and its subtasks
-  CONSTRAINT: Do not proceed to additional tasks without explicit user request
 ELSE:
   WAIT: For user clarification or modifications
 ```

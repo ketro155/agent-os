@@ -11,9 +11,11 @@
 - [Error Handling](#error-handling)
 
 ## Description
-Execute one or more tasks from a specification with context-efficient architecture. This command uses **phase-based instruction loading** and supports an **orchestrator pattern** for multi-task sessions.
+Execute one or more tasks from a specification with context-efficient architecture. This command uses **phase-based instruction loading**, supports an **orchestrator pattern** for multi-task sessions, and enables **parallel async agent execution** (v2.0).
 
 **Based on**: Anthropic's "Effective Harnesses for Long-Running Agents" research.
+
+**v2.0 Feature**: Automatic parallel execution of independent tasks using Claude Code's async agent capabilities (`run_in_background`, `AgentOutputTool`).
 
 ## Parameters
 - `spec_srd_reference` (required): Path to the specification file or folder
@@ -46,9 +48,9 @@ const todos = [
 ];
 ```
 
-## Execution Modes
+## Execution Modes (UPDATED v2.0)
 
-This command supports three execution modes based on Anthropic's research:
+This command supports four execution modes based on Anthropic's research:
 
 ### Mode 1: Direct Single-Task (DEFAULT, RECOMMENDED)
 ```
@@ -58,15 +60,24 @@ Benefits: Simplest, full context available
 Use when: Most sessions (1-2 tasks)
 ```
 
-### Mode 2: Orchestrated Multi-Task
+### Mode 2: Orchestrated Sequential
 ```
 Tasks: 2+ parent tasks
-Context: Orchestrator spawns workers per task
+Context: Orchestrator spawns workers per task (sequential)
 Benefits: Fresh context per task, scalable
-Use when: Long sessions, many tasks
+Use when: Tasks have dependencies (execution_strategy.mode == "sequential")
 ```
 
-### Mode 3: Direct Multi-Task (NOT RECOMMENDED)
+### Mode 3: Parallel Wave Execution (NEW v2.0)
+```
+Tasks: 2+ parent tasks with independence
+Context: Orchestrator spawns parallel workers per wave
+Benefits: Significant speedup (1.5-3x), fresh context, true concurrency
+Use when: tasks.json has execution_strategy.mode == "parallel_waves"
+Mechanism: Task tool with run_in_background, AgentOutputTool for collection
+```
+
+### Mode 4: Direct Multi-Task (NOT RECOMMENDED)
 ```
 Tasks: 2+ parent tasks
 Context: All in current session
@@ -74,17 +85,35 @@ Risks: Context bloat, lower quality
 Use when: User explicitly overrides
 ```
 
-**Mode Selection Flow:**
+**Mode Selection Flow (UPDATED v2.0):**
 ```
 IF 1 task selected:
   USE: Direct Single-Task (Mode 1)
 
 IF 2+ tasks selected:
-  DISPLAY: Warning about research findings
-  OFFER:
-    1. Single task focus (Mode 1) - RECOMMENDED
-    2. Orchestrated execution (Mode 2)
-    3. Direct multi-task (Mode 3) - override only
+  READ: execution_strategy from tasks.json
+
+  IF execution_strategy.mode == "parallel_waves":
+    DISPLAY: Parallel execution opportunity
+    SHOW: Estimated speedup, wave structure
+    OFFER:
+      1. Parallel wave execution (Mode 3) - RECOMMENDED for independent tasks
+      2. Single task focus (Mode 1) - Conservative option
+      3. Direct multi-task (Mode 4) - Override only
+
+  ELSE IF execution_strategy.mode == "sequential":
+    DISPLAY: Sequential execution required (dependencies)
+    OFFER:
+      1. Orchestrated sequential (Mode 2) - RECOMMENDED
+      2. Single task focus (Mode 1) - Conservative option
+      3. Direct multi-task (Mode 4) - Override only
+
+  ELSE:
+    # Fallback to v1.9 behavior
+    OFFER:
+      1. Single task focus (Mode 1) - RECOMMENDED
+      2. Orchestrated execution (Mode 2)
+      3. Direct multi-task (Mode 4) - Override only
 ```
 
 ## For Claude Code
@@ -190,14 +219,33 @@ EXECUTE: Task discovery and mode selection
 OUTPUT: execution_mode determined (direct/orchestrated)
 ```
 
-### Step 2: Mode Branch
+### Step 2: Mode Branch (UPDATED v2.0)
 
 ```
-IF execution_mode == "orchestrated":
+IF execution_mode == "parallel_waves":
+  # NEW v2.0: Parallel async execution
   ACTION: Invoke task-orchestrator subagent via Task tool
-  REQUEST: "Orchestrate task execution for spec:
+  REQUEST: "Orchestrate PARALLEL task execution for spec:
             Spec: [SPEC_FOLDER_PATH]
-            Mode: orchestrated
+            Mode: parallel_waves
+            Waves: [FROM execution_strategy.waves]
+            Tasks: [TASK_IDS_TO_EXECUTE]
+            Context: Use context-summary.json with parallel_context
+
+            Execute waves in order. For each wave:
+            1. Spawn all workers with run_in_background: true
+            2. Collect results with AgentOutputTool
+            3. Update tasks.json
+            4. Proceed to next wave"
+  WAIT: For orchestrator completion
+  SKIP: To Phase 3 completion steps (Step 10+)
+
+ELSE IF execution_mode == "orchestrated_sequential":
+  # v1.9 behavior: Sequential orchestration
+  ACTION: Invoke task-orchestrator subagent via Task tool
+  REQUEST: "Orchestrate SEQUENTIAL task execution for spec:
+            Spec: [SPEC_FOLDER_PATH]
+            Mode: sequential
             Tasks: [TASK_IDS_TO_EXECUTE]
             Context: Use context-summary.json"
   WAIT: For orchestrator completion
@@ -237,33 +285,52 @@ These skills trigger automatically at appropriate points:
 | codebase-indexer | Code reference updates | Phase 2 |
 | project-manager | Documentation and notification | Phase 3 |
 
-## Context Efficiency
+## Context Efficiency (UPDATED v2.0)
 
 ### Token Budget (Approximate)
 
-| Component | Direct Mode | Orchestrated Mode |
-|-----------|-------------|-------------------|
-| Shell instructions | ~800 | ~800 |
-| Phase 0-1 | ~600 | ~600 |
-| Phase 2 (per task) | ~1500 | Delegated to worker |
-| Phase 3 | ~800 | ~800 |
-| Context summary | ~800/task | ~800/worker |
-| **Total for 5 tasks** | ~10,000 | ~4,500 (orchestrator) |
+| Component | Direct Mode | Sequential Orchestrated | Parallel Waves (v2.0) |
+|-----------|-------------|-------------------------|----------------------|
+| Shell instructions | ~800 | ~800 | ~800 |
+| Phase 0-1 | ~600 | ~600 | ~600 |
+| Phase 2 (per task) | ~1500 | Delegated to worker | Delegated to parallel workers |
+| Phase 3 | ~800 | ~800 | ~800 |
+| Context summary | ~800/task | ~800/worker | ~800/worker |
+| **Total for 5 tasks** | ~10,000 | ~4,500 (orchestrator) | ~4,500 (orchestrator) |
 
-### Why Orchestrated Mode Helps
+### Why Parallel Waves Mode Helps (v2.0)
 
 ```
-Direct Mode (5 tasks):
+Direct Mode (5 tasks, 150 min sequential):
 ├── All context accumulates
 ├── By task 5: ~15,000 tokens of context
+├── Total time: 150 minutes
 └── Risk: Context overflow, quality degradation
 
-Orchestrated Mode (5 tasks):
+Sequential Orchestrated (5 tasks, 150 min):
 ├── Orchestrator holds ~2,000 tokens
 ├── Each worker starts fresh (~3,000 tokens)
 ├── Workers terminate after task
+├── Total time: 150 minutes
 └── Result: Consistent quality throughout
+
+Parallel Waves (5 tasks, 2 waves, ~90 min):
+├── Orchestrator holds ~2,000 tokens
+├── Wave 1: 3 workers run simultaneously (~3,000 tokens each)
+├── Wave 2: 2 workers run simultaneously
+├── Workers terminate after task
+├── Total time: ~90 minutes (40% faster)
+└── Result: Consistent quality + significant speedup
 ```
+
+### Parallel Execution Time Savings
+
+| Spec Structure | Sequential Time | Parallel Time | Speedup |
+|----------------|-----------------|---------------|---------|
+| All independent (1 wave) | 150 min | 50 min | 3x |
+| 2 waves (3+2 tasks) | 150 min | 90 min | 1.67x |
+| 3 waves (2+2+1 tasks) | 150 min | 110 min | 1.36x |
+| All dependent (5 waves) | 150 min | 150 min | 1x |
 
 <!-- END EMBEDDED CONTENT -->
 

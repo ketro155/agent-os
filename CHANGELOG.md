@@ -5,6 +5,139 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-12-11
+
+### Parallel Async Agent Execution
+
+Major update enabling **true parallel task execution** using Claude Code's async agent capabilities. Tasks without dependencies now run simultaneously, providing significant speedup for multi-task specs.
+
+### New: Parallel Wave Execution
+
+Tasks are automatically analyzed for dependencies and grouped into execution waves:
+
+```
+Wave 1: Independent Tasks (run in parallel)
+┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+│   Worker 1   │   │   Worker 2   │   │   Worker 3   │
+│  (Task 1)    │   │  (Task 2)    │   │  (Task 3)    │
+└──────────────┘   └──────────────┘   └──────────────┘
+       │                  │                  │
+       └──────────────────┼──────────────────┘
+                          │
+                   AgentOutputTool
+                   (collect all results)
+                          │
+                          ▼
+Wave 2: Dependent Tasks (after Wave 1 completes)
+```
+
+**Mechanism:**
+- `Task` tool with `run_in_background: true` spawns parallel workers
+- `AgentOutputTool` collects results from all workers
+- Pre-computed `execution_strategy` in `tasks.json` defines waves
+
+**Performance:**
+| Spec Structure | Sequential | Parallel | Speedup |
+|----------------|------------|----------|---------|
+| All independent | 150 min | 50 min | **3x** |
+| 2 waves | 150 min | 90 min | **1.67x** |
+| All dependent | 150 min | 150 min | 1x |
+
+### New: Dependency Analysis at Task Creation
+
+`/create-tasks` now analyzes task dependencies to generate parallel execution strategy:
+
+```json
+{
+  "execution_strategy": {
+    "mode": "parallel_waves",
+    "waves": [
+      { "wave_id": 1, "tasks": ["1", "2"], "rationale": "No shared files" },
+      { "wave_id": 2, "tasks": ["3"], "rationale": "Depends on task 1" }
+    ],
+    "estimated_parallel_speedup": 1.5,
+    "max_concurrent_workers": 2
+  }
+}
+```
+
+**Analysis Criteria:**
+- File overlap detection (shared_files)
+- Logical dependencies (blocked_by, blocks)
+- Isolation scoring (0-1 scale)
+
+### New: Parallel Context in Context Summaries
+
+`context-summary.json` now includes `parallel_context` for each task:
+
+```json
+{
+  "parallel_context": {
+    "wave": 1,
+    "concurrent_tasks": ["2"],
+    "conflict_risk": "low",
+    "shared_resources": [],
+    "worker_instructions": "Independent execution safe."
+  }
+}
+```
+
+### New: Four Execution Modes
+
+| Mode | When Used | Description |
+|------|-----------|-------------|
+| Direct Single | 1 task | Full instructions, no delegation |
+| Sequential Orchestrated | 2+ tasks with dependencies | Workers per task, sequential |
+| **Parallel Waves** | 2+ independent tasks | **Workers per wave, concurrent** |
+| Direct Multi | Override only | All in session (not recommended) |
+
+### Enhanced Task Orchestrator (v2.0)
+
+The task-orchestrator subagent now supports parallel execution:
+
+- Reads `execution_strategy.waves` from `tasks.json`
+- Spawns parallel workers using `run_in_background: true`
+- Tracks active `agentId` for each worker
+- Collects results via `AgentOutputTool`
+- Updates `tasks.json` with completion status
+
+### New Shared Module
+
+- `shared/parallel-execution.md` - Patterns for async agent coordination:
+  - `SPAWN_PARALLEL_WORKERS_PATTERN`
+  - `COLLECT_WORKER_RESULTS_PATTERN`
+  - `MONITOR_WORKERS_PATTERN`
+  - `EXECUTE_WAVE_WITH_RETRY_PATTERN`
+  - `ORCHESTRATE_PARALLEL_EXECUTION_PATTERN`
+
+### Updated Shared Modules
+
+- `shared/task-json.md` (v2.0) - Added parallelization schema
+- `shared/context-summary.md` (v2.0) - Added parallel_context patterns
+
+### Updated Commands
+
+- **create-tasks.md**: New Step 1.5 for dependency analysis
+- **execute-tasks.md**: New Mode 3 (Parallel Wave Execution)
+- **phases/execute-phase2.md**: Added parallel execution alternative
+
+### Updated Agents
+
+- **task-orchestrator.md**: Full parallel wave support
+
+### Migration Notes
+
+**For existing projects:**
+- Existing `tasks.json` files without `execution_strategy` use sequential mode
+- Run `/create-tasks` again to generate parallel analysis
+- No breaking changes - parallel is opt-in when waves are detected
+
+**New features require:**
+- Claude Code with `run_in_background` Task parameter support
+- `AgentOutputTool` for result collection
+
+---
+
 ## [1.9.0] - 2025-12-09
 
 ### Context Efficiency Architecture

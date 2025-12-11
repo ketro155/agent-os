@@ -1,6 +1,8 @@
 # Task Orchestrator Subagent
 
-A lightweight orchestrator that manages task execution with minimal context footprint. Based on Anthropic's research on "Effective Harnesses for Long-Running Agents".
+A lightweight orchestrator that manages task execution with minimal context footprint, supporting **parallel async agent execution** (v2.0). Based on Anthropic's research on "Effective Harnesses for Long-Running Agents".
+
+**Version**: 2.0 - Adds parallel wave execution using Claude Code's async agent capabilities.
 
 ---
 
@@ -11,6 +13,7 @@ The orchestrator maintains minimal state while delegating implementation work to
 2. Passing only task-specific information
 3. Receiving structured completion reports
 4. Managing cross-task coordination
+5. **Spawning parallel workers for independent tasks** (v2.0)
 
 ---
 
@@ -21,6 +24,7 @@ This subagent should be invoked via Task tool when:
 - Context window is at risk of filling up
 - Tasks are independent enough to parallelize
 - Session needs to span many tasks
+- **Parallel wave execution is enabled** (v2.0)
 
 ---
 
@@ -28,12 +32,14 @@ This subagent should be invoked via Task tool when:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     TASK ORCHESTRATOR                            │
-│  (Lightweight - minimal state, delegates implementation)         │
+│                  TASK ORCHESTRATOR (v2.0)                        │
+│  (Lightweight - minimal state, coordinates parallel workers)     │
 ├─────────────────────────────────────────────────────────────────┤
 │  State Held:                                                     │
 │  • tasks.json reference (not full content)                       │
-│  • Current task ID                                               │
+│  • execution_strategy (waves, mode)                              │
+│  • Current wave ID                                               │
+│  • Active worker agent IDs (for parallel tracking)               │
 │  • Worker completion status                                      │
 │  • Test results summary (pass/fail count)                        │
 │                                                                  │
@@ -45,6 +51,7 @@ This subagent should be invoked via Task tool when:
 └─────────────────────────────────────────────────────────────────┘
            │
            │ Spawns with task-specific context
+           │ (Sequential OR Parallel via run_in_background)
            ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      TASK WORKER                                 │
@@ -53,6 +60,7 @@ This subagent should be invoked via Task tool when:
 │  Receives (via prompt):                                          │
 │  • Single task from tasks.json                                   │
 │  • Pre-computed context summary for this task                    │
+│  • parallel_context (coordination instructions)                  │
 │  • Relevant codebase references (filtered)                       │
 │  • Standards relevant to task type                               │
 │                                                                  │
@@ -65,67 +73,144 @@ This subagent should be invoked via Task tool when:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Parallel Wave Execution (v2.0)
+
+```
+Wave 1: Independent Tasks (run in parallel)
+┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+│   Worker 1   │   │   Worker 2   │   │   Worker 3   │
+│  (Task 1)    │   │  (Task 2)    │   │  (Task 3)    │
+│  agentId: a1 │   │  agentId: a2 │   │  agentId: a3 │
+└──────────────┘   └──────────────┘   └──────────────┘
+       │                  │                  │
+       └──────────────────┼──────────────────┘
+                          │
+                   AgentOutputTool
+                   (collect all results)
+                          │
+                          ▼
+Wave 2: Dependent Tasks (after Wave 1 completes)
+┌──────────────┐   ┌──────────────┐
+│   Worker 4   │   │   Worker 5   │
+│  (Task 4)    │   │  (Task 5)    │
+└──────────────┘   └──────────────┘
+```
+
 ---
 
 ## Orchestrator Protocol
 
-### Phase 1: Initialization
+### Phase 1: Initialization (UPDATED v2.0)
 
 ```
-INPUT: spec_folder_path, tasks_to_execute (optional)
+INPUT: spec_folder_path, tasks_to_execute (optional), execution_mode
 
 1. LOAD tasks.json from spec folder
    - Extract task list and summary
+   - Extract execution_strategy (mode, waves)
    - Do NOT load full spec content
 
 2. READ context-summary.json for task context
    - Pre-computed summaries per task
+   - parallel_context for each task (v2.0)
    - Filtered codebase references
 
 3. DETERMINE execution plan
-   - Single task mode (default, recommended)
-   - Multi-task mode (if user override)
+   - IF execution_strategy.mode == "parallel_waves":
+       USE: Wave-based parallel execution
+   - ELSE IF execution_strategy.mode == "sequential":
+       USE: Sequential task execution
+   - ELSE:
+       USE: Single task mode (default)
 
 4. LOG session_started to progress log
 
-OUTPUT: Execution plan with task order
+OUTPUT: Execution plan with waves and task order
 ```
 
-### Phase 2: Task Execution Loop
+### Phase 2: Task Execution Loop (UPDATED v2.0)
 
 ```
-FOR each task in execution_plan:
+IF execution_strategy.mode == "parallel_waves":
+  # PARALLEL EXECUTION FLOW
+  FOR each wave in execution_strategy.waves:
 
-  1. PREPARE worker context
-     - Extract task from tasks.json
-     - Get context summary for task ID
-     - Filter codebase refs to relevant files only
-     - Bundle into worker prompt
+    1. PREPARE wave workers
+       FOR each task_id in wave.tasks:
+         - Extract task from tasks.json
+         - Get context summary with parallel_context
+         - Build worker prompt with coordination instructions
 
-  2. SPAWN worker via Task tool
-     REQUEST: Execute single task with provided context
-     WORKER_TYPE: task-worker (implementation agent)
+    2. SPAWN parallel workers
+       USE_PATTERN: SPAWN_PARALLEL_WORKERS_PATTERN from @shared/parallel-execution.md
 
-  3. WAIT for worker completion
-     - Worker returns structured result
-     - Do NOT re-process worker's implementation context
+       FOR each task_id in wave.tasks:
+         agent_result = Task({
+           description: "Execute task {task_id}",
+           prompt: worker_prompt,
+           subagent_type: "task-worker",
+           run_in_background: true  # ASYNC EXECUTION
+         })
+         STORE: agent_result.agentId in active_workers
 
-  4. PROCESS worker result
-     - Update tasks.json status
-     - Log task_completed or task_blocked
-     - Aggregate test results
+    3. COLLECT parallel results
+       USE_PATTERN: COLLECT_WORKER_RESULTS_PATTERN from @shared/parallel-execution.md
 
-  5. VERIFY via tests
-     - Run task-specific tests (if not already run by worker)
-     - Confirm completion before next task
+       FOR each agent_id in active_workers:
+         result = AgentOutputTool({
+           agentId: agent_id,
+           block: true,
+           wait_up_to: 300  # 5 minute timeout per worker
+         })
+         PROCESS: result
+         UPDATE: tasks.json with completion status
 
-  6. CHECK for abort conditions
-     - Too many blocked tasks
-     - Critical test failures
-     - User interrupt
+    4. VERIFY wave completion
+       - All workers in wave must complete before next wave
+       - Log task_completed or task_blocked for each
+       - Aggregate test results
 
-  CONTINUE to next task OR terminate
-END FOR
+    5. CHECK for abort conditions
+       - If critical task failed, later waves may be blocked
+       - Check if blocked_by tasks are all complete
+
+    CONTINUE to next wave OR terminate
+  END FOR
+
+ELSE:
+  # SEQUENTIAL EXECUTION FLOW (unchanged)
+  FOR each task in execution_plan:
+
+    1. PREPARE worker context
+       - Extract task from tasks.json
+       - Get context summary for task ID
+       - Filter codebase refs to relevant files only
+       - Bundle into worker prompt
+
+    2. SPAWN worker via Task tool (BLOCKING)
+       REQUEST: Execute single task with provided context
+       WORKER_TYPE: task-worker (implementation agent)
+
+    3. WAIT for worker completion
+       - Worker returns structured result
+       - Do NOT re-process worker's implementation context
+
+    4. PROCESS worker result
+       - Update tasks.json status
+       - Log task_completed or task_blocked
+       - Aggregate test results
+
+    5. VERIFY via tests
+       - Run task-specific tests (if not already run by worker)
+       - Confirm completion before next task
+
+    6. CHECK for abort conditions
+       - Too many blocked tasks
+       - Critical test failures
+       - User interrupt
+
+    CONTINUE to next task OR terminate
+  END FOR
 ```
 
 ### Phase 3: Completion
@@ -139,8 +224,12 @@ END FOR
    - Create PR
 
 3. LOG session_ended to progress log
+   - Include parallel execution metrics (v2.0):
+     - actual_parallel_time
+     - speedup_achieved
+     - workers_spawned
 
-4. RETURN summary to user
+4. RETURN summary to user with parallel metrics
 ```
 
 ---
@@ -237,15 +326,20 @@ Cons: More overhead for simple tasks
 
 ---
 
-## Error Handling
+## Error Handling (UPDATED v2.0)
 
 | Error | Orchestrator Action |
 |-------|---------------------|
-| Worker timeout | Retry once, then mark task blocked |
-| Worker returns fail | Log blocker, continue to next task |
+| Worker timeout | Retry once with extended timeout, then mark task blocked |
+| Worker returns fail | Log blocker, continue to next task (or next wave) |
 | Too many failures (3+) | Abort session, save state for resume |
 | Test verification fails | Return to worker for fix OR mark blocked |
-| Context overflow warning | Force Mode B, spawn fresh worker |
+| Context overflow warning | Force orchestrated mode, spawn fresh worker |
+| **Parallel worker timeout** | Use AgentOutputTool with block:false to check status, extend or abort |
+| **Wave partial failure** | Complete remaining workers in wave, mark failed tasks blocked |
+| **AgentOutputTool error** | Retry with polling (block:false), then timeout |
+| **All wave workers fail** | Abort wave, fall back to sequential for remaining waves |
+| **Dependency chain broken** | If blocked task blocks others, skip dependent waves |
 
 ---
 
@@ -293,6 +387,8 @@ REQUEST: "Orchestrate task execution for spec:
 
 1. **Prevents Context Bloat**: Workers start fresh
 2. **Better Recovery**: Each task independently completable
-3. **Parallel Potential**: Independent tasks could run in parallel (future)
+3. **True Parallel Execution**: Independent tasks run simultaneously (v2.0)
 4. **Cleaner Separation**: Coordination vs implementation clearly split
 5. **Scalable**: Can handle arbitrarily long task lists
+6. **Significant Speedup**: 1.5-3x faster for parallel-friendly specs (v2.0)
+7. **Automatic Dependency Handling**: Pre-computed waves ensure correct ordering

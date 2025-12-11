@@ -2,6 +2,8 @@
 
 Pre-computed context summaries for efficient task execution. Instead of loading full specs during execution, generate summaries at task creation time that contain only what each task needs.
 
+**Version**: 2.0 - Adds parallel execution context for async agent coordination.
+
 **Reference**: Based on Anthropic's research on "Effective Harnesses for Long-Running Agents" - reducing per-task context overhead.
 
 ---
@@ -12,6 +14,7 @@ Pre-computed context summaries for efficient task execution. Instead of loading 
 2. **Task-Specific Filtering**: Each task gets only relevant context
 3. **Token-Conscious**: Summaries are compressed, not full documents
 4. **Update on Demand**: Regenerate if specs change significantly
+5. **Parallel-Aware**: Include coordination context for concurrent workers (v2.0)
 
 ---
 
@@ -29,12 +32,12 @@ Pre-computed context summaries for efficient task execution. Instead of loading 
 
 ## Context Summary Schema
 
-### context-summary.json Structure
+### context-summary.json Structure (v2.0)
 
 ```json
 {
-  "$schema": "https://agent-os.dev/schemas/context-summary-v1.json",
-  "version": "1.0",
+  "$schema": "https://agent-os.dev/schemas/context-summary-v2.json",
+  "version": "2.0",
   "spec": "feature-name",
   "generated": "2025-12-08T10:00:00Z",
   "source_hashes": {
@@ -68,7 +71,60 @@ Pre-computed context summaries for efficient task execution. Instead of loading 
         "testing": ["Unit tests for validation", "Integration test for full flow"]
       },
       "dependencies": [],
-      "estimated_tokens": 850
+      "estimated_tokens": 850,
+      "parallel_context": {
+        "wave": 1,
+        "concurrent_tasks": ["2"],
+        "conflict_risk": "low",
+        "shared_resources": [],
+        "worker_instructions": "Independent execution safe. No coordination needed with task 2."
+      }
+    },
+    "2": {
+      "summary": "Implement user profile UI",
+      "spec_sections": ["3.1 Profile Page", "3.2 Edit Form"],
+      "relevant_files": ["src/components/profile/"],
+      "codebase_refs": {
+        "functions": [],
+        "imports": []
+      },
+      "standards": {
+        "patterns": ["React functional components"],
+        "testing": ["Component unit tests"]
+      },
+      "dependencies": [],
+      "estimated_tokens": 600,
+      "parallel_context": {
+        "wave": 1,
+        "concurrent_tasks": ["1"],
+        "conflict_risk": "low",
+        "shared_resources": [],
+        "worker_instructions": "Independent execution safe. No coordination needed with task 1."
+      }
+    },
+    "3": {
+      "summary": "Add session management",
+      "spec_sections": ["2.3 Session Handling"],
+      "relevant_files": ["src/auth/session.ts", "src/middleware/auth.ts"],
+      "codebase_refs": {
+        "functions": []
+      },
+      "dependencies": ["1"],
+      "estimated_tokens": 750,
+      "parallel_context": {
+        "wave": 2,
+        "concurrent_tasks": [],
+        "conflict_risk": "medium",
+        "shared_resources": ["src/middleware/auth.ts"],
+        "prerequisite_outputs": {
+          "1": {
+            "description": "Auth middleware with JWT validation",
+            "files": ["src/auth/middleware.ts"],
+            "exports": ["authMiddleware", "validateToken"]
+          }
+        },
+        "worker_instructions": "WAIT for task 1 completion. Depends on authMiddleware export from src/auth/middleware.ts. Verify task 1 artifacts exist before starting."
+      }
     },
     "1.1": {
       "summary": "Write failing tests for login endpoint",
@@ -90,7 +146,13 @@ Pre-computed context summaries for efficient task execution. Instead of loading 
   "metadata": {
     "total_tasks": 8,
     "total_estimated_tokens": 5200,
-    "average_tokens_per_task": 650
+    "average_tokens_per_task": 650,
+    "parallel_summary": {
+      "total_waves": 2,
+      "max_concurrent": 2,
+      "parallelizable_tasks": 2,
+      "sequential_tasks": 1
+    }
   }
 }
 ```
@@ -507,6 +569,139 @@ function validateContextSummary(specFolder) {
 
 ---
 
+## Pattern: Generate Parallel Context (v2.0)
+
+Add parallel execution context to task summaries.
+
+```javascript
+// GENERATE_PARALLEL_CONTEXT_PATTERN
+function generateParallelContext(taskId, tasksJson, techSpec) {
+  const task = tasksJson.tasks.find(t => t.id === taskId);
+  const executionStrategy = tasksJson.execution_strategy;
+
+  if (!task || task.type !== 'parent' || !executionStrategy) {
+    return null; // Only parent tasks get parallel context
+  }
+
+  const parallelization = task.parallelization;
+  if (!parallelization) {
+    return null;
+  }
+
+  // Find wave info
+  const wave = executionStrategy.waves.find(w => w.tasks.includes(taskId));
+
+  // Build prerequisite outputs for dependent tasks
+  const prerequisiteOutputs = {};
+  for (const depId of parallelization.blocked_by) {
+    const depTask = tasksJson.tasks.find(t => t.id === depId);
+    if (depTask) {
+      prerequisiteOutputs[depId] = {
+        description: depTask.description,
+        files: parallelization.shared_files.filter(f =>
+          extractFilesForTask(depTask, techSpec).includes(f)
+        ),
+        exports: extractExportsForTask(depTask, techSpec)
+      };
+    }
+  }
+
+  // Determine conflict risk
+  const conflictRisk = parallelization.shared_files.length > 2 ? 'high'
+    : parallelization.shared_files.length > 0 ? 'medium'
+    : 'low';
+
+  // Generate worker instructions
+  let workerInstructions = '';
+  if (parallelization.blocked_by.length > 0) {
+    workerInstructions = `WAIT for task(s) ${parallelization.blocked_by.join(', ')} completion. `;
+    workerInstructions += `Depends on: ${Object.values(prerequisiteOutputs)
+      .map(p => p.files.join(', ')).join('; ')}. `;
+    workerInstructions += 'Verify prerequisite artifacts exist before starting.';
+  } else if (parallelization.can_parallel_with.length > 0) {
+    workerInstructions = `Independent execution safe. `;
+    workerInstructions += `Can run in parallel with task(s) ${parallelization.can_parallel_with.join(', ')}. `;
+    if (parallelization.shared_files.length > 0) {
+      workerInstructions += `Caution: shared files [${parallelization.shared_files.join(', ')}] - coordinate commits.`;
+    } else {
+      workerInstructions += 'No coordination needed.';
+    }
+  } else {
+    workerInstructions = 'Sequential execution - no parallel considerations.';
+  }
+
+  return {
+    wave: wave?.wave_id || 1,
+    concurrent_tasks: parallelization.can_parallel_with,
+    conflict_risk: conflictRisk,
+    shared_resources: parallelization.shared_files,
+    prerequisite_outputs: Object.keys(prerequisiteOutputs).length > 0
+      ? prerequisiteOutputs
+      : undefined,
+    worker_instructions: workerInstructions
+  };
+}
+
+function extractExportsForTask(task, techSpec) {
+  // Simplified - real implementation would parse tech spec
+  const exports = [];
+  const exportPattern = /export\s+(?:const|function|class)\s+(\w+)/g;
+  // Would scan task's relevant files in tech spec
+  return exports;
+}
+```
+
+---
+
+## Pattern: Format Parallel Worker Prompt (v2.0)
+
+Format context with parallel execution instructions.
+
+```javascript
+// FORMAT_PARALLEL_WORKER_PROMPT_PATTERN
+function formatParallelWorkerPrompt(context, parallelContext) {
+  let prompt = formatWorkerContext(context); // Base context
+
+  if (!parallelContext) {
+    return prompt;
+  }
+
+  // Add parallel execution section
+  prompt += `\n## Parallel Execution Context\n\n`;
+  prompt += `**Wave**: ${parallelContext.wave}\n`;
+  prompt += `**Conflict Risk**: ${parallelContext.conflict_risk}\n`;
+
+  if (parallelContext.concurrent_tasks.length > 0) {
+    prompt += `**Running Concurrently With**: Tasks ${parallelContext.concurrent_tasks.join(', ')}\n`;
+  }
+
+  if (parallelContext.shared_resources.length > 0) {
+    prompt += `\n### Shared Resources (Coordinate Carefully)\n`;
+    parallelContext.shared_resources.forEach(resource => {
+      prompt += `- ⚠️ ${resource}\n`;
+    });
+  }
+
+  if (parallelContext.prerequisite_outputs) {
+    prompt += `\n### Prerequisites (MUST be complete before starting)\n`;
+    for (const [taskId, prereq] of Object.entries(parallelContext.prerequisite_outputs)) {
+      prompt += `\n**From Task ${taskId}**: ${prereq.description}\n`;
+      prompt += `- Files: ${prereq.files.join(', ')}\n`;
+      if (prereq.exports.length > 0) {
+        prompt += `- Required exports: ${prereq.exports.join(', ')}\n`;
+      }
+    }
+  }
+
+  prompt += `\n### Worker Instructions\n`;
+  prompt += `${parallelContext.worker_instructions}\n`;
+
+  return prompt;
+}
+```
+
+---
+
 ## Usage in Commands
 
 Reference these patterns:
@@ -520,6 +715,9 @@ Use patterns from @shared/context-summary.md:
 - Load for worker: LOAD_TASK_CONTEXT_PATTERN
 - Format prompt: FORMAT_WORKER_CONTEXT_PATTERN
 - Invalidation: CONTEXT_INVALIDATION_PATTERN
+- Parallel context: GENERATE_PARALLEL_CONTEXT_PATTERN (v2.0)
+- Parallel prompt: FORMAT_PARALLEL_WORKER_PROMPT_PATTERN (v2.0)
 
 Generate after create-tasks, use during execute-tasks.
+Parallel context enables async agent coordination in v2.0.
 ```
