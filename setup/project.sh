@@ -6,8 +6,8 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="1.9.0"
-AGENT_OS_RELEASE_DATE="2025-12-09"
+AGENT_OS_VERSION="2.1.0"
+AGENT_OS_RELEASE_DATE="2025-12-11"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
