@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v2.1.1 Task JSON Auto-Sync**: Addresses task JSON drift with multi-layered auto-sync. New `task-sync` skill, enhanced `session-startup` (Step 4.5), and mandatory sync gate in Phase 3 (Step 9.7) ensure tasks.json stays synchronized with tasks.md.
+
 **v2.1.0 Task Artifacts**: Tasks now record their outputs (files created, functions exported) in tasks.json. This enables cross-task verification without maintaining a separate codebase index. The codebase-names skill uses live Grep + task artifacts for reliable name validation.
 
 **v2.0.0 Parallel Async Execution**: Leverages Claude Code's async agent capabilities (`run_in_background`, `AgentOutputTool`) for true parallel task execution. Independent tasks now run simultaneously via wave-based orchestration, providing 1.5-3x speedup.
@@ -18,7 +20,7 @@ Agent OS is a development framework that installs into other projects to provide
 
 ```bash
 # Test installation in a separate test project
-./setup/project.sh --claude-code                 # Basic installation (9 default skills)
+./setup/project.sh --claude-code                 # Basic installation (10 default skills)
 ./setup/project.sh --claude-code --full-skills   # Full installation (14 skills)
 ./setup/project.sh --claude-code --with-hooks    # With validation hooks
 ./setup/project.sh --cursor                      # Cursor support
@@ -84,8 +86,9 @@ agent-os/
 | tdd | Auto-invoke before implementing features to enforce RED-GREEN-REFACTOR |
 | brainstorming | Invoke during spec creation for Socratic design refinement |
 | writing-plans | Invoke during task breakdown for detailed micro-task planning |
-| session-startup | Load progress context, verify environment at execute-tasks start |
+| session-startup | Load progress context, verify environment, validate task JSON sync at execute-tasks start |
 | implementation-verifier | End-to-end verification before delivery (after all tasks complete) |
+| task-sync | Auto-invoke to synchronize tasks.json with tasks.md when drift detected (v2.1.1) |
 
 **Optional Skills** (source: `claude-code/skills/optional/*.md`) - Installed with `--full-skills`:
 

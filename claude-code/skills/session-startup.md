@@ -116,6 +116,58 @@ DISPLAY:
 CALCULATE: progress_percent = (completed / total) * 100
 ```
 
+### Step 4.5: Task JSON Validation & Auto-Sync (NEW)
+Validate tasks.json matches tasks.md and auto-sync if needed.
+
+```
+ACTION: Check if tasks.json exists for current spec
+PATH: .agent-os/specs/[spec-name]/tasks.json (or .agent-os/tasks/[spec-name]/)
+
+IF tasks.json does NOT exist:
+  NOTE: "⚠️ tasks.json missing - creating from tasks.md"
+  ACTION: Generate tasks.json using SYNC_TASKS_PATTERN from @shared/task-json.md
+  RESULT: tasks.json created with current state
+
+IF tasks.json EXISTS:
+  ACTION: Validate sync status
+  COMPARE:
+    - Count completed tasks in tasks.md (lines matching "- [x]")
+    - Count tasks with status="pass" in tasks.json
+
+  IF counts differ (DRIFT DETECTED):
+    DISPLAY:
+      "⚠️ Task JSON Drift Detected
+       ─────────────────────────────────────────
+       tasks.md:   [X] tasks completed
+       tasks.json: [Y] tasks marked pass
+       ─────────────────────────────────────────"
+
+    ACTION: Auto-sync tasks.json from tasks.md
+    USE_PATTERN: SYNC_TASKS_PATTERN from @shared/task-json.md
+    PRESERVE: Existing metadata (started_at, duration_minutes, notes, artifacts)
+    UPDATE: Status, progress_percent, summary
+
+    DISPLAY: "✅ tasks.json synced to match tasks.md"
+
+  IF counts match:
+    DISPLAY: "✓ tasks.json in sync"
+
+VALIDATION GATE:
+  ☐ tasks.json exists
+  ☐ Task counts match between MD and JSON
+  ☐ Summary percentages accurate
+
+IF validation fails after sync attempt:
+  WARN: "tasks.json sync failed - manual review needed"
+  CONTINUE: Proceed with tasks.md as source of truth
+```
+
+**Why This Step Matters:**
+- Catches sync drift at session start (before any work begins)
+- Auto-repairs without user intervention
+- Preserves valuable metadata (duration, artifacts)
+- Ensures cross-task verification (v2.1) works correctly
+
 ### Step 5: Environment Health Check
 Verify development environment is ready.
 
@@ -173,6 +225,7 @@ Directory: ✓ [project-name]
 Progress:  ✓ [X] previous entries loaded
 Git:       ✓ On branch [branch-name] | [clean/uncommitted changes]
 Tasks:     ✓ [X]/[Y] complete ([Z]%)
+JSON Sync: ✓ In sync [or "✓ Auto-synced" or "⚠️ Manual review needed"]
 Env:       ✓ Ready [or ⚠️ with notes]
 Focus:     → Task [id]: [description]
 ─────────────────────────────────────────────────

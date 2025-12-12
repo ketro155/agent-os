@@ -111,6 +111,52 @@ VALIDATION:
     ✗ HALT - Apply fixes first
 ```
 
+### Step 9.7: Task JSON Sync Gate (MANDATORY)
+
+Final sync validation before committing. Ensures tasks.json accurately reflects completed work.
+
+**Validation Protocol:**
+```
+ACTION: Compare tasks.md and tasks.json completion counts
+COMMAND: Count "- [x]" in tasks.md vs status="pass" in tasks.json
+
+IF counts differ (DRIFT DETECTED):
+  WARN: "⚠️ Task JSON out of sync with markdown"
+  DISPLAY:
+    "tasks.md completed: [X]
+     tasks.json passed:  [Y]
+     Difference: [Z] tasks"
+
+  ACTION: Auto-sync using SYNC_TASKS_PATTERN from @shared/task-json.md
+  STEPS:
+    1. Parse tasks.md (source of truth)
+    2. Load existing tasks.json metadata
+    3. Merge: Update statuses, preserve metadata (started_at, artifacts)
+    4. Recalculate summary
+    5. Atomic write to tasks.json
+
+  VERIFY: Re-compare counts after sync
+  DISPLAY: "✅ tasks.json synced - [X] tasks completed"
+
+IF counts match:
+  DISPLAY: "✓ Task JSON in sync"
+  PROCEED: To git workflow
+
+VALIDATION GATE:
+  ☐ tasks.json exists
+  ☐ Completion counts match between MD and JSON
+  ☐ Summary percentages accurate
+  ☐ All completed tasks have completed_at timestamps
+
+BLOCKING: Cannot proceed to git workflow until sync verified
+```
+
+**Why This Gate Matters:**
+- Prevents committing with stale task metadata
+- Ensures v2.1 artifact tracking is accurate for subsequent tasks
+- Catches any sync drift from Phase 2 execution
+- Provides reliable progress data for project-manager subagent
+
 ### Step 10: Git Workflow
 
 Create commit, push, and PR.

@@ -5,6 +5,48 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2025-12-12
+
+### Automatic Task JSON Sync
+
+Addresses task JSON drift where `tasks.json` becomes out of sync with `tasks.md` (source of truth) during task execution.
+
+**Problem**: When tasks were executed outside `/execute-tasks` or Phase 2 update steps were skipped, `tasks.json` would show stale data (all tasks pending) even when `tasks.md` showed completed tasks.
+
+**Solution**: Multi-layered auto-sync approach:
+
+### New: task-sync Skill
+
+New dedicated skill for synchronizing tasks.json with tasks.md:
+- Auto-invokes when drift is detected
+- Parses tasks.md as source of truth
+- Preserves existing metadata (started_at, duration_minutes, artifacts)
+- Updates status, progress_percent, and summary
+- Performs atomic writes to prevent corruption
+
+### Changed: session-startup Skill (Step 4.5)
+
+Added new **Task JSON Validation & Auto-Sync** step:
+- Checks if tasks.json exists and matches tasks.md
+- Auto-syncs on drift detection
+- Reports sync status in startup summary
+- Catches issues before work begins
+
+### Changed: execute-phase3.md (Step 9.7)
+
+Added new **Task JSON Sync Gate (MANDATORY)**:
+- Final validation before git commit
+- Blocks completion if drift detected
+- Auto-syncs to ensure accurate task state in commits
+- Ensures artifacts are recorded correctly for cross-task verification
+
+### Installation
+
+- Added `task-sync` to default skills (Tier 1)
+- Updated project.sh for both local and GitHub download paths
+
+---
+
 ## [2.1.0] - 2025-12-11
 
 ### Task Artifacts for Cross-Task Verification
