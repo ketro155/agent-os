@@ -6,7 +6,7 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="3.0.1"
+AGENT_OS_VERSION="3.0.2"
 AGENT_OS_RELEASE_DATE="2025-12-14"
 AGENT_OS_V2_VERSION="2.2.0"  # Legacy version for --v2 flag
 
@@ -508,8 +508,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
         else
             # GitHub installation for v3
-            echo "  Downloading v3 files from GitHub..."
-            echo "  ⚠️  Note: v3 GitHub installation not yet available. Use base installation."
+            install_v3_from_github "$OVERWRITE_CLAUDE"
         fi
 
     # ============================================================
@@ -551,7 +550,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             echo ""
             echo "  📂 Shared Modules:"
             create_tracked_dir "./.agent-os/shared"
-            for shared in error-recovery state-patterns progress-log task-json context-summary; do
+            for shared in error-recovery state-patterns progress-log task-json context-summary parallel-execution; do
                 if [ -f "$BASE_AGENT_OS/shared/${shared}.md" ]; then
                     copy_file "$BASE_AGENT_OS/shared/${shared}.md" "./.agent-os/shared/${shared}.md" "$OVERWRITE_CLAUDE" "shared/${shared}.md"
                 else
@@ -609,7 +608,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             echo ""
             echo "  📂 Shared Modules:"
             create_tracked_dir "./.agent-os/shared"
-            for shared in error-recovery state-patterns progress-log task-json context-summary; do
+            for shared in error-recovery state-patterns progress-log task-json context-summary parallel-execution; do
                 download_file "${BASE_URL}/shared/${shared}.md" \
                     "./.agent-os/shared/${shared}.md" \
                     "$OVERWRITE_CLAUDE" \
