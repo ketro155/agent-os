@@ -2,7 +2,6 @@
 name: phase3-delivery
 description: Completion and delivery agent. Invoke after all tasks are done to run final tests, create PR, and document completion.
 tools: Read, Bash, Grep, Glob, TodoWrite, Write
-model: sonnet
 ---
 
 # Phase 3: Delivery Agent

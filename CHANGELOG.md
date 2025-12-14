@@ -5,6 +5,48 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2025-12-14
+
+### Added
+
+- **PR Review Cycle Command** (`/pr-review-cycle`): Automated processing of PR review feedback using direct GitHub API
+  - Fetches reviews via `gh` CLI (no setup required)
+  - Categorizes comments by priority (CRITICAL → HIGH → MEDIUM → LOW → INFO)
+  - Processes comments in priority order
+  - Posts replies to GitHub comments
+  - Commits and pushes fixes automatically
+
+- **PR Review Handler Skill** (`pr-review-handler`): Systematic approach to addressing review feedback
+  - Comment categorization patterns
+  - Fix protocols for security, bugs, logic errors
+  - Reply templates by category
+  - Verification checklists
+
+### Fixed
+
+- **Git Workflow Enforcement** (CRITICAL): Added mandatory branch validation gates to v3 native subagents
+  - **phase1-discovery.md**: Added Step 0 MANDATORY Gate - returns `blocked` status if on main/master
+  - **phase2-implementation.md**: Added pre-implementation defense-in-depth validation
+  - Both gates HALT execution and require feature branch before proceeding
+
+### Removed
+
+- **v2.x Architecture Removed** (BREAKING): Legacy files deleted from source repository
+  - `commands/phases/` directory removed (execute-phase0.md through execute-phase3.md)
+  - `claude-code/agents/task-orchestrator.md` removed
+  - `claude-code/agents/codebase-indexer.md` removed
+  - Installer no longer installs these files
+  - v3 uses native subagents in `v3/agents/` instead (phase1-discovery.md, phase2-implementation.md, phase3-delivery.md)
+
+### Why Git Workflow Enforcement Was Needed
+
+During task execution, workers could commit directly to main/master if branch setup was skipped or failed silently. The fix adds two enforcement layers in v3 architecture:
+
+1. **Phase 1 Gate**: Blocks task discovery if on protected branch - fails early
+2. **Phase 2 Gate**: Defense-in-depth - catches any bypass before implementation
+
+---
+
 ## [3.0.1] - 2025-12-14
 
 ### Fixed

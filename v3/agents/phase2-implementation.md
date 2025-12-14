@@ -2,7 +2,6 @@
 name: phase2-implementation
 description: TDD implementation agent for executing a single task. Invoke when ready to implement task code with test-first approach.
 tools: Read, Edit, Write, Bash, Grep, Glob, TodoWrite
-model: sonnet
 ---
 
 # Phase 2: TDD Implementation Agent
@@ -43,6 +42,43 @@ You receive:
 ```
 
 ## Execution Protocol
+
+### Pre-Implementation Gate: Branch Validation (v3.0.2)
+
+> ⚠️ **DEFENSE-IN-DEPTH** - Verify branch before ANY implementation begins
+
+```bash
+# Check current branch
+git branch --show-current
+```
+
+**Validation Logic:**
+```
+IF branch == "main" OR branch == "master":
+  ⛔ HALT IMMEDIATELY
+
+  RETURN:
+  {
+    "status": "blocked",
+    "task_id": "[task_id]",
+    "blocker": "Cannot implement on protected branch '[branch]'. Phase 1 should have blocked this.",
+    "notes": "Defense-in-depth validation caught protected branch violation"
+  }
+
+  DO NOT write any code.
+  DO NOT commit anything.
+
+ELSE:
+  ✅ Branch validation passed
+  CONTINUE with implementation
+```
+
+**Why This Check Exists:**
+- Phase 1 gate may have been bypassed or failed silently
+- Workers may be spawned without proper branch context
+- Last line of defense before code changes
+
+---
 
 ### For Each Subtask:
 

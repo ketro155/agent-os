@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v3.0.2 Git Workflow Enforcement + v2.x Removal**: Adds mandatory branch validation gates to v3 native subagents to prevent direct commits to main/master. `phase1-discovery.md` has Step 0 MANDATORY Gate that blocks if on protected branch. `phase2-implementation.md` has defense-in-depth validation. Also adds `/pr-review-cycle` command for automated PR review feedback processing. **BREAKING**: v2.x architecture removed entirely (phase files, task-orchestrator, codebase-indexer).
+
 **v2.1.1 Task JSON Auto-Sync**: Addresses task JSON drift with multi-layered auto-sync. New `task-sync` skill, enhanced `session-startup` (Step 4.5), and mandatory sync gate in Phase 3 (Step 9.7) ensure tasks.json stays synchronized with tasks.md.
 
 **v2.1.0 Task Artifacts**: Tasks now record their outputs (files created, functions exported) in tasks.json. This enables cross-task verification without maintaining a separate codebase index. The codebase-names skill uses live Grep + task artifacts for reliable name validation.
@@ -54,6 +56,7 @@ agent-os/
 **Commands** (source: `commands/*.md`):
 - `plan-product` / `analyze-product` - Product initialization
 - `shape-spec` → `create-spec` → `create-tasks` → `execute-tasks` - Feature development pipeline
+- `pr-review-cycle` - Automated PR review feedback processing (v3.0.2+)
 - `index-codebase` - Code reference management (legacy - replaced by task artifacts)
 - `debug` - Context-aware debugging with git integration
 
@@ -89,6 +92,7 @@ agent-os/
 | session-startup | Load progress context, verify environment, validate task JSON sync at execute-tasks start |
 | implementation-verifier | End-to-end verification before delivery (after all tasks complete) |
 | task-sync | Auto-invoke to synchronize tasks.json with tasks.md when drift detected (v2.1.1) |
+| pr-review-handler | Systematic PR review comment processing for /pr-review-cycle (v3.0.2+) |
 
 **Optional Skills** (source: `claude-code/skills/optional/*.md`) - Installed with `--full-skills`:
 

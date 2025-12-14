@@ -2,7 +2,6 @@
 name: phase1-discovery
 description: Task discovery and execution mode selection. Invoke at start of execute-tasks to determine which tasks to run and how.
 tools: Read, Grep, Glob, TodoWrite, AskUserQuestion, Task
-model: haiku
 ---
 
 # Phase 1: Task Discovery Agent
@@ -43,6 +42,49 @@ You receive:
 ```
 
 ## Execution Protocol
+
+### 0. Git Branch Validation (MANDATORY Gate - v3.0.2)
+
+> ⛔ **BLOCKING GATE** - MUST validate branch before task discovery proceeds
+
+```bash
+# Check current branch
+git branch --show-current
+```
+
+**Validation Logic:**
+```
+COMMAND: git branch --show-current
+STORE: current_branch
+
+IF current_branch == "main" OR current_branch == "master":
+  ⛔ CANNOT PROCEED ON PROTECTED BRANCH
+
+  RETURN immediately with:
+  {
+    "status": "blocked",
+    "blockers": ["Cannot execute tasks on protected branch '[current_branch]'. Create feature branch first."],
+    "git_branch": {
+      "current": "[current_branch]",
+      "target": "feature/[spec-name]",
+      "needs_creation": true,
+      "action_required": "Create feature branch before re-running execute-tasks"
+    }
+  }
+
+  DO NOT continue with task discovery.
+
+ELSE:
+  ✅ Branch validation passed: [current_branch]
+  CONTINUE to task loading
+```
+
+**Why This Gate Exists:**
+- Prevents workers from committing directly to main/master
+- Ensures proper PR workflow in Phase 3
+- Must fail early before any implementation context is loaded
+
+---
 
 ### 1. Load Tasks
 

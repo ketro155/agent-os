@@ -435,7 +435,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ "$IS_FROM_BASE" = true ]; then
             # Install v3 commands (simplified)
             echo "  📂 Commands (v3 - simplified):"
-            for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug; do
+            for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug pr-review-cycle; do
                 if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
                     copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
                 fi
@@ -527,7 +527,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ "$IS_FROM_BASE" = true ]; then
             # Copy from base installation
             echo "  📂 Commands:"
-            for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
+            for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug pr-review-cycle; do
                 if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
                     copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
                 else
@@ -537,7 +537,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Agents:"
-            for agent in git-workflow project-manager codebase-indexer task-orchestrator; do
+            for agent in git-workflow project-manager; do
                 if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
                     copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
                 else
@@ -545,16 +545,8 @@ if [ "$CLAUDE_CODE" = true ]; then
                 fi
             done
 
-            echo ""
-            echo "  📂 Phases (execute-tasks):"
-            create_tracked_dir "./.claude/commands/phases"
-            for phase in execute-phase0 execute-phase1 execute-phase2 execute-phase3; do
-                if [ -f "$BASE_AGENT_OS/commands/phases/${phase}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/commands/phases/${phase}.md" "./.claude/commands/phases/${phase}.md" "$OVERWRITE_CLAUDE" "phases/${phase}.md"
-                else
-                    echo "  ⚠️  Warning: ${phase}.md not found in base installation"
-                fi
-            done
+            # Note: v2.x phase files (execute-phase*.md) and task-orchestrator removed in v3.0.2
+            # v3 uses native subagents in v3/agents/ instead
 
             echo ""
             echo "  📂 Shared Modules:"
@@ -569,7 +561,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync; do
+            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler; do
                 if [ -f "$BASE_AGENT_OS/claude-code/skills/${skill}.md" ]; then
                     copy_file "$BASE_AGENT_OS/claude-code/skills/${skill}.md" "./.claude/skills/${skill}.md" "$OVERWRITE_CLAUDE" "skills/${skill}.md"
                 else
@@ -595,7 +587,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             echo "  Downloading Claude Code files from GitHub..."
             echo ""
             echo "  📂 Commands:"
-            for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug; do
+            for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug pr-review-cycle; do
                 download_file "${BASE_URL}/commands/${cmd}.md" \
                     "./.claude/commands/${cmd}.md" \
                     "$OVERWRITE_CLAUDE" \
@@ -604,22 +596,15 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Agents:"
-            for agent in git-workflow project-manager codebase-indexer task-orchestrator; do
+            for agent in git-workflow project-manager; do
                 download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
                     "./.claude/agents/${agent}.md" \
                     "$OVERWRITE_CLAUDE" \
                     "agents/${agent}.md"
             done
 
-            echo ""
-            echo "  📂 Phases (execute-tasks):"
-            create_tracked_dir "./.claude/commands/phases"
-            for phase in execute-phase0 execute-phase1 execute-phase2 execute-phase3; do
-                download_file "${BASE_URL}/commands/phases/${phase}.md" \
-                    "./.claude/commands/phases/${phase}.md" \
-                    "$OVERWRITE_CLAUDE" \
-                    "phases/${phase}.md"
-            done
+            # Note: v2.x phase files (execute-phase*.md) and task-orchestrator removed in v3.0.2
+            # v3 uses native subagents in v3/agents/ instead
 
             echo ""
             echo "  📂 Shared Modules:"
@@ -633,7 +618,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync; do
+            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler; do
                 download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
                     "./.claude/skills/${skill}.md" \
                     "$OVERWRITE_CLAUDE" \
@@ -968,11 +953,12 @@ echo ""
 
 if [ "$CLAUDE_CODE" = true ]; then
     echo "Claude Code usage:"
-    echo "  /plan-product    - Set the mission & roadmap for a new product"
-    echo "  /analyze-product - Set up the mission and roadmap for an existing product"
-    echo "  /shape-spec      - Explore and refine a feature concept before full spec"
-    echo "  /create-spec     - Create a detailed spec for a new feature"
-    echo "  /execute-tasks   - Build and ship code for a new feature"
+    echo "  /plan-product      - Set the mission & roadmap for a new product"
+    echo "  /analyze-product   - Set up the mission and roadmap for an existing product"
+    echo "  /shape-spec        - Explore and refine a feature concept before full spec"
+    echo "  /create-spec       - Create a detailed spec for a new feature"
+    echo "  /execute-tasks     - Build and ship code for a new feature"
+    echo "  /pr-review-cycle   - Process and address PR review feedback"
     echo ""
 fi
 

@@ -131,27 +131,24 @@ Target Project/
 ├── .claude/
 │   ├── commands/           # Embedded instructions (250-900 lines each)
 │   │   ├── plan-product.md
-│   │   ├── execute-tasks.md    # v2: 475 lines with embedded instructions
-│   │   └── phases/             # Manual phase loading (v2)
-│   │       ├── execute-phase0.md
-│   │       ├── execute-phase1.md
-│   │       ├── execute-phase2.md
-│   │       └── execute-phase3.md
+│   │   ├── execute-tasks.md    # v3: uses native subagents
+│   │   └── debug.md
 │   │
-│   ├── agents/             # Subagents (v2)
-│   │   ├── git-workflow.md
-│   │   ├── codebase-indexer.md
-│   │   ├── project-manager.md
-│   │   └── task-orchestrator.md
+│   ├── agents/             # Native subagents (v3)
+│   │   ├── phase1-discovery.md      # Task discovery (haiku)
+│   │   ├── phase2-implementation.md # TDD implementation (sonnet)
+│   │   ├── phase3-delivery.md       # Completion workflow (sonnet)
+│   │   ├── git-workflow.md          # Git operations
+│   │   └── project-manager.md       # Task/roadmap updates
 │   │
-│   ├── skills/             # Model-invoked skills (v2)
+│   ├── skills/             # Model-invoked skills
 │   │   ├── build-check.md
 │   │   ├── test-check.md
 │   │   ├── tdd.md
 │   │   ├── task-sync.md
 │   │   └── session-startup.md
 │   │
-│   └── hooks/              # Optional hooks (v2)
+│   └── hooks/              # Deterministic hooks (v3)
 │
 └── [project files...]
 ```
@@ -287,9 +284,12 @@ Target Project/
 2. **Specification Caching** - One-time spec discovery for session
 3. **Context Gathering** - Batch retrieval of relevant docs
 4. **Dev Server Check** - Handle port conflicts
-5. **Git Branch Setup** - Create/switch to feature branch
+5. **Git Branch Setup (MANDATORY Gate v3.0.2)** - Create/switch to feature branch
+   - ⛔ BLOCKS if on main/master - cannot proceed until on feature branch
+   - Validates branch before allowing implementation
 
 #### Phase 2: Task Execution Loop (per task)
+0. **Branch Validation (Defense-in-Depth v3.0.2)** - Re-verify not on protected branch
 1. **Use Cached Specs** - Instant spec access
 2. **Task Understanding** - Map requirements to specs
 3. **Batched Context** - Single request for all context
@@ -443,61 +443,51 @@ Planning Mode provides:
 
 | Subagent | Purpose | Used By |
 |----------|---------|---------|
+| **phase1-discovery** | Task discovery, mode selection | execute-tasks |
+| **phase2-implementation** | TDD implementation | execute-tasks |
+| **phase3-delivery** | Completion workflow, PR creation | execute-tasks |
 | **git-workflow** | Branch management, commits, PRs | execute-tasks, debug |
-| **codebase-indexer** | Code reference updates (deprecated v2.1 - use task artifacts) | index-codebase (legacy) |
 | **project-manager** | Task/roadmap updates, notifications | execute-tasks, create-spec |
-| **task-orchestrator** | Multi-task coordination with workers (v1.9.0+) | execute-tasks (orchestrated mode) |
 
-### Task Orchestrator Pattern (v2.0.0+)
+### Native Subagent Architecture (v3.0+)
 
-For multi-task sessions, the orchestrator pattern prevents context bloat and enables **parallel execution**:
+Execute-tasks uses native Claude Code subagents for phase-based execution:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                  TASK ORCHESTRATOR (v2.0)                        │
-│  (Lightweight - coordinates parallel workers, minimal state)     │
-├─────────────────────────────────────────────────────────────────┤
-│  Holds: tasks.json, execution_strategy, active agentIds          │
-│  Does NOT hold: spec content, code context, implementation       │
+│                    EXECUTE-TASKS (v3.0)                          │
+│  Orchestrates native subagents with tool restrictions            │
 └─────────────────────────────────────────────────────────────────┘
            │
-           │ Spawns with task-specific context
-           │ (Sequential OR Parallel via run_in_background)
            ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      TASK WORKER(S)                              │
-│  (Full context for ONE task, then terminates)                    │
-├─────────────────────────────────────────────────────────────────┤
-│  Receives: Single task, pre-computed context, parallel_context   │
-│  Returns: Completion status, files modified, test results        │
+│  phase1-discovery.md (inherits session model)                    │
+│  Tools: Read, Grep, Glob, TodoWrite, AskUserQuestion, Task       │
+│  ⛔ Step 0: MANDATORY Git Branch Gate (v3.0.2)                   │
+│  Purpose: Task discovery, mode selection                         │
 └─────────────────────────────────────────────────────────────────┘
-```
-
-**Parallel Wave Execution (v2.0.0):**
-
-```
-Wave 1: Independent Tasks (run in parallel)
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│   Worker 1   │   │   Worker 2   │   │   Worker 3   │
-│  (Task 1)    │   │  (Task 2)    │   │  (Task 3)    │
-│  agentId: a1 │   │  agentId: a2 │   │  agentId: a3 │
-└──────────────┘   └──────────────┘   └──────────────┘
-       │                  │                  │
-       └──────────────────┼──────────────────┘
-                          │
-                   AgentOutputTool
-                   (collect all results)
-                          │
-                          ▼
-Wave 2: Dependent Tasks (after Wave 1 completes)
+           │
+           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  phase2-implementation.md (inherits session model)               │
+│  Tools: Read, Edit, Write, Bash, Grep, Glob, TodoWrite           │
+│  ⛔ Pre-Implementation Gate: Branch validation (v3.0.2)          │
+│  Purpose: TDD implementation of single task                      │
+└─────────────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  phase3-delivery.md (inherits session model)                     │
+│  Tools: Read, Bash, Grep, Write, TodoWrite                       │
+│  Purpose: Final tests, PR creation, documentation                │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 **Benefits:**
-- Workers start with fresh context (no accumulation)
-- Orchestrator stays under 20% context budget
-- Scalable to arbitrarily long task lists
-- Consistent quality throughout session
-- **1.5-3x speedup for parallel-friendly specs (v2.0)**
+- Fresh context per phase (no accumulation)
+- Tool restrictions prevent scope creep
+- Inherits session model (consistent quality across phases)
+- Git workflow enforcement at Phase 1 and Phase 2 gates
 
 ### Task Artifacts (v2.1)
 
@@ -530,9 +520,65 @@ Tasks now record their outputs for cross-task verification:
 - Supports parallel execution (workers report artifacts)
 
 **Replaces:**
-- `codebase-indexer` subagent (deprecated)
-- `index-codebase` command for task execution (now optional/legacy)
-- Step 7.7's conditional index updates
+- Manual codebase index maintenance (removed in v3.0.2)
+- `index-codebase` command for task execution (legacy, not recommended)
+
+### PR Review Cycle (v3.0.2+)
+
+Automated processing of PR review feedback using direct GitHub API:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PR REVIEW CYCLE FLOW                          │
+└─────────────────────────────────────────────────────────────────┘
+
+  execute-tasks ──► PR Created ──► Review Submitted ──► /pr-review-cycle
+                                                              │
+                                                              ▼
+                                              ┌───────────────────────────┐
+                                              │  Fetches via gh CLI:      │
+                                              │  • gh pr view             │
+                                              │  • gh api pulls/comments  │
+                                              │  • gh api pulls/reviews   │
+                                              └───────────────────────────┘
+                                                              │
+                                                              ▼
+                                              ┌───────────────────────────┐
+                                              │  Processes feedback:      │
+                                              │  1. Categorize by priority│
+                                              │  2. Address CRITICAL first│
+                                              │  3. Reply to comments     │
+                                              │  4. Commit and push       │
+                                              └───────────────────────────┘
+                                                              │
+                                                              ▼
+                                              Wait for re-review or merge
+```
+
+**No setup required** - just run the command when you're ready to address feedback.
+
+**Components:**
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| **pr-review-cycle** | `.claude/commands/pr-review-cycle.md` | Fetches and processes reviews |
+| **pr-review-handler** | `.claude/skills/pr-review-handler.md` | Systematic comment addressing |
+
+**Usage:**
+```bash
+# When you're ready to address review feedback
+/pr-review-cycle            # Auto-detects PR from current branch
+/pr-review-cycle 123        # Or specify PR number explicitly
+```
+
+**Comment Priority:**
+| Priority | Categories |
+|----------|------------|
+| CRITICAL | Security vulnerabilities |
+| HIGH | Bugs, logic errors |
+| MEDIUM | Missing implementation, performance |
+| LOW | Style, documentation |
+| INFO | Questions, suggestions (reply only) |
 
 ### Skills (Auto-Invoked)
 
@@ -561,6 +607,8 @@ Skills are auto-invoked by Claude based on context. They live in `.claude/skills
 | **writing-plans** | Create detailed micro-task plans | During task breakdown |
 | **session-startup** | Load progress context, verify environment | At execute-tasks start |
 | **implementation-verifier** | End-to-end verification before delivery | After all tasks complete |
+| **pr-review-handler** | Systematic PR review comment processing | During /pr-review-cycle |
+| **task-sync** | Synchronize tasks.json with tasks.md when drift detected | When task drift detected |
 
 **Tier 2 - Optional Skills (Installed with `--full-skills`):**
 
@@ -769,20 +817,19 @@ Parallel Waves (5 tasks, 2 waves):
 
 Based on Anthropic's "Effective Harnesses for Long-Running Agents" research:
 
-**Phase-Based Instruction Loading:**
+**Native Subagent Architecture (v3.0+):**
 ```
-execute-tasks.md (shell: ~430 lines)
-├── Phase 0: execute-phase0.md (~50 lines) - Session startup
-├── Phase 1: execute-phase1.md (~150 lines) - Task discovery + git branch setup
-├── Phase 2: execute-phase2.md (~200 lines) - TDD implementation
-└── Phase 3: execute-phase3.md (~150 lines) - Completion + git commit/PR
+execute-tasks.md
+├── Phase 1: phase1-discovery.md - Task discovery + git branch gate
+├── Phase 2: phase2-implementation.md - TDD implementation + branch validation
+└── Phase 3: phase3-delivery.md - Completion + git commit/PR
 
-Total loaded at any time: ~500 lines (vs ~636 all at once)
+Each phase = fresh context, tool restrictions, inherits session model
 ```
 
-**⚠️ CRITICAL**: Phase files MUST be read with the Read tool before execution.
-Each phase contains subagent invocations (git-workflow) that will be skipped if phases are bypassed.
-See `execute-tasks.md` for mandatory enforcement gates.
+**⚠️ CRITICAL**: Phase 1 has MANDATORY Git Branch Gate (v3.0.2).
+Execution BLOCKS if on main/master. Phase 2 has defense-in-depth validation.
+See `v3/agents/phase1-discovery.md` for gate implementation.
 
 **Pre-Computed Context (context-summary.json):**
 | Approach | Tokens per Task | Overhead |
@@ -849,13 +896,14 @@ See `execute-tasks.md` for mandatory enforcement gates.
 
 ## 📊 Key Metrics
 
-### File Sizes (with phase-based loading v1.9.0+)
-- **execute-tasks.md**: ~360 lines (lightweight shell)
-- **phases/execute-phase0-3.md**: ~550 lines total (loaded on-demand)
+### File Sizes (v3.0+ Native Subagent Architecture)
+- **execute-tasks.md**: ~360 lines (lightweight orchestrator)
+- **v3/agents/phase1-discovery.md**: ~200 lines
+- **v3/agents/phase2-implementation.md**: ~180 lines
+- **v3/agents/phase3-delivery.md**: ~150 lines
 - **create-spec.md**: ~550 lines
 - **debug.md**: ~550 lines
 - **plan-product.md**: ~500 lines
-- **index-codebase.md**: ~450 lines
 - **analyze-product.md**: ~400 lines
 - **create-tasks.md**: ~300 lines (generates JSON files)
 
