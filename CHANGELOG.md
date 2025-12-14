@@ -5,6 +5,288 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2025-12-14
+
+### Fixed
+
+- **task-orchestrator.md**: Added missing YAML frontmatter with required `name` field (was causing agent parse errors)
+- **settings.json**: Corrected schema URL from `https://claude.ai/schemas/settings.json` to `https://json.schemastore.org/claude-code-settings.json`
+
+### Added
+
+- **Legacy file cleanup**: Installer now automatically removes v2.x files during v3 upgrades
+  - Removes legacy agents: `build-checker`, `context-fetcher`, `date-checker`, `file-creator`, `spec-cache-manager`, `test-runner`, `task-orchestrator`, `codebase-indexer`, `project-manager`
+  - Removes `skills/` directory (v3 uses hooks instead)
+  - Removes `commands/phases/` directory (v3 uses native subagents)
+  - Removes `shared/` directory (v3 uses memory hierarchy)
+  - Removes deprecated `index-codebase.md` command
+- **`--keep-legacy` flag**: Preserves v2.x files during upgrade if needed (not recommended)
+- **.gitignore**: Added exclusions for test installation directories in source repo
+
+### Changed
+
+- Installer help text updated to document upgrade behavior and `--keep-legacy` flag
+
+## [3.0.0] - 2025-12-12
+
+### Major Architecture Overhaul - Native Claude Code Integration
+
+Agent OS v3.0 is a complete architectural refactor that leverages Claude Code's native capabilities. This release replaces custom solutions with deterministic, built-in features for improved reliability and reduced complexity.
+
+**Key Insight**: Claude Code has evolved to natively support many patterns Agent OS previously implemented in markdown. v3.0 moves from "in markdown" to "in configuration."
+
+### Breaking Changes
+
+- **Single-source task format**: `tasks.json` is now the source of truth (not `tasks.md`)
+- **Skills removed**: Replaced by native hooks and memory rules
+- **Phase files removed**: Replaced by native subagents
+- **Embedded instructions removed**: Replaced by memory hierarchy
+
+### New: Native Hooks (Mandatory Validation)
+
+Hooks are **deterministic** - they always run and cannot be skipped by the model.
+
+| Hook | Trigger | Purpose |
+|------|---------|---------|
+| `session-start.sh` | SessionStart | Load progress context, validate environment |
+| `session-end.sh` | SessionEnd | Save checkpoint, log session summary |
+| `post-file-change.sh` | PostToolUse (Write/Edit) | Auto-regenerate tasks.md from JSON |
+| `pre-commit-gate.sh` | PreToolUse (git commit) | Validate build, tests, types before commit |
+
+**Why this matters**: In v2.x, skills like `build-check` and `task-sync` were model-invoked, meaning Claude decided when to use them. This led to validation being skipped. Hooks **cannot be bypassed**.
+
+### New: Single-Source Task Format
+
+- `tasks.json` is the **source of truth**
+- `tasks.md` is **auto-generated** by `post-file-change.sh` hook
+- No sync logic needed (eliminates drift problem from v2.1.1)
+- Schema: `.agent-os/schemas/tasks-v3.json`
+
+### New: Native Subagents for Phases
+
+Phases are now native Claude Code subagents with tool restrictions:
+
+| Agent | Model | Tools | Purpose |
+|-------|-------|-------|---------|
+| `phase1-discovery.md` | haiku | Read, Grep, Glob, Task | Task discovery, mode selection |
+| `phase2-implementation.md` | sonnet | Read, Edit, Write, Bash | TDD implementation |
+| `phase3-delivery.md` | sonnet | Read, Bash, Grep, Write | Final tests, PR, documentation |
+
+**Benefits**:
+- Fresh context per phase (prevents context bloat)
+- Tool restrictions prevent scope creep
+- Model specification (haiku for fast phases)
+- Auto-skill loading via `skills:` field
+
+### New: Planning Mode + Explore Agent Integration
+
+v3.0 includes native Claude Code agent integration:
+
+**Planning Mode** in `/shape-spec`:
+
+| Step | Tool | Purpose |
+|------|------|---------|
+| Start | `EnterPlanMode` | Restrict to read-only, signal exploration |
+| End | `ExitPlanMode` | Get user approval, ready for implementation |
+
+**Explore Agent** with thoroughness levels:
+
+| Command/Agent | Thoroughness | Use Case |
+|---------------|--------------|----------|
+| phase1-discovery | `quick` | Spec discovery, context loading |
+| shape-spec (quick) | `quick` | Fast validation |
+| shape-spec (standard) | `medium` | Balanced exploration |
+| shape-spec (deep) | `very thorough` | Complex features |
+| debug | `very thorough` | Root cause investigation |
+
+### New: shape-spec and debug Commands (v3-style)
+
+New simplified commands with native integration:
+
+- **shape-spec.md** (~100 lines): Planning Mode + Explore agent for feature exploration
+- **debug.md** (~100 lines): Explore agent for root cause investigation
+
+### New: Memory Hierarchy
+
+Instructions are now in Claude Code's native memory system:
+
+```
+.claude/
+├── CLAUDE.md              # Core instructions (always loaded)
+└── rules/
+    ├── tdd-workflow.md    # TDD rules (path-specific)
+    ├── git-conventions.md # Git rules
+    └── execute-tasks.md   # Task execution rules
+```
+
+**Benefits**:
+- Automatic loading (no Read tool needed)
+- Path-specific rules with YAML frontmatter
+- Hierarchical precedence
+
+### New: Task Operations Script
+
+All task operations consolidated into `.claude/scripts/task-operations.sh`:
+
+```bash
+# Get status
+.claude/scripts/task-operations.sh status [spec_name]
+
+# Update task
+.claude/scripts/task-operations.sh update <task_id> <status>
+
+# Collect artifacts from git
+.claude/scripts/task-operations.sh collect-artifacts [since_commit]
+
+# Validate names exist
+.claude/scripts/task-operations.sh validate-names '["functionName"]'
+```
+
+### Changed: Installer
+
+- Default architecture is now v3
+- New flags: `--v3` (default), `--v2`/`--legacy`
+- Version tracking includes `"architecture": "v3"` or `"v2"`
+- v2 installation preserved for backwards compatibility
+
+```bash
+# v3 installation (default)
+./setup/project.sh --claude-code
+
+# v2 legacy installation
+./setup/project.sh --claude-code --v2
+```
+
+### Removed
+
+| Component | Replacement |
+|-----------|-------------|
+| `task-sync` skill | `post-file-change.sh` hook |
+| `session-startup` skill | `session-start.sh` hook |
+| `build-check` skill | `pre-commit-gate.sh` hook |
+| Phase files (`execute-phase0-3.md`) | Native subagents |
+| Embedded instructions (250-900 lines) | Memory hierarchy |
+| Dual-format tasks (MD + JSON) | Single-source JSON |
+| `codebase-indexer` subagent | Task artifacts + live Grep |
+
+### Code Reduction
+
+| Component | v2.x Lines | v3.0 Lines | Reduction |
+|-----------|------------|------------|-----------|
+| execute-tasks.md | 475 | ~120 | **75%** |
+| Phase files | 970 | 0 (native) | **100%** |
+| task-sync skill | 290 | 0 (hooks) | **100%** |
+| session-startup skill | 286 | 0 (hooks) | **100%** |
+| **Total** | ~2,000+ | ~120 | **~94%** |
+
+### Migration from v2.x
+
+1. Run `./setup/project.sh --claude-code --upgrade`
+2. Old `skills/` directory can be deleted (not used in v3)
+3. Existing `tasks.md` files work as-is (will be regenerated from JSON)
+4. Progress logs are preserved
+
+### Why Upgrade?
+
+1. **More Reliable**: Hooks cannot be skipped
+2. **Simpler**: ~50% less code to maintain
+3. **Faster**: Native features, no Read tool overhead
+4. **No Dependencies**: Uses only built-in Claude Code tools
+5. **Cleaner**: Single-source data, deterministic validation
+
+---
+
+## [2.2.0] - 2025-12-13
+
+### Native Claude Code Agent Integration (Planning Mode + Explore Agent)
+
+This release deepens integration with Claude Code's native capabilities by incorporating Planning Mode and enhanced Explore agent usage into key commands.
+
+**Design Philosophy**: Option B - Moderate Integration
+- Wraps `shape-spec` with Planning Mode for formal exploration
+- Adds Explore agent with thoroughness levels across commands
+- Preserves the existing `create-spec` → `create-tasks` → `execute-tasks` pipeline
+
+### New: Planning Mode Integration in shape-spec
+
+The `/shape-spec` command now uses Claude Code's Planning Mode:
+
+| Step | Tool | Purpose |
+|------|------|---------|
+| Step 0 | `EnterPlanMode` | Signal exploration phase, restrict to read-only tools |
+| Step 9 | `ExitPlanMode` | Signal exploration complete, get user approval |
+
+**Benefits**:
+- Clear separation between "exploring options" and "building"
+- Tool restrictions prevent premature implementation
+- User approval required before proceeding to `/create-spec`
+
+### New: Explore Agent with Thoroughness Levels
+
+Commands now use the Explore agent with context-appropriate thoroughness:
+
+| Command | Thoroughness | Use Case |
+|---------|--------------|----------|
+| `shape-spec` (quick mode) | `quick` | Fast validation, known patterns |
+| `shape-spec` (standard) | `medium` | Balanced exploration |
+| `shape-spec` (deep mode) | `very thorough` | Comprehensive analysis |
+| `debug` | `very thorough` | Root cause investigation |
+| `execute-tasks` Phase 1 | `quick` | Targeted context loading |
+| `execute-tasks` Phase 1 | `medium` | Spec discovery (fallback) |
+
+### Changed: shape-spec Command
+
+Added new steps for native integration:
+
+- **Step 0**: Enter Planning Mode
+- **Step 2.5**: Deep Codebase Exploration (Explore agent)
+- **Step 3**: Technical Feasibility now incorporates exploration results
+- **Step 9**: Exit Planning Mode
+
+Exploration depth parameter now maps to Explore agent thoroughness:
+- `quick` → `thoroughness: quick`
+- `standard` → `thoroughness: medium`
+- `deep` → `thoroughness: very thorough`
+
+### Changed: debug Command
+
+Added Explore agent for root cause investigation:
+
+- **Step 3.5**: Codebase Exploration for Root Cause
+  - Traces error propagation through codebase
+  - Finds working examples for comparison
+  - Identifies related code and dependencies
+  - Results feed into systematic-debugging skill
+
+Investigation phases now leverage Explore agent results:
+- Phase 1: Uses "Recent changes" and "Error propagation"
+- Phase 2: Uses "Related code" and "Dependencies"
+
+### Changed: execute-tasks Phase 1
+
+Enhanced context loading with Explore agent:
+
+- **Step 3-Alternative**: Uses `thoroughness: medium` for spec discovery fallback
+- **Step 4**: Uses `thoroughness: quick` for targeted document retrieval
+
+### Documentation Updates
+
+- Updated SYSTEM-OVERVIEW.md with v2.2.0 features
+- Added Planning Mode integration section
+- Added Explore Agent thoroughness levels documentation
+- Updated command workflow descriptions
+
+### Why This Release?
+
+This release implements "Option B: Moderate Integration" from our evaluation:
+
+1. **Selective Planning Mode**: Only in `shape-spec` (exploration command)
+2. **Deep Explore Agent**: Thoroughness-aware integration across commands
+3. **Pipeline Preserved**: `create-spec` → `create-tasks` → `execute-tasks` unchanged
+4. **Non-Breaking**: Existing projects work without modification
+
+---
+
 ## [2.1.1] - 2025-12-12
 
 ### Automatic Task JSON Sync

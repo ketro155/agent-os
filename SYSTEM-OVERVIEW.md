@@ -1,96 +1,157 @@
 # Agent-OS System Overview
-## Native Claude Code Implementation with Embedded Instructions
+## Native Claude Code Implementation
 
 ---
 
 ## 🎯 Executive Summary
 
-Agent-OS is a **development framework** that gets installed INTO other projects to provide structured AI-assisted software development workflows. This implementation uses **embedded instructions** directly in commands to ensure Claude Code always has full context, solving reliability issues with external references.
+Agent-OS is a **development framework** that gets installed INTO other projects to provide structured AI-assisted software development workflows.
 
-### Key Innovation
-- **Problem Solved**: Claude Code doesn't reliably follow "Refer to instructions in..." references
-- **Solution**: All instructions are embedded directly within command files
-- **Result**: 100% reliable execution with complete context always available
+### v3.0 Architecture (Current - Default)
 
-### Parallel Async Execution (v2.0.0+)
-Leveraging Claude Code's async agent capabilities for true parallel task execution:
-- **Wave-based parallelism**: Independent tasks run simultaneously via `run_in_background`
+v3.0 leverages Claude Code's **native capabilities** for improved reliability and simplicity:
+
+| Feature | Implementation |
+|---------|----------------|
+| **Validation** | Native hooks (deterministic, cannot be skipped) |
+| **Task Format** | Single-source JSON (MD auto-generated) |
+| **Phases** | Native subagents with tool restrictions |
+| **Instructions** | Memory hierarchy (CLAUDE.md + rules/) |
+| **Operations** | Shell script utilities |
+
+**Key Benefits**:
+- Hooks **cannot be bypassed** (unlike model-invoked skills)
+- ~75% code reduction (simpler maintenance)
+- No sync issues (single source of truth)
+- Native Claude Code features (faster, more reliable)
+
+### v2.x Architecture (Legacy - `--v2` flag)
+
+The original architecture using embedded instructions:
+
+| Feature | Implementation |
+|---------|----------------|
+| **Validation** | Skills (model-invoked, can be skipped) |
+| **Task Format** | Dual MD + JSON (sync required) |
+| **Phases** | Manual Read tool loading |
+| **Instructions** | Embedded in commands (250-900 lines each) |
+
+**Key Innovation** (v2.x):
+- Solved: Claude Code doesn't reliably follow external references
+- Solution: All instructions embedded directly in command files
+- Result: 100% reliable execution with complete context
+
+### Parallel Async Execution (v2.0.0+, both architectures)
+- **Wave-based parallelism**: Independent tasks run via `run_in_background`
 - **Automatic dependency analysis**: `/create-tasks` detects parallelizable tasks
-- **1.5-3x speedup**: Significant performance improvement for multi-task specs
+- **1.5-3x speedup**: Significant performance improvement
 - **AgentOutputTool collection**: Results gathered after parallel workers complete
-
-### Context Efficiency Architecture (v1.9.0+)
-Based on Anthropic's "Effective Harnesses for Long-Running Agents" research:
-- **Phase-based loading**: Instructions loaded on-demand, not all at once
-- **Orchestrator pattern**: Multi-task sessions delegate to workers with fresh context
-- **Pre-computed context**: context-summary.json reduces per-task overhead by ~73%
-- **JSON-first tasks**: tasks.json for machine-readable status, tasks.md for humans
 
 ---
 
 ## 🏗️ System Architecture
 
-### Installation Structure
+### v3.0 Installation Structure (Default)
+
 ```
 Target Project/
 ├── .agent-os/
-│   ├── standards/          # Categorized development standards (v1.8.0+)
-│   │   ├── global/         # Cross-cutting: coding-style, conventions, error-handling, validation, tech-stack
+│   ├── standards/          # Categorized development standards
+│   │   ├── global/         # Cross-cutting: coding-style, conventions, error-handling
 │   │   ├── frontend/       # UI patterns: react-patterns, styling
 │   │   ├── backend/        # Server patterns: api-design, database
 │   │   └── testing/        # Test patterns: test-patterns
+│   ├── schemas/            # JSON schemas (v3)
+│   │   └── tasks-v3.json   # Task format schema
 │   ├── state/              # State management and caching
 │   │   ├── workflow.json   # Current workflow state
-│   │   ├── session-cache.json # Runtime cache (auto-generated)
-│   │   └── recovery/       # Automatic state backups
-│   ├── progress/           # Persistent progress log (cross-session memory)
+│   │   ├── session.json    # Current session (hook-managed)
+│   │   └── checkpoints/    # Recovery checkpoints (hook-managed)
+│   ├── progress/           # Persistent progress log
 │   │   ├── progress.json   # Machine-readable progress data
-│   │   ├── progress.md     # Human-readable progress log
-│   │   └── archive/        # Archived entries (>30 days old)
-│   ├── specs/              # Feature specifications (created by commands)
-│   ├── tasks/              # Task breakdowns (created by commands)
-│   ├── product/            # Product planning docs (created by commands)
-│   ├── codebase/           # Code references (created by commands)
-│   └── recaps/             # Completion summaries (created by commands)
+│   │   └── progress.md     # Human-readable progress log
+│   ├── tasks/              # Task breakdowns
+│   │   └── [spec-name]/
+│   │       ├── tasks.json  # SOURCE OF TRUTH (v3)
+│   │       └── tasks.md    # Auto-generated (read-only)
+│   └── specs/, product/, recaps/  # Created by commands
 │
 ├── .claude/
-│   ├── commands/           # Claude Code commands with embedded instructions
-│   │   ├── plan-product.md     # (~500 lines with embedded instructions)
-│   │   ├── analyze-product.md  # (~400 lines with embedded instructions)
-│   │   ├── create-spec.md      # (~550 lines with embedded instructions)
-│   │   ├── create-tasks.md     # (~300 lines, generates tasks.json + context-summary.json)
-│   │   ├── execute-tasks.md    # (~360 lines, lightweight shell + phase loading)
-│   │   ├── index-codebase.md   # (~450 lines with embedded instructions)
-│   │   ├── debug.md            # (~550 lines with embedded instructions)
-│   │   └── phases/             # Phase-based instructions for execute-tasks (v1.9.0+)
-│   │       ├── execute-phase0.md  # Session startup (~50 lines)
-│   │       ├── execute-phase1.md  # Task discovery (~150 lines)
-│   │       ├── execute-phase2.md  # Task execution (~200 lines)
-│   │       └── execute-phase3.md  # Completion (~150 lines)
+│   ├── CLAUDE.md           # Core memory (auto-loaded by Claude Code)
+│   ├── settings.json       # Hooks configuration
 │   │
-│   ├── agents/             # Specialized subagents
-│   │   ├── git-workflow.md        # Git operations and PR creation
-│   │   ├── codebase-indexer.md    # Code reference management
-│   │   ├── project-manager.md     # Task and roadmap management
-│   │   └── task-orchestrator.md   # Multi-task coordination (v1.9.0+)
+│   ├── commands/           # Simplified commands (~100 lines each)
+│   │   ├── plan-product.md
+│   │   ├── analyze-product.md
+│   │   ├── create-spec.md
+│   │   ├── create-tasks.md
+│   │   ├── execute-tasks.md    # v3: uses native subagents
+│   │   └── debug.md
 │   │
-│   ├── skills/             # Model-invoked skills (auto-triggered by Claude)
-│   │   ├── build-check.md         # Build verification before commits
-│   │   ├── test-check.md          # Test execution and analysis
-│   │   ├── codebase-names.md      # Name validation against codebase
-│   │   ├── systematic-debugging.md # 4-phase root cause analysis
-│   │   ├── tdd.md                 # Test-driven development enforcement
-│   │   ├── brainstorming.md       # Socratic design refinement
-│   │   ├── writing-plans.md       # Detailed micro-task planning
-│   │   └── optional/              # Tier 2 skills (--full-skills flag)
-│   │       ├── code-review.md     # Code review guidance
-│   │       ├── verification.md    # Completion verification
-│   │       ├── skill-creator.md   # Custom skill creation guide
-│   │       └── mcp-builder.md     # MCP server creation guide
+│   ├── agents/             # Native subagents (v3)
+│   │   ├── phase1-discovery.md      # Task discovery (haiku)
+│   │   ├── phase2-implementation.md # TDD implementation (sonnet)
+│   │   ├── phase3-delivery.md       # Completion workflow (sonnet)
+│   │   └── git-workflow.md          # Git operations
 │   │
-│   └── hooks/              # Optional validation hooks
-│       ├── pre-write.sh    # JSON validation before writes
-│       └── post-command.sh # Cache cleanup after execution
+│   ├── hooks/              # Mandatory validation (v3)
+│   │   ├── session-start.sh    # Load progress, validate env
+│   │   ├── session-end.sh      # Save checkpoint, log summary
+│   │   ├── post-file-change.sh # Auto-regenerate tasks.md
+│   │   └── pre-commit-gate.sh  # Validate build/tests/types
+│   │
+│   ├── scripts/            # Task operations (v3)
+│   │   ├── task-operations.sh  # All task management
+│   │   └── json-to-markdown.js # MD generation from JSON
+│   │
+│   └── rules/              # Path-specific rules (v3)
+│       ├── tdd-workflow.md     # TDD enforcement
+│       ├── git-conventions.md  # Git conventions
+│       └── execute-tasks.md    # Task execution rules
+│
+└── [project files...]
+```
+
+### v2.x Installation Structure (Legacy - `--v2` flag)
+
+```
+Target Project/
+├── .agent-os/
+│   ├── standards/          # Same as v3
+│   ├── state/              # State management
+│   ├── progress/           # Progress logging
+│   ├── shared/             # Shared modules (v2 only)
+│   │   ├── error-recovery.md
+│   │   ├── state-patterns.md
+│   │   ├── progress-log.md
+│   │   ├── task-json.md
+│   │   └── context-summary.md
+│   └── specs/, tasks/, product/
+│
+├── .claude/
+│   ├── commands/           # Embedded instructions (250-900 lines each)
+│   │   ├── plan-product.md
+│   │   ├── execute-tasks.md    # v2: 475 lines with embedded instructions
+│   │   └── phases/             # Manual phase loading (v2)
+│   │       ├── execute-phase0.md
+│   │       ├── execute-phase1.md
+│   │       ├── execute-phase2.md
+│   │       └── execute-phase3.md
+│   │
+│   ├── agents/             # Subagents (v2)
+│   │   ├── git-workflow.md
+│   │   ├── codebase-indexer.md
+│   │   ├── project-manager.md
+│   │   └── task-orchestrator.md
+│   │
+│   ├── skills/             # Model-invoked skills (v2)
+│   │   ├── build-check.md
+│   │   ├── test-check.md
+│   │   ├── tdd.md
+│   │   ├── task-sync.md
+│   │   └── session-startup.md
+│   │
+│   └── hooks/              # Optional hooks (v2)
 │
 └── [project files...]
 ```
@@ -104,23 +165,36 @@ Target Project/
 
 ---
 
-### 1.5 `/shape-spec` - Specification Shaping (NEW in v1.8.0)
+### 1.5 `/shape-spec` - Specification Shaping (v1.8.0, Enhanced v2.2.0)
 **Purpose**: Lightweight exploration and refinement of feature concepts before full specification
+
+**v2.2.0 Enhancements**:
+- **Planning Mode Integration**: Uses `EnterPlanMode`/`ExitPlanMode` for formal exploration
+- **Explore Agent Integration**: Deep codebase analysis with thoroughness levels
 
 **Use this command when:**
 - You have a rough idea but need to explore feasibility
 - Multiple approaches are viable and need trade-off analysis
 - Scope is unclear and needs boundary definition
 
-**Workflow**:
-1. Understand the feature concept
-2. Check product alignment with mission
-3. Explore technical feasibility
-4. Identify 2-3 approach options
-5. Analyze trade-offs
-6. Define scope boundaries
-7. Create shaped spec summary
-8. Get user validation
+**Workflow (v2.2.0)**:
+1. **Enter Planning Mode** - Signal exploration phase (restricts to read-only)
+2. Understand the feature concept
+3. Check product alignment with mission
+4. **Deep codebase exploration** (Explore agent with thoroughness based on depth)
+5. Explore technical feasibility (informed by codebase context)
+6. Identify 2-3 approach options
+7. Analyze trade-offs
+8. Define scope boundaries
+9. Create shaped spec summary
+10. **Exit Planning Mode** - Get user validation
+
+**Explore Agent Thoroughness**:
+| Depth Mode | Thoroughness | Use Case |
+|------------|--------------|----------|
+| quick | `quick` | Fast validation, known patterns |
+| standard | `medium` | Balanced exploration (default) |
+| deep | `very thorough` | Comprehensive analysis, complex features |
 
 **Creates**:
 - `.agent-os/specs/shaped/YYYY-MM-DD-concept-name.md`
@@ -281,19 +355,31 @@ Target Project/
 
 ---
 
-### 7. `/debug` - Unified Debugging with Full Workflow Integration
+### 7. `/debug` - Unified Debugging with Full Workflow Integration (Enhanced v2.2.0)
 **Purpose**: Intelligent debugging with automatic context detection and complete workflow integration
 
-**Workflow**:
+**v2.2.0 Enhancements**:
+- **Explore Agent Integration**: Comprehensive codebase analysis for root cause investigation
+- Uses `thoroughness: very thorough` for debugging (requires deep analysis)
+
+**Workflow (v2.2.0)**:
 1. **Context Detection** - Automatically determine debug context (task/spec/general)
 2. **Smart Routing** - Route to appropriate debug strategy
-3. **Targeted Investigation** - Context-aware debugging
-4. **Reproduce Issue** - Systematic reproduction attempts
-5. **Implement Fix** - Apply context-appropriate solution
-6. **Verify Fix** - Run scoped test verification
-7. **Update References** - Update codebase index if code changed
-8. **Git Workflow** - Commit, push, and optionally create PR
-9. **Document Results** - Create comprehensive debug report
+3. **Issue Information Gathering** - Collect context-appropriate details
+4. **Codebase Exploration** (v2.2.0) - Explore agent investigates error context
+5. **Targeted Investigation** - systematic-debugging skill with Explore agent results
+6. **Reproduce Issue** - Systematic reproduction attempts
+7. **Implement Fix** - Apply context-appropriate solution
+8. **Verify Fix** - Run scoped test verification
+9. **Update References** - Update codebase index if code changed
+10. **Git Workflow** - Commit, push, and optionally create PR
+11. **Document Results** - Create comprehensive debug report
+
+**Explore Agent for Debugging (v2.2.0)**:
+- Traces error propagation through codebase
+- Finds working examples for comparison
+- Identifies related code and dependencies
+- Results feed into systematic-debugging skill phases
 
 **Debug Contexts**:
 - **Task Scope**: Issues affecting single task implementation
@@ -329,6 +415,29 @@ Commands leverage a hybrid approach of native Claude Code features and specializ
 | **Explore agent** | spec-cache-manager, context-fetcher | Specification discovery, document retrieval |
 | **Write tool** | file-creator | File and directory creation |
 | **Environment context** | date-checker | Current date/time from session |
+| **Planning Mode** (v2.2.0) | - | Formal exploration phase with read-only tool restriction |
+
+### Explore Agent Thoroughness Levels (v2.2.0)
+
+The Explore agent now supports thoroughness levels for context-appropriate exploration:
+
+| Level | Use Case | Commands Using |
+|-------|----------|----------------|
+| `quick` | Targeted retrieval, known locations | execute-tasks (context loading) |
+| `medium` | Balanced discovery | execute-tasks (spec discovery fallback), shape-spec (standard) |
+| `very thorough` | Comprehensive analysis | debug (root cause), shape-spec (deep mode) |
+
+### Planning Mode Integration (v2.2.0)
+
+| Tool | Purpose | Used By |
+|------|---------|---------|
+| **EnterPlanMode** | Signal exploration phase, restrict to read-only | shape-spec (Step 0) |
+| **ExitPlanMode** | Signal exploration complete, ready for implementation | shape-spec (Step 9) |
+
+Planning Mode provides:
+- Clear separation between exploration and implementation
+- Tool restrictions prevent premature code changes
+- User approval required before proceeding
 
 ### Subagent Specializations
 

@@ -13,6 +13,8 @@
 ## Description
 Debug and fix issues with automatic context detection for the appropriate scope (general, task, or spec scope). This unified debugging command intelligently determines the debugging context and applies scope-appropriate investigation and resolution strategies.
 
+**v2.2.0 Integration:** This command now uses the **Explore agent** for comprehensive root cause investigation, enabling deeper codebase analysis before fix implementation.
+
 ## Parameters
 - `issue_description` (optional): Description of the issue to debug
 - `scope_hint` (optional): "task", "spec", or "general" to hint at debugging scope
@@ -187,29 +189,82 @@ IF scope == "task" OR scope == "spec":
 - CHECK: Content mapping if debugging file/content issues
 - DOCUMENT: Issue details and affected areas
 
+### Step 3.5: Codebase Exploration for Root Cause (v2.2.0)
+
+Use the Explore agent for comprehensive codebase analysis to understand the error context.
+
+**Instructions:**
+```
+ACTION: Use Task tool with subagent_type='Explore'
+THOROUGHNESS: "very thorough" (debugging requires comprehensive analysis)
+
+PROMPT: "Investigate the following issue in the codebase:
+
+        Issue: [ISSUE_DESCRIPTION]
+        Error Location: [FILE/FUNCTION if known]
+        Symptoms: [OBSERVED_BEHAVIOR]
+
+        Explore:
+        1. Error propagation - Trace data flow to/from error point
+        2. Related code - Find similar patterns that work correctly
+        3. Recent changes - Identify files modified recently
+        4. Dependencies - Check imported modules and their usage
+        5. Test coverage - Find existing tests for affected code
+
+        Return:
+        - Root cause candidates with evidence
+        - Working examples of similar patterns
+        - Files that may need investigation
+        - Suggested investigation priorities"
+
+STORE: Exploration results for systematic-debugging skill
+```
+
+**Explore Agent Benefits for Debugging:**
+- Provides broader context than manual file reading
+- Identifies related code that might reveal patterns
+- Discovers working examples for comparison
+- Reduces time to root cause identification
+
+**Integration with systematic-debugging:**
+```
+Explore Agent results feed into Phase 1 (Root Cause Investigation):
+- "Error propagation" → Data flow tracing
+- "Related code" → Working vs broken comparison
+- "Recent changes" → Git history correlation
+- "Dependencies" → Dependency analysis
+```
+
 ### Step 4: Targeted Investigation (systematic-debugging skill)
 
 The systematic-debugging skill auto-invokes to enforce root cause analysis before attempting fixes.
 
 **Core Principle:** NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 
+**v2.2.0 Enhancement:** Step 3.5 Explore agent results provide context for all investigation phases.
+
 **Systematic Investigation Phases:**
 
 **Phase 1: Root Cause Investigation**
 ```
 ACTION: systematic-debugging skill auto-invokes
+INPUT: Exploration results from Step 3.5
 WORKFLOW:
   1. Read complete error messages and stack traces
   2. Reproduce issue consistently
   3. Check recent changes (git log, git diff)
+     - LEVERAGE: "Recent changes" from Explore agent
   4. Trace data flow from source to error point
+     - LEVERAGE: "Error propagation" from Explore agent
 ```
 
 **Phase 2: Pattern Analysis**
 ```
 SEARCH: Find working examples in codebase
+  - LEVERAGE: "Related code" and "Working examples" from Explore agent
 COMPARE: Working vs broken code
 IDENTIFY: Key differences (config, types, dependencies, timing)
+  - LEVERAGE: "Dependencies" analysis from Explore agent
 ```
 
 **Phase 3: Hypothesis Formation**
@@ -888,8 +943,24 @@ See @shared/error-recovery.md for general recovery procedures.
 
 ## Subagent Integration
 When the instructions mention agents, use the Task tool to invoke these subagents:
-- `codebase-names` skill (auto-invoked) for validating existing function/variable names before implementing fixes
-- `test-check` skill (auto-invoked) for running test verification
-- Use `build-check` skill (auto-invoked) for build verification before commits
-- `codebase-indexer` for updating code references after fixes
-- `git-workflow` for complete git workflow including commits, pushes, and PRs
+
+**Native Claude Code Tools (v2.2.0):**
+- **Task tool with `subagent_type='Explore'`** - Comprehensive codebase analysis for root cause investigation (Step 3.5)
+
+**Skills (auto-invoked):**
+- `systematic-debugging` skill - Enforces 4-phase root cause analysis (Step 4)
+- `codebase-names` skill - Validates existing function/variable names before implementing fixes (Step 5.5)
+- `test-check` skill - Runs test verification (Step 7)
+- `build-check` skill - Build verification before commits (Step 10.5)
+
+**Subagents:**
+- `codebase-indexer` for updating code references after fixes (Step 10)
+- `git-workflow` for complete git workflow including commits, pushes, and PRs (Step 11)
+
+**Integration Flow (v2.2.0):**
+```
+Issue → Explore Agent → systematic-debugging → Fix → test-check → build-check → git-workflow
+          ↓                    ↓                           ↓            ↓
+    (context for         (root cause          (verification)   (commit/PR)
+     investigation)       analysis)
+```

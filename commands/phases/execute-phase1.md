@@ -2,6 +2,8 @@
 
 Task assignment, context gathering, and environment preparation. Loaded after Phase 0 completes.
 
+**v2.2.0 Enhancement:** Uses Explore agent with thoroughness levels for context loading and specification discovery.
+
 ---
 
 ## Phase 1: Task Discovery and Setup
@@ -109,11 +111,30 @@ ELSE:
 Only use if context-summary.json doesn't exist.
 
 ```
-ACTION: Use native Explore agent
-REQUEST: "Perform specification discovery for project"
+ACTION: Use Task tool with subagent_type='Explore'
+THOROUGHNESS: "medium" (balanced speed vs comprehensiveness for spec discovery)
+
+PROMPT: "Perform specification discovery for project:
+
+        Discover:
+        1. Spec files in .agent-os/specs/
+        2. Task files and their status
+        3. Technical specifications
+        4. Content mappings if present
+
+        Return:
+        - List of available specs
+        - Current spec status (if active)
+        - Key files for context loading"
+
 STORE: Spec index in session-cache.json
-NOTE: This is slower than pre-computed summary
+NOTE: This is slower than pre-computed summary but provides comprehensive discovery
 ```
+
+**Explore Agent Thoroughness for Spec Discovery (v2.2.0):**
+- `quick`: Fast scan, file listing only (for known spec locations)
+- `medium`: Balanced discovery (default for fallback)
+- `very thorough`: Complete exploration (use for initial project analysis)
 
 ### Step 4: Initial Context Analysis
 Load core documents for task understanding.
@@ -125,12 +146,25 @@ IF using context-summary.json:
   SKIP: Document loading (already summarized)
 
 ELSE (fallback):
-  ACTION: Use Explore agent via Task tool to:
-    - Get product pitch from mission-lite.md
-    - Get spec summary from spec-lite.md
-    - Get technical approach from technical-spec.md
+  ACTION: Use Task tool with subagent_type='Explore'
+  THOROUGHNESS: "quick" (targeted document retrieval, not discovery)
+
+  PROMPT: "Load task context documents:
+
+          Retrieve:
+          1. Product pitch from mission-lite.md
+          2. Spec summary from spec-lite.md
+          3. Technical approach from technical-spec.md
+
+          Return:
+          - Key context for task execution
+          - Technical constraints
+          - Integration requirements"
+
   CACHE: In session-cache.json
 ```
+
+**v2.2.0 Enhancement:** Explore agent with "quick" thoroughness for targeted document retrieval is faster than manual file loading while maintaining flexibility.
 
 ### Step 5: Development Server Check
 Check for running development server.

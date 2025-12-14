@@ -1,0 +1,176 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agent-os.dev/schemas/tasks-v3.json",
+  "title": "Agent OS Tasks Schema v3.0",
+  "description": "Single-source task format - JSON is the source of truth, markdown is auto-generated",
+  "type": "object",
+  "required": ["version", "spec", "tasks"],
+  "properties": {
+    "version": {
+      "const": "3.0",
+      "description": "Schema version"
+    },
+    "spec": {
+      "type": "string",
+      "description": "Specification name/identifier"
+    },
+    "spec_path": {
+      "type": "string",
+      "description": "Path to specification directory"
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When tasks.json was created"
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last modification timestamp"
+    },
+    "markdown_generated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When tasks.md was last regenerated (auto-managed by hooks)"
+    },
+    "execution_strategy": {
+      "type": "object",
+      "description": "Parallel execution configuration",
+      "properties": {
+        "mode": {
+          "enum": ["sequential", "parallel_waves", "fully_parallel"],
+          "description": "Execution mode"
+        },
+        "waves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "wave_id": { "type": "integer", "minimum": 1 },
+              "tasks": { "type": "array", "items": { "type": "string" } },
+              "rationale": { "type": "string" },
+              "estimated_duration_minutes": { "type": "integer" }
+            },
+            "required": ["wave_id", "tasks"]
+          }
+        },
+        "estimated_parallel_speedup": { "type": "number" },
+        "max_concurrent_workers": { "type": "integer" }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "description", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Task identifier (e.g., '1', '1.1', '1.2')"
+          },
+          "type": {
+            "enum": ["parent", "subtask"],
+            "description": "Task hierarchy level"
+          },
+          "parent": {
+            "type": "string",
+            "description": "Parent task ID (required for subtasks)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Task description"
+          },
+          "status": {
+            "enum": ["pending", "in_progress", "pass", "blocked", "skipped"],
+            "description": "Current task status"
+          },
+          "subtasks": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Child task IDs (for parent tasks)"
+          },
+          "progress_percent": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Completion percentage (for parent tasks)"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of execution attempts"
+          },
+          "started_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When task execution started"
+          },
+          "completed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When task was completed"
+          },
+          "duration_minutes": {
+            "type": ["integer", "null"],
+            "description": "Total execution time"
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "description": "Additional context or notes"
+          },
+          "blocker": {
+            "type": ["string", "null"],
+            "description": "Blocker description if status is blocked"
+          },
+          "parallelization": {
+            "type": "object",
+            "description": "Parallel execution metadata (parent tasks only)",
+            "properties": {
+              "wave": { "type": "integer" },
+              "can_parallel_with": { "type": "array", "items": { "type": "string" } },
+              "blocked_by": { "type": "array", "items": { "type": "string" } },
+              "blocks": { "type": "array", "items": { "type": "string" } },
+              "shared_files": { "type": "array", "items": { "type": "string" } },
+              "isolation_score": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "artifacts": {
+            "type": "object",
+            "description": "Task outputs for cross-task verification",
+            "properties": {
+              "files_modified": { "type": "array", "items": { "type": "string" } },
+              "files_created": { "type": "array", "items": { "type": "string" } },
+              "functions_created": { "type": "array", "items": { "type": "string" } },
+              "exports_added": { "type": "array", "items": { "type": "string" } },
+              "test_files": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "checkpoint": {
+            "type": "object",
+            "description": "Recovery checkpoint data",
+            "properties": {
+              "git_commit": { "type": "string" },
+              "last_successful_step": { "type": "string" },
+              "state_snapshot": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Aggregated statistics",
+      "properties": {
+        "total_tasks": { "type": "integer" },
+        "parent_tasks": { "type": "integer" },
+        "subtasks": { "type": "integer" },
+        "completed": { "type": "integer" },
+        "in_progress": { "type": "integer" },
+        "blocked": { "type": "integer" },
+        "pending": { "type": "integer" },
+        "overall_percent": { "type": "integer" }
+      }
+    }
+  }
+}

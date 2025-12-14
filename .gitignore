@@ -42,3 +42,8 @@ node_modules/
 .agent-os/debugging/
 .agent-os/**/*.cache
 .agent-os/**/*.tmp
+
+# Source repo test installations (these are installed in TARGET projects, not the source repo)
+# Exclude entire directories created by running installer locally for testing
+.agent-os/
+.claude/

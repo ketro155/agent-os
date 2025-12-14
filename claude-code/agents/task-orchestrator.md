@@ -1,3 +1,10 @@
+---
+name: task-orchestrator
+description: Lightweight orchestrator that manages task execution with minimal context footprint. Supports parallel async agent execution via wave-based coordination. Invoke when executing multi-task workflows to prevent context bloat.
+tools: Read, Grep, Glob, Write, Edit, Bash, TodoWrite, Task, TaskOutput
+model: sonnet
+---
+
 # Task Orchestrator Subagent
 
 A lightweight orchestrator that manages task execution with minimal context footprint, supporting **parallel async agent execution** (v2.0). Based on Anthropic's research on "Effective Harnesses for Long-Running Agents".
