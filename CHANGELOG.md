@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **task-orchestrator.md**: Added missing YAML frontmatter with required `name` field (was causing agent parse errors)
 - **settings.json**: Corrected schema URL from `https://claude.ai/schemas/settings.json` to `https://json.schemastore.org/claude-code-settings.json`
+- **gitignore**: Added missing v3 session files (`session.json`, `checkpoints/`) to gitignore entries
 
 ### Added
 

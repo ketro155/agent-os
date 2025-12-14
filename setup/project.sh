@@ -816,8 +816,10 @@ if [ -f .gitignore ]; then
     if ! grep -q "# Agent-OS cache and state files" .gitignore; then
         echo "" >> .gitignore
         echo "# Agent-OS cache and state files (excludes progress/ which is version controlled)" >> .gitignore
+        echo ".agent-os/state/session.json" >> .gitignore
         echo ".agent-os/state/session-cache.json" >> .gitignore
         echo ".agent-os/state/command-state.json" >> .gitignore
+        echo ".agent-os/state/checkpoints/" >> .gitignore
         echo ".agent-os/state/recovery/" >> .gitignore
         echo ".agent-os/state/.lock" >> .gitignore
         echo ".agent-os/cache/" >> .gitignore
@@ -831,8 +833,10 @@ else
     # Create new .gitignore with Agent-OS entries
     cat > .gitignore << 'EOF'
 # Agent-OS cache and state files (excludes progress/ which is version controlled)
+.agent-os/state/session.json
 .agent-os/state/session-cache.json
 .agent-os/state/command-state.json
+.agent-os/state/checkpoints/
 .agent-os/state/recovery/
 .agent-os/state/.lock
 .agent-os/cache/
