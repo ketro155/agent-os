@@ -35,16 +35,23 @@ v3.0 uses native Claude Code features instead of embedded instructions:
 ```
 SessionStart hook → Load progress context
         ↓
-Phase 1 Agent → Task discovery, mode selection
+Phase 1 Agent → Task discovery, mode selection, branch validation
         ↓
 [User confirms execution mode]
         ↓
-Phase 2 Agent(s) → TDD implementation (parallel if applicable)
+Phase 2 Agent(s) → TDD implementation
+        │
+        ├── Single Task: One agent
+        └── Parallel Waves: Multiple agents per wave, waves in sequence
         ↓
-Phase 3 Agent → Final tests, PR, documentation
+[Completion Gate] → Verify all agents collected, all tasks updated
+        ↓
+Phase 3 Agent → Final tests, PR, documentation  ⚠️ MANDATORY
         ↓
 SessionEnd hook → Log progress, checkpoint
 ```
+
+> **CRITICAL**: Phase 3 MUST always run. It creates the PR. Never skip.
 
 ## For Claude Code
 
@@ -97,19 +104,33 @@ Task({
 
 **Parallel Wave Mode:**
 ```javascript
-// Spawn parallel workers for wave
-for (task of wave.tasks) {
-  Task({
-    subagent_type: "phase2-implementation",
-    run_in_background: true,
-    prompt: `Execute task: ${task}...`
-  })
+// IMPORTANT: Process ALL waves in order
+for (wave of parallel_config.waves) {
+
+  // Spawn parallel workers for this wave
+  const waveAgents = [];
+  for (task of wave.tasks) {
+    const agentId = Task({
+      subagent_type: "phase2-implementation",
+      run_in_background: true,
+      prompt: `Execute task: ${task}
+               Context: ${context_from_phase1}
+               Return structured result with artifacts.`
+    });
+    waveAgents.push(agentId);
+  }
+
+  // Collect ALL results from this wave before next wave
+  for (agentId of waveAgents) {
+    const result = TaskOutput({ task_id: agentId, block: true });
+    // Process result, update task status (Step 5)
+  }
+
+  // Update task status for completed tasks in this wave
+  // (see Step 5 below)
 }
 
-// Collect results
-for (agentId of active_workers) {
-  AgentOutputTool({ agentId, block: true })
-}
+// After ALL waves complete → MUST proceed to Step 6
 ```
 
 ### Step 5: Update Task Status
@@ -128,9 +149,36 @@ ARTIFACTS=$(.claude/scripts/task-operations.sh collect-artifacts HEAD~1)
 .claude/scripts/task-operations.sh artifacts "1.2" "$ARTIFACTS"
 ```
 
-### Step 6: Invoke Phase 3 Delivery
+### Step 5.5: Completion Gate (MANDATORY)
 
-After all tasks complete:
+> ⛔ **BLOCKING GATE** - MUST verify before proceeding to Phase 3
+
+After ALL tasks/waves have completed, verify:
+
+```
+CHECKLIST before Phase 3:
+
+☑️ All background agents collected (no pending TaskOutput calls)
+☑️ All task statuses updated in tasks.json
+☑️ No more waves remaining in parallel_config.waves
+
+IF any task blocked or failed:
+  → Log blockers
+  → Still proceed to Phase 3 (PR includes partial work)
+
+IF all checks pass OR partial completion acceptable:
+  → MUST proceed to Step 6
+  → Do NOT skip Phase 3 regardless of execution mode
+  → Do NOT end session without Phase 3
+
+VIOLATION: Ending without Phase 3 invocation = incomplete delivery
+```
+
+---
+
+### Step 6: Invoke Phase 3 Delivery (MANDATORY)
+
+> ⚠️ **ALWAYS REQUIRED** - This step creates the PR. Never skip.
 
 ```javascript
 Task({
@@ -140,6 +188,11 @@ Task({
            Create PR and documentation.`
 })
 ```
+
+**This step MUST run regardless of:**
+- Execution mode (single task, parallel waves, sequential)
+- Task success/failure status
+- Number of tasks completed
 
 ## Task Operations (Shell Script)
 
