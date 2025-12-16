@@ -74,15 +74,25 @@ CHECK reviewDecision:
 
 **Step 1.3: Fetch Review Comments**
 
-```bash
-# Get all review comments (inline code comments)
-gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | {id, path, line, body, user: .user.login, created_at, in_reply_to_id}'
+GitHub stores PR feedback in three separate locations. Check ALL THREE:
 
-# Get review bodies (general review comments)
-gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews --jq '.[] | select(.state != "APPROVED" and .body != "") | {id, body, user: .user.login, state, submitted_at}'
+```bash
+# 1. Inline code comments (attached to specific lines of code)
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | {id, path, line, body, user: .user.login, created_at, in_reply_to_id, type: "inline"}'
+
+# 2. Formal reviews (approve/request changes submissions with body text)
+gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews --jq '.[] | select(.state != "APPROVED" and .body != "") | {id, body, user: .user.login, state, submitted_at, type: "review"}'
+
+# 3. Issue comments (general PR conversation - where bots often post!)
+gh api repos/{owner}/{repo}/issues/{pr_number}/comments --jq '.[] | {id, body, user: .user.login, created_at, type: "conversation"}'
 ```
 
-IF no comments AND no review bodies with feedback:
+> **Why three endpoints?** In GitHub's data model, PRs are also issues. Comments can be:
+> - **Inline** (`/pulls/.../comments`): Attached to specific code lines
+> - **Reviews** (`/pulls/.../reviews`): Part of formal review submissions
+> - **Conversation** (`/issues/.../comments`): General comments in PR thread (common for bots)
+
+IF no comments across ALL THREE endpoints:
   OUTPUT: "No actionable feedback found. PR may be waiting for review."
   EXIT
 
@@ -272,20 +282,36 @@ git push origin [BRANCH_NAME]
 gh pr view [NUMBER] --json state,reviewDecision,title,url
 ```
 
-### Get Review Comments (Inline)
+### Get PR Comments (Three Endpoints!)
+
+GitHub stores comments in three locations - **check all three** for complete coverage:
+
 ```bash
+# 1. Inline code comments (attached to specific lines)
 gh api repos/{owner}/{repo}/pulls/{pr_number}/comments
+
+# 2. Formal review submissions (approve/request changes with body)
+gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews
+
+# 3. Conversation comments (general PR thread - common for bots!)
+gh api repos/{owner}/{repo}/issues/{pr_number}/comments
 ```
 
-### Get Reviews (General Comments)
-```bash
-gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews
-```
+| Endpoint | Contains | Common Use |
+|----------|----------|------------|
+| `/pulls/.../comments` | Line-specific code comments | Human reviewers clicking on code |
+| `/pulls/.../reviews` | Review submission bodies | Formal approve/request changes |
+| `/issues/.../comments` | General PR comments | Bots, CI feedback, discussions |
 
 ### Reply to Comment
 ```bash
+# Reply to inline code comment
 gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
   -X POST -f body="Reply text"
+
+# Reply to conversation comment (issue comment)
+gh api repos/{owner}/{repo}/issues/comments/{comment_id} \
+  -X PATCH -f body="Reply text"
 ```
 
 ### Check Review Decision
