@@ -2,74 +2,82 @@
 
 ## Overview
 
-The `/execute-tasks` and `/debug` commands now include intelligent build verification before commits. This prevents build failures from reaching CI/CD by catching type and lint errors early, while smartly distinguishing between "must fix now" and "acceptable for future tasks" issues.
+The `/execute-tasks` and `/debug` commands include intelligent build verification before commits. This prevents build failures from reaching CI/CD by catching type and lint errors early, while smartly distinguishing between "must fix now" and "acceptable for future tasks" issues.
 
-## What's New
+## Architecture (v3.0+)
 
-### New Subagent: `build-checker`
+### v3 Implementation: Hooks + Skills
 
-**Location:** `claude-code/agents/build-checker.md`
+In v3.0, build checking uses a **hybrid approach** combining mandatory hooks and model-invoked skills:
 
-**Purpose:** Verify build status and diagnostics before commits with intelligent failure classification.
+| Component | Type | Location | Purpose |
+|-----------|------|----------|---------|
+| `pre-commit-gate.sh` | Hook | `.claude/hooks/` | **Mandatory** validation before any commit |
+| `build-check` skill | Skill | `.claude/skills/` | **Auto-invoked** for intelligent error classification |
 
-**Key Features:**
-- Runs project build command (if available)
-- Uses `mcp__ide__getDiagnostics` for type/lint error detection
-- Classifies failures as MUST_FIX, ACCEPTABLE_FOR_NOW, or INVESTIGATE
-- Provides context-aware decisions based on task dependencies
+**Key Difference from v2.x**: Hooks are **deterministic**—they cannot be skipped by the model. This ensures build validation always runs before commits.
 
-### Updated Commands
+### How It Works
 
-#### `/execute-tasks`
-- **New Step 9.5:** Build Verification and Diagnostics Check
-- **Position:** After tests pass, before git commit
-- **Integration:** Passes spec context and future tasks to build-checker
+1. **Hook Trigger**: When `git commit` is invoked, `pre-commit-gate.sh` runs automatically
+2. **Skill Invocation**: The `build-check` skill is auto-invoked to classify any errors
+3. **Decision**: Based on classification, commit proceeds or blocks
+
+### Integration Points
+
+#### `/execute-tasks` (Phase 3)
+- **Pre-commit gate** runs before git workflow
+- Validates build, tests, and types
+- Blocks commit if critical errors found
 
 #### `/debug`
-- **New Step 10.5:** Build Verification and Diagnostics Check
-- **Position:** After fix implementation, before git commit
-- **Integration:** Passes debugging scope and context to build-checker
+- Same pre-commit validation
+- Context-aware error classification based on fix scope
 
-## How It Works
-
-### Build Check Workflow
+## Build Check Workflow
 
 ```
 ┌─────────────────────────────────────┐
-│  Step 1: Run Build Command          │
+│  Step 1: Pre-Commit Hook Triggers   │
+│  (git commit attempted)             │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│  Step 2: Run Build Command          │
 │  (if package.json has build script) │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
-│  Step 2: Get IDE Diagnostics        │
+│  Step 3: Get IDE Diagnostics        │
 │  (mcp__ide__getDiagnostics)         │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
-│  Step 3: Analyze Modified Files     │
+│  Step 4: Analyze Modified Files     │
 │  - Errors in modified files         │
 │  - Type/lint issues in our code     │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
-│  Step 4: Analyze Other Files        │
+│  Step 5: Analyze Other Files        │
 │  - Breaking changes we caused       │
 │  - Errors future tasks will fix     │
 │  - Pre-existing unrelated errors    │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
-│  Step 5: Smart Classification       │
+│  Step 6: Smart Classification       │
+│  (build-check skill)                │
 │  - MUST_FIX                         │
 │  - ACCEPTABLE_FOR_NOW               │
 │  - INVESTIGATE                      │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
-│  Step 6: Return Decision            │
-│  - FIX_REQUIRED                     │
+│  Step 7: Return Decision            │
+│  - FIX_REQUIRED (block commit)      │
 │  - DOCUMENT_AND_COMMIT              │
-│  - COMMIT                           │
+│  - COMMIT (proceed)                 │
 └─────────────────────────────────────┘
 ```
 
@@ -198,26 +206,39 @@ Build Check Result:
 → Action: Update all files using User.email to use new structure
 ```
 
-## Integration Points
+## Integration Details
 
-### In `/execute-tasks` Command
+### v3.0 Hook Configuration
 
-**Step 9.5 is invoked with:**
-```javascript
+The `pre-commit-gate.sh` hook is configured in `.claude/settings.json`:
+
+```json
 {
-  context: "spec",
-  modifiedFiles: ["list", "of", "files"],
-  currentTask: "Task 2.1 - Define authentication types",
-  specPath: ".agent-os/specs/2024-03-15-auth-system",
-  futureTasks: [
-    "Task 2.2 - Implement login",
-    "Task 2.3 - Implement logout"
-  ]
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "git commit",
+        "hooks": [".claude/hooks/pre-commit-gate.sh"]
+      }
+    ]
+  }
 }
 ```
 
-**The build-checker returns:**
+### Build-Check Skill Context
+
+When the `build-check` skill is auto-invoked, it receives context about:
+- Modified files from current task/fix
+- Current task or fix description
+- Future tasks (if within active spec)
+- Spec path for dependency analysis
+
+### Classification Output
+
+The skill classifies errors and returns a decision:
+
 ```javascript
+// Example classification result
 {
   decision: "DOCUMENT_AND_COMMIT",
   buildStatus: "failed",
@@ -239,19 +260,6 @@ Build Check Result:
   ],
   commitMessageAddendum: "\n\nNote: 5 expected errors...",
   recommendedAction: "Document acceptable errors and proceed"
-}
-```
-
-### In `/debug` Command
-
-**Step 10.5 is invoked with:**
-```javascript
-{
-  context: "task" | "spec" | "general",
-  modifiedFiles: ["files", "changed", "in", "fix"],
-  currentFix: "Fix authentication session timeout",
-  specPath: ".agent-os/specs/auth-system" (if applicable),
-  futureTasks: [...] (if within active spec)
 }
 ```
 
@@ -303,37 +311,47 @@ Uses `mcp__ide__getDiagnostics` tool which provides:
 - IDE-detected issues
 - All severity levels (error, warning, info)
 
-## File Locations
+## File Locations (v3.0+)
 
 ```
 agent-os/
-├── claude-code/agents/
-│   └── build-checker.md           # New subagent
+├── v3/
+│   ├── hooks/
+│   │   └── pre-commit-gate.sh      # Mandatory pre-commit validation
+│   └── agents/
+│       └── phase3-delivery.md      # Includes build check before commit
+├── claude-code/skills/
+│   └── build-check.md              # Smart error classification skill
 ├── commands/
-│   ├── execute-tasks.md           # Updated with Step 9.5
-│   └── debug.md                   # Updated with Step 10.5
+│   ├── execute-tasks.md            # Orchestrates phases including build check
+│   └── debug.md                    # Same pre-commit validation
 └── docs/
-    └── build-check-integration.md # This document
+    └── build-check-integration.md  # This document
 ```
 
-## Rollout Plan
+**When installed to a project:**
+```
+.claude/
+├── hooks/
+│   └── pre-commit-gate.sh          # Hook (deterministic)
+├── skills/
+│   └── build-check.md              # Skill (model-invoked)
+└── settings.json                   # Hook configuration
+```
 
-### Phase 1: Installation ✅
-1. Create `build-checker.md` subagent
-2. Update `execute-tasks.md` with Step 9.5
-3. Update `debug.md` with Step 10.5
-4. Document integration (this file)
+## Installation
 
-### Phase 2: Testing
-1. Test with multi-task specs (acceptable errors scenario)
-2. Test with breaking changes (must-fix scenario)
-3. Test with clean code (commit scenario)
-4. Verify commit message enhancement
+Build checking is automatically included with v3 installation:
 
-### Phase 3: Deployment
-1. Run `./setup/project.sh --claude-code` in target projects
-2. Build-checker will be automatically included
-3. Existing workflows enhanced with build checks
+```bash
+# Fresh installation (v3 is default)
+./setup/project.sh --claude-code
+
+# Upgrade from v2.x
+./setup/project.sh --claude-code --upgrade
+```
+
+No additional configuration needed—hooks are automatically configured in `settings.json`.
 
 ## Troubleshooting
 
@@ -351,24 +369,29 @@ agent-os/
 
 ## Migration Notes
 
-### For Existing Projects
-No migration needed. When you run:
+### From v2.x to v3.0
+When upgrading, build checking transitions from skill-only to hook+skill:
+
+| v2.x | v3.0+ |
+|------|-------|
+| `build-check` skill (can be skipped) | `pre-commit-gate.sh` hook (mandatory) + `build-check` skill |
+| Model decides when to invoke | Hook always runs before commit |
+
+Run the upgrade command:
 ```bash
-./setup/project.sh --claude-code
+./setup/project.sh --claude-code --upgrade
 ```
 
-The new build-checker subagent will be installed automatically, and commands will use it.
-
 ### For Active Specs
-Build checks will intelligently handle incomplete work:
+Build checks intelligently handle incomplete work:
 - Tasks in progress: Errors in other files are acceptable
 - Final task: All errors must be fixed before commit
 - Breaking changes: Always flagged as must-fix
 
-### Backward Compatibility
-- Old command versions (without build check) still work
-- New versions enhance with build verification
-- No breaking changes to existing workflows
+### v3.0 Benefits Over v2.x
+- **Hooks cannot be bypassed** - validation is deterministic
+- **Consistent behavior** - same validation every time
+- **Better audit trail** - hook execution is logged
 
 ## Future Enhancements
 
@@ -381,12 +404,13 @@ Build checks will intelligently handle incomplete work:
 
 ## Summary
 
-The build check integration provides:
-- ✅ Intelligent error detection before commits
-- ✅ Context-aware classification of failures
-- ✅ Clear documentation of acceptable errors
+The build check integration (v3.0+) provides:
+- ✅ **Mandatory validation** via pre-commit hook (cannot be skipped)
+- ✅ **Intelligent classification** via build-check skill
+- ✅ Context-aware handling of future task errors
+- ✅ Clear documentation of acceptable errors in commit messages
 - ✅ Confidence in commit quality
 - ✅ Reduced CI/CD failures
 - ✅ Better developer experience
 
-All while recognizing that multi-task workflows naturally have temporary incomplete states that shouldn't block progress.
+**Key v3.0 Improvement**: The hook+skill hybrid ensures validation **always runs** while maintaining smart error classification for multi-task workflows.
