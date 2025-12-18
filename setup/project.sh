@@ -435,20 +435,23 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ "$IS_FROM_BASE" = true ]; then
             # Install v3 commands (simplified)
             echo "  📂 Commands (v3 - simplified):"
-            for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug pr-review-cycle; do
+            for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug; do
                 if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
                     copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
                 fi
             done
-            # v3 execute-tasks is different
+            # v3 execute-tasks and pr-review-cycle are v3-specific
             if [ -f "$BASE_AGENT_OS/v3/commands/execute-tasks.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/commands/execute-tasks.md" "./.claude/commands/execute-tasks.md" "$OVERWRITE_CLAUDE" "commands/execute-tasks.md (v3)"
+            fi
+            if [ -f "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" "./.claude/commands/pr-review-cycle.md" "$OVERWRITE_CLAUDE" "commands/pr-review-cycle.md (v3)"
             fi
 
             # Install v3 agents (native subagents for phases)
             echo ""
             echo "  📂 Agents (v3 - phase subagents):"
-            for agent in phase1-discovery phase2-implementation phase3-delivery; do
+            for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation; do
                 if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                     copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
                 fi
@@ -470,10 +473,14 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             # Install v3 scripts
             echo ""
-            echo "  📂 Scripts (v3 - task operations):"
+            echo "  📂 Scripts (v3 - operations):"
             if [ -f "$BASE_AGENT_OS/v3/scripts/task-operations.sh" ]; then
                 copy_file "$BASE_AGENT_OS/v3/scripts/task-operations.sh" "./.claude/scripts/task-operations.sh" "$OVERWRITE_CLAUDE" "scripts/task-operations.sh"
                 chmod +x "./.claude/scripts/task-operations.sh"
+            fi
+            if [ -f "$BASE_AGENT_OS/v3/scripts/pr-review-operations.sh" ]; then
+                copy_file "$BASE_AGENT_OS/v3/scripts/pr-review-operations.sh" "./.claude/scripts/pr-review-operations.sh" "$OVERWRITE_CLAUDE" "scripts/pr-review-operations.sh"
+                chmod +x "./.claude/scripts/pr-review-operations.sh"
             fi
             if [ -f "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" ]; then
                 copy_file "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" "./.claude/scripts/json-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/json-to-markdown.js"
@@ -560,7 +567,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler; do
+            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer; do
                 if [ -f "$BASE_AGENT_OS/claude-code/skills/${skill}.md" ]; then
                     copy_file "$BASE_AGENT_OS/claude-code/skills/${skill}.md" "./.claude/skills/${skill}.md" "$OVERWRITE_CLAUDE" "skills/${skill}.md"
                 else
@@ -617,7 +624,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler; do
+            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer; do
                 download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
                     "./.claude/skills/${skill}.md" \
                     "$OVERWRITE_CLAUDE" \
