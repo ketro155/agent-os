@@ -26,7 +26,7 @@ fi
 
 # 3. Get task progress
 TASKS_COMPLETED=0
-TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/tasks" -name "tasks.json" -type f 2>/dev/null | head -1)
+TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/specs" -name "tasks.json" -type f 2>/dev/null | head -1)
 if [ -n "$TASKS_FILE" ] && [ -f "$TASKS_FILE" ]; then
   # Count tasks completed in this session (completed_at after session start)
   if [ -n "$SESSION_START" ]; then

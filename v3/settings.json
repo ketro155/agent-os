@@ -60,7 +60,7 @@
     "allow": [
       "Read(.agent-os/**)",
       "Read(.claude/**)",
-      "Write(.agent-os/tasks/**)",
+      "Write(.agent-os/specs/**)",
       "Write(.agent-os/progress/**)",
       "Write(.agent-os/state/**)",
       "Bash(.claude/scripts/*)",

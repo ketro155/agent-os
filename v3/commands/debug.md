@@ -26,7 +26,7 @@ Unified debugging command with automatic context detection and Explore agent int
 ### 1. Context Detection
 
 ```
-CHECK: .agent-os/tasks/ for active specs
+CHECK: .agent-os/specs/ for active specs
 DETERMINE:
   - task: Issue affects single task
   - spec: Issue affects multiple tasks/integration

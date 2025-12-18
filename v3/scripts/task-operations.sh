@@ -13,7 +13,7 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 # Find tasks.json
 find_tasks_json() {
   local spec_name="$1"
-  local base_path="$PROJECT_DIR/.agent-os/tasks"
+  local base_path="$PROJECT_DIR/.agent-os/specs"
 
   if [ -n "$spec_name" ]; then
     echo "$base_path/$spec_name/tasks.json"

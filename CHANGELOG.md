@@ -5,6 +5,41 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] - 2025-12-17
+
+### Added
+
+- **Changelog Writer Skill** (`changelog-writer`): Automatic changelog maintenance for projects using Agent OS
+  - Auto-detects change type using hybrid analysis (spec content + git diff patterns)
+  - Confidence-based prompting: auto-proceeds when confident (≥70%), asks user when uncertain
+  - Maintains Keep a Changelog format with proper sections (Added/Changed/Fixed/etc.)
+  - Suggests semantic version bumps based on change type
+  - Creates CHANGELOG.md from template if not exists
+  - Non-blocking: failures warn but don't stop delivery
+
+- **Phase 3 Delivery Integration** (Step 8.5): Changelog skill invoked automatically after recap creation
+  - Receives spec folder, PR number, and spec name
+  - Reports semver suggestion in delivery output
+  - Added changelog fields to output format
+
+### Change Type Detection
+
+| Signal | Detection Method | Weight |
+|--------|------------------|--------|
+| Spec keywords | "fix/bug" → bugfix, "add/new" → feature, "breaking" → breaking | 0.3-0.5 |
+| Git diff | New files → feature, modifications → bugfix, deletions → breaking | 0.2-0.4 |
+
+### Semver Suggestion Logic
+
+| Change Type | Section | Semver Impact |
+|-------------|---------|---------------|
+| feature | Added | MINOR |
+| bugfix | Fixed | PATCH |
+| breaking | Changed (BREAKING:) | MAJOR |
+| refactor/docs/chore | Changed | PATCH |
+
+---
+
 ## [3.0.2] - 2025-12-14
 
 ### Added

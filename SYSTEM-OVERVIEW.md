@@ -609,6 +609,7 @@ Skills are auto-invoked by Claude based on context. They live in `.claude/skills
 | **implementation-verifier** | End-to-end verification before delivery | After all tasks complete |
 | **pr-review-handler** | Systematic PR review comment processing | During /pr-review-cycle |
 | **task-sync** | Synchronize tasks.json with tasks.md when drift detected | When task drift detected |
+| **changelog-writer** | Auto-generate CHANGELOG.md entries with type detection | After spec completion (Phase 3) |
 
 **Tier 2 - Optional Skills (Installed with `--full-skills`):**
 

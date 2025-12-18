@@ -22,7 +22,7 @@ You receive:
 {
   "spec_name": "auth-feature",
   "spec_folder": ".agent-os/specs/auth-feature/",
-  "tasks_folder": ".agent-os/tasks/auth-feature/",
+  "tasks_folder": ".agent-os/specs/auth-feature/",
   "completed_tasks": [
     {
       "id": "1",
@@ -160,6 +160,100 @@ Write to `.agent-os/recaps/YYYY-MM-DD-SPEC_NAME.md`:
 [Any important context]
 ```
 
+### 8.5 Update Changelog
+
+Update project CHANGELOG.md with an entry for this spec using Keep a Changelog format.
+
+**Step 8.5.1: Auto-Detect Change Type**
+
+Analyze spec content and git diff to determine change type:
+
+```
+READ: [SPEC_FOLDER]/spec.md and spec-lite.md
+
+Keyword Detection (case-insensitive):
+- "fix", "bug", "error", "issue", "crash" → bugfix (weight: 0.4)
+- "add", "new", "implement", "create", "feature" → feature (weight: 0.4)
+- "breaking", "remove", "deprecate", "incompatible" → breaking (weight: 0.5)
+- "refactor", "clean", "improve", "optimize" → refactor (weight: 0.3)
+
+Git Diff Analysis:
+```bash
+git diff --name-status main...HEAD 2>/dev/null
+```
+- Mostly new files (A) → feature (weight: 0.3)
+- Mostly modifications (M) → bugfix/refactor (weight: 0.2)
+- Any deletions in src/ → breaking (weight: 0.4)
+
+Confidence = highest combined weight for any type
+
+IF confidence >= 0.7: Proceed with detected type
+IF confidence < 0.7: Ask user to confirm
+```
+
+**Step 8.5.2: Map Type to Section**
+
+| Type | Section | Semver |
+|------|---------|--------|
+| feature | Added | MINOR |
+| bugfix | Fixed | PATCH |
+| breaking | Changed (BREAKING:) | MAJOR |
+| refactor | Changed | PATCH |
+
+**Step 8.5.3: Create Entry**
+
+Format: `- [SUMMARY] from \`[SPEC_NAME]\` (PR #[NUMBER])`
+
+Example: `- User authentication with JWT tokens from \`auth-feature\` (PR #123)`
+
+**Step 8.5.4: Update CHANGELOG.md**
+
+```
+IF CHANGELOG.md does not exist:
+  CREATE from template:
+  ---
+  # Changelog
+
+  All notable changes to this project will be documented in this file.
+
+  The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+  and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+  ## [Unreleased]
+
+  ### Added
+
+  ### Changed
+
+  ### Fixed
+  ---
+
+FIND: ## [Unreleased] section
+FIND or CREATE: ### [SECTION] subsection
+INSERT: Entry as last item in subsection
+```
+
+**Step 8.5.5: Calculate Semver Suggestion**
+
+```bash
+# Find current version
+CURRENT=$(grep -oE '## \[([0-9]+\.[0-9]+\.[0-9]+)\]' CHANGELOG.md | head -1)
+# Default: 0.0.0 if not found
+
+# Suggest based on type:
+# breaking → MAJOR bump
+# feature → MINOR bump
+# bugfix/refactor → PATCH bump
+```
+
+**Error Handling:**
+```
+IF changelog update fails:
+  WARN: "Changelog update skipped: [ERROR]"
+  NOTE: Failure is non-blocking
+  CONTINUE: to output
+```
+
 ## Output Format
 
 ```json
@@ -168,6 +262,13 @@ Write to `.agent-os/recaps/YYYY-MM-DD-SPEC_NAME.md`:
   "pr_url": "https://github.com/org/repo/pull/123",
   "pr_number": 123,
   "recap_path": ".agent-os/recaps/2025-01-15-auth-feature.md",
+  "changelog": {
+    "updated": true,
+    "change_type": "feature",
+    "section": "Added",
+    "entry": "- User authentication with JWT tokens from `auth-feature` (PR #123)",
+    "semver_suggestion": "1.2.0 → 1.3.0"
+  },
   "summary": {
     "tasks_completed": 3,
     "files_created": 12,
@@ -212,4 +313,5 @@ Before returning "delivered":
 - [ ] Build succeeds
 - [ ] PR created with description
 - [ ] Recap document created
+- [ ] Changelog updated (or skipped with warning)
 - [ ] Progress log updated

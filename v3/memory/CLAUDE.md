@@ -104,7 +104,7 @@ Cross-session memory is maintained in `.agent-os/progress/progress.json`:
 
 ### Check Task Status
 ```bash
-jq '.summary' .agent-os/tasks/*/tasks.json
+jq '.summary' .agent-os/specs/*/tasks.json
 ```
 
 ### View Recent Progress
@@ -114,7 +114,7 @@ jq '.entries[-5:]' .agent-os/progress/progress.json
 
 ### Manual Task Regeneration
 ```bash
-node .claude/scripts/json-to-markdown.js .agent-os/tasks/*/tasks.json
+node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json
 ```
 
 ---

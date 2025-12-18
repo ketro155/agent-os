@@ -90,7 +90,7 @@ ELSE:
 
 ```bash
 # Read tasks.json (source of truth in v3.0)
-cat .agent-os/tasks/[spec-name]/tasks.json | jq '.tasks, .execution_strategy'
+cat .agent-os/specs/[spec-name]/tasks.json | jq '.tasks, .execution_strategy'
 ```
 
 ### 2. Determine Tasks to Execute
@@ -141,7 +141,7 @@ FOR each task:
 
 ```bash
 # Read pre-computed context for each task
-cat .agent-os/tasks/[spec-name]/context-summary.json | jq '.tasks["1"]'
+cat .agent-os/specs/[spec-name]/context-summary.json | jq '.tasks["1"]'
 ```
 
 ## Output Format

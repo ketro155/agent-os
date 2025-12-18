@@ -54,7 +54,7 @@ if [ -f "$PROJECT_DIR/package.json" ]; then
 fi
 
 # 5. Tasks Sync Check (v3.0)
-TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/tasks" -name "tasks.json" -type f 2>/dev/null | head -1)
+TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/specs" -name "tasks.json" -type f 2>/dev/null | head -1)
 if [ -n "$TASKS_FILE" ] && [ -f "$TASKS_FILE" ]; then
   echo "  Validating tasks.json..." >&2
 

@@ -1,6 +1,5 @@
 ---
 paths:
-  - ".agent-os/tasks/**"
   - ".agent-os/specs/**"
 ---
 

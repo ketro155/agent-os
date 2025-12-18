@@ -276,7 +276,7 @@ Phase 1 returns: { tasks_to_execute: [] }
 ## Dependencies
 
 **Required:**
-- `.agent-os/tasks/[spec]/tasks.json` (v3.0 format)
+- `.agent-os/specs/[spec]/tasks.json` (v3.0 format)
 - `.claude/agents/phase*.md` (native subagents)
 - `.claude/hooks/*` (validation hooks)
 - `.claude/scripts/task-operations.sh` (task management)
