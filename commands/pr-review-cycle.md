@@ -34,6 +34,7 @@ const todos = [
   { content: "Fetch PR and review data from GitHub", status: "pending", activeForm: "Fetching PR data" },
   { content: "Parse review comments into todos", status: "pending", activeForm: "Parsing review comments" },
   { content: "Address review comments", status: "pending", activeForm: "Addressing review comments" },
+  { content: "Capture future recommendations", status: "pending", activeForm: "Capturing future recommendations" },
   { content: "Commit and push fixes", status: "pending", activeForm: "Committing and pushing fixes" }
 ];
 ```
@@ -115,19 +116,23 @@ For each comment, detect category from content:
 | `DOCS` | comment, document, explain, unclear | **LOW** |
 | `QUESTION` | ends with ?, why, what, how | **INFO** |
 | `SUGGESTION` | consider, might, could, optional | **INFO** |
+| `FUTURE` | future, later, v2, next version, nice to have, follow-up, backlog, tech debt, out of scope, enhancement for later, eventually | **CAPTURE** |
 
 **Step 2.2: Create Prioritized Todo List**
 
 ```javascript
-// Sort: CRITICAL → HIGH → MEDIUM → LOW → INFO
+// Sort: CRITICAL → HIGH → MEDIUM → LOW → INFO (FUTURE handled separately in Phase 3.5)
 const todos = comments
-  .filter(c => c.category !== 'QUESTION') // Questions handled separately
+  .filter(c => c.category !== 'QUESTION' && c.category !== 'FUTURE') // Questions and Future handled separately
   .sort((a, b) => priorityOrder[a.category] - priorityOrder[b.category])
   .map(c => ({
     content: `[${c.category}] ${summarize(c.body)} (${c.path}:${c.line})`,
     status: "pending",
     activeForm: `Addressing ${c.category.toLowerCase()} in ${c.path}`
   }));
+
+// Separate future recommendations for capture
+const futureItems = comments.filter(c => c.category === 'FUTURE');
 ```
 
 **Step 2.3: Display Summary**
@@ -144,6 +149,7 @@ const todos = comments
 ║   CRITICAL: 0  |  HIGH: 2  |  MEDIUM: 3  |  LOW: 1           ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ Questions (reply only): 1                                     ║
+║ Future Recommendations (capture): 2                           ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
@@ -189,6 +195,103 @@ For SUGGESTION category:
 - EVALUATE if it improves the code
 - IF yes: Implement
 - IF no: Prepare explanation for reply
+
+---
+
+### Phase 3.5: Capture Future Recommendations
+
+**Purpose:** Capture reviewer suggestions for future work so they don't get lost after merge.
+
+**Step 3.5.1: Classify Future Items (Using Subagent)**
+
+For each FUTURE category comment, invoke the `future-classifier` subagent for context-aware classification:
+
+```
+INVOKE: Task tool with subagent_type="future-classifier"
+INPUT:
+  COMMENT: "[COMMENT_TEXT]"
+  FILE_CONTEXT: "[FILE:LINE]"
+  SPEC_FOLDER: "[CURRENT_SPEC_PATH]"
+  PR_NUMBER: [NUMBER]
+  REVIEWER: "@[REVIEWER]"
+```
+
+The subagent will:
+1. Read `tasks.json` to check for duplicates and understand current scope
+2. Read `roadmap.md` to check for existing similar items
+3. Read the spec to understand feature domain
+4. Return a classification with confidence and reasoning
+
+**Classification Outcomes:**
+
+| Result | Action |
+|--------|--------|
+| `WAVE_TASK` | Add to tasks.json future_tasks section |
+| `ROADMAP_ITEM` | Add to roadmap.md |
+| `SKIP` | Already captured elsewhere, no action needed |
+| `ASK_USER` | Present options to user for decision |
+
+**Fallback (if subagent unavailable):**
+```
+IF subagent fails OR timeout:
+  USE keyword heuristics:
+    - "quick fix", "small addition", "minor" → WAVE_TASK
+    - "new feature", "v2", "major", "architecture" → ROADMAP_ITEM
+  DEFAULT: ROADMAP_ITEM (more visible)
+```
+
+**Step 3.5.2: Create Future Task Entries**
+
+For `WAVE_TASK` items:
+
+```bash
+# Read current tasks.json
+cat .agent-os/specs/[SPEC_FOLDER]/tasks.json
+```
+
+```json
+// Add to tasks.json under new "future_tasks" section
+{
+  "future_tasks": [
+    {
+      "id": "F1",
+      "source": "pr_review",
+      "pr_number": [NUMBER],
+      "reviewer": "@[REVIEWER]",
+      "description": "[SUMMARIZED_RECOMMENDATION]",
+      "original_comment": "[FULL_COMMENT_TEXT]",
+      "file_context": "[FILE:LINE if applicable]",
+      "captured_at": "[ISO_TIMESTAMP]",
+      "priority": "backlog"
+    }
+  ]
+}
+```
+
+**Step 3.5.3: Create Roadmap Entries**
+
+For `ROADMAP_ITEM` items:
+
+```bash
+# Append to roadmap.md
+cat >> .agent-os/product/roadmap.md << 'EOF'
+
+### [ITEM_TITLE] (from PR #[NUMBER] review)
+- **Source:** PR review by @[REVIEWER]
+- **Description:** [SUMMARIZED_RECOMMENDATION]
+- **Status:** Proposed
+- **Added:** [DATE]
+EOF
+```
+
+**Step 3.5.4: Reply to Future Comments**
+
+For each captured FUTURE comment:
+
+```bash
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+  -X POST -f body="Captured for future work. Added to [tasks.json|roadmap.md]."
+```
 
 ---
 
@@ -264,13 +367,30 @@ git push origin [BRANCH_NAME]
 ║ Replies Posted: [COUNT]                                       ║
 ║ Commit: [SHORT_SHA]                                          ║
 ╠══════════════════════════════════════════════════════════════╣
+║ FUTURE RECOMMENDATIONS CAPTURED:                              ║
+║   • Wave Tasks: [COUNT] → tasks.json (future_tasks)          ║
+║   • Roadmap Items: [COUNT] → roadmap.md                      ║
+╠══════════════════════════════════════════════════════════════╣
 ║ NEXT STEPS:                                                   ║
 ║                                                               ║
 ║ Wait for re-review, then either:                             ║
 ║   • Run /pr-review-cycle again (if more feedback)            ║
 ║   • Merge: gh pr merge [NUMBER] --squash                     ║
 ║   • Continue to next wave                                     ║
+║   • Review captured future items in tasks.json/roadmap.md    ║
 ╚══════════════════════════════════════════════════════════════╝
+```
+
+**Future Items Detail (if any captured):**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ CAPTURED FUTURE RECOMMENDATIONS                              │
+├──────────────┬──────────────────────────────────────────────┤
+│ Type         │ Description                                  │
+├──────────────┼──────────────────────────────────────────────┤
+│ WAVE_TASK    │ [DESCRIPTION] → tasks.json:F1               │
+│ ROADMAP      │ [DESCRIPTION] → roadmap.md                  │
+└──────────────┴──────────────────────────────────────────────┘
 ```
 
 ---

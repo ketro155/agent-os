@@ -33,6 +33,7 @@ Claude should invoke this skill:
 | `DOCS` | comment, document, explain, unclear, confusing | **LOW** | Add clarification |
 | `QUESTION` | ends with ?, why, what, how, could you explain | **INFO** | Reply only, no code change |
 | `SUGGESTION` | consider, might, could, optional, alternative | **INFO** | Evaluate and decide |
+| `FUTURE` | future, later, v2, next version, nice to have, follow-up, backlog, tech debt, out of scope, eventually | **CAPTURE** | Capture to tasks.json or roadmap.md |
 | `PRAISE` | great, nice, good, excellent, well done | **SKIP** | No action needed |
 
 ### Priority Processing Order
@@ -43,7 +44,8 @@ Claude should invoke this skill:
 3. MEDIUM (MISSING, PERF) - Implement systematically
 4. LOW (STYLE, DOCS) - Apply consistently
 5. INFO (QUESTION, SUGGESTION) - Handle after code fixes
-6. SKIP (PRAISE) - Acknowledge but no action
+6. CAPTURE (FUTURE) - Capture to tasks.json or roadmap.md
+7. SKIP (PRAISE) - Acknowledge but no action
 ```
 
 ## Phase 2: Understanding Each Comment
@@ -199,6 +201,41 @@ Considered but kept as-is because:
 Happy to discuss if you see issues with this reasoning.
 ```
 
+**Future (captured):**
+```markdown
+Captured for future work. Added to [tasks.json|roadmap.md].
+```
+
+### Handling Future Comments
+
+For FUTURE category comments, invoke the `future-classifier` subagent for context-aware classification:
+
+```
+INVOKE: Task tool with subagent_type="future-classifier"
+INPUT: comment, file_context, spec_folder, pr_number, reviewer
+```
+
+The subagent analyzes existing tasks.json and roadmap.md to:
+- Check for duplicates
+- Understand current feature scope
+- Make context-aware routing decisions
+
+**Classification Outcomes:**
+
+| Result | Destination |
+|--------|-------------|
+| `WAVE_TASK` | tasks.json (future_tasks section) |
+| `ROADMAP_ITEM` | roadmap.md |
+| `SKIP` | No action (duplicate found) |
+| `ASK_USER` | Present options with reasoning |
+
+**Fallback (if subagent unavailable):**
+```
+USE keyword heuristics:
+├── WAVE_TASK: "quick fix", "small addition", "minor"
+└── ROADMAP_ITEM: "new feature", "v2", "major" (default)
+```
+
 ### What NOT to Say
 
 ```
@@ -255,10 +292,17 @@ After processing all comments:
 | 2 | BUG | api.ts:123 | Fixed | Corrected null check |
 | 3 | QUESTION | config.ts:67 | Replied | Explained caching strategy |
 | 4 | SUGGESTION | utils.ts:89 | Declined | YAGNI - not used elsewhere |
+| 5 | FUTURE | utils.ts:102 | Captured | Added to tasks.json:F1 |
 
 ### Changes Made
 - `auth.ts`: Added XSS protection (lines 45-52)
 - `api.ts`: Fixed null pointer dereference (line 123)
+
+### Future Recommendations Captured
+| Type | Description | Location |
+|------|-------------|----------|
+| WAVE_TASK | Add caching for repeated queries | tasks.json:F1 |
+| ROADMAP | Consider GraphQL API in v2 | roadmap.md |
 
 ### Pending Clarification
 - Comment #5: Need clarification on expected behavior
@@ -274,7 +318,7 @@ After processing all comments:
 ### With /pr-review-cycle Command
 
 This skill is automatically invoked by `/pr-review-cycle`. The command:
-1. Loads review data from `.agent-os/reviews/`
+1. Fetches review data directly from GitHub API (`gh api`)
 2. Invokes this skill for systematic processing
 3. Handles commit and push after fixes
 

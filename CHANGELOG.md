@@ -5,6 +5,42 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.4] - 2025-12-22
+
+### Added
+
+- **Future Recommendations Capture** (`/pr-review-cycle`): PR review comments suggesting future work are now captured and routed to appropriate locations
+  - New `FUTURE` category detects keywords: future, later, v2, nice to have, follow-up, backlog, tech debt, out of scope, eventually
+  - Two-destination classification system:
+    - `WAVE_TASK` → `tasks.json` (future_tasks section) for small feature-related items
+    - `ROADMAP_ITEM` → `.agent-os/product/roadmap.md` for anything larger needing its own spec
+  - New Phase 3.5 in pr-review-cycle handles capture workflow
+  - Updated summary report shows captured future items with locations
+  - Replies posted to reviewers confirming capture
+
+- **Future Classifier Subagent** (`future-classifier`): Context-aware classification of future recommendations
+  - Uses haiku model for fast, cheap classification
+  - Reads tasks.json, roadmap.md, and spec.md to understand context
+  - Checks for duplicates before creating new entries
+  - Returns classification with confidence level and reasoning
+  - Four outcomes: WAVE_TASK, ROADMAP_ITEM, SKIP (duplicate), ASK_USER (ambiguous)
+  - Graceful fallback to keyword heuristics if subagent unavailable
+
+- **PR Review Handler Skill Enhancement**: Added `FUTURE` category with `CAPTURE` priority
+  - Integrates with future-classifier subagent
+  - Reply templates for captured future recommendations
+  - Output format includes "Future Recommendations Captured" section
+
+### Design Decision
+
+Two destinations are sufficient for future recommendations:
+- **Small items** (WAVE_TASK) → `tasks.json` - integrates with current spec workflow
+- **Larger items** (ROADMAP_ITEM) → `roadmap.md` - visible, becomes its own spec when prioritized
+
+A third "spec enhancement" destination was considered but rejected as redundant—items either fit as tasks or need roadmap visibility.
+
+---
+
 ## [3.0.3] - 2025-12-17
 
 ### Added

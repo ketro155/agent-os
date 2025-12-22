@@ -456,10 +456,12 @@ if [ "$CLAUDE_CODE" = true ]; then
                     copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
                 fi
             done
-            # Also install git-workflow from v2 (still useful)
-            if [ -f "$BASE_AGENT_OS/claude-code/agents/git-workflow.md" ]; then
-                copy_file "$BASE_AGENT_OS/claude-code/agents/git-workflow.md" "./.claude/agents/git-workflow.md" "$OVERWRITE_CLAUDE" "agents/git-workflow.md"
-            fi
+            # Also install utility agents from claude-code/agents/ (still useful in v3)
+            for agent in git-workflow future-classifier; do
+                if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
+                    copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
+                fi
+            done
 
             # Install v3 hooks (mandatory validation)
             echo ""
@@ -543,7 +545,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Agents:"
-            for agent in git-workflow project-manager; do
+            for agent in git-workflow project-manager future-classifier; do
                 if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
                     copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
                 else
@@ -602,7 +604,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Agents:"
-            for agent in git-workflow project-manager; do
+            for agent in git-workflow project-manager future-classifier; do
                 download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
                     "./.claude/agents/${agent}.md" \
                     "$OVERWRITE_CLAUDE" \
