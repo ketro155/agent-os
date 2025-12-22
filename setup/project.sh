@@ -6,8 +6,8 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="3.0.2"
-AGENT_OS_RELEASE_DATE="2025-12-14"
+AGENT_OS_VERSION="3.0.4"
+AGENT_OS_RELEASE_DATE="2025-12-22"
 AGENT_OS_V2_VERSION="2.2.0"  # Legacy version for --v2 flag
 
 # Track installation progress for cleanup

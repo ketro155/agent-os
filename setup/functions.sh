@@ -2,7 +2,7 @@
 
 # Agent OS Shared Functions
 # Used by both base.sh and project.sh
-# Updated for v3.0.2 architecture
+# Updated for v3.0.4 architecture
 
 # Base URL for raw GitHub content
 BASE_URL="https://raw.githubusercontent.com/buildermethods/agent-os/main"
@@ -105,7 +105,7 @@ EOF
     fi
 }
 
-# Function to install from GitHub (v3.0.2 structure)
+# Function to install from GitHub (v3.0.4 structure)
 # This function downloads the core Agent OS files from the GitHub repository
 install_from_github() {
     local target_dir="$1"
@@ -186,7 +186,7 @@ install_from_github() {
         echo "📥 Downloading command files to $target_dir/commands/"
         mkdir -p "$target_dir/commands"
 
-        # All v3.0.2 commands
+        # All v3.0.4 commands
         for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug pr-review-cycle; do
             download_file "${BASE_URL}/commands/${cmd}.md" \
                 "$target_dir/commands/${cmd}.md" \
@@ -317,8 +317,8 @@ install_v2_agents_from_github() {
     echo "  📂 Agents (v2):"
     mkdir -p "./.claude/agents"
 
-    # Only the agents that still exist in v3.0.2
-    for agent in git-workflow project-manager; do
+    # Only the agents that still exist in v3.0.4
+    for agent in git-workflow project-manager future-classifier; do
         download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
             "./.claude/agents/${agent}.md" \
             "$overwrite" \

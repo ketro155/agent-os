@@ -3,13 +3,13 @@
 # Agent OS Base Installation Script
 # This script installs Agent OS to the current directory as a central repository
 # Other projects can then install from this base using project.sh
-# Updated for v3.0.2 architecture
+# Updated for v3.0.4 architecture
 
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="3.0.2"
-AGENT_OS_RELEASE_DATE="2025-12-14"
+AGENT_OS_VERSION="3.0.4"
+AGENT_OS_RELEASE_DATE="2025-12-22"
 
 # Initialize flags
 OVERWRITE_COMMANDS=false
