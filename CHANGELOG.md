@@ -5,6 +5,29 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.5] - 2025-12-23
+
+### Fixed
+
+- **Paths with Spaces Support**: Fixed hook execution failures when project paths contain spaces (e.g., `AI Projects/`)
+  - Hook commands in `settings.json` now use `bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/..."` instead of relative paths
+  - Properly quotes `$CLAUDE_PROJECT_DIR` environment variable for space-safe path resolution
+  - Affects: `session-start.sh`, `session-end.sh`, `post-file-change.sh`, `pre-commit-gate.sh`
+
+- **session-end.sh**: Fixed checkpoint cleanup failing on paths with spaces
+  - Changed from `ls ... | xargs rm` to `find -print0 | xargs -0` pattern
+  - Uses `while IFS= read -r` for safe file iteration
+
+- **task-operations.sh**: Fixed multiple path-handling issues
+  - `collect-artifacts`: Changed `for` loop to `while read` for filenames with spaces
+  - `validate-names`: Fixed hardcoded `src/` to check `$PROJECT_DIR/src`, `lib`, `app` directories
+
+### Technical Details
+
+Root cause: OneDrive-synced projects often have paths like `/Users/.../AI Projects/...` where the space in "AI Projects" breaks shell path resolution when not properly quoted.
+
+---
+
 ## [3.0.4] - 2025-12-22
 
 ### Added

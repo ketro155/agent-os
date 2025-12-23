@@ -151,9 +151,9 @@ case "$COMMAND" in
     # Get test files
     TEST_FILES=$(git diff --name-status "$SINCE_COMMIT" HEAD 2>/dev/null | grep -E "\.(test|spec)\." | cut -f2 | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
-    # Extract exports from new files
+    # Extract exports from new files (handle paths with spaces)
     EXPORTS="[]"
-    for file in $(git diff --name-status "$SINCE_COMMIT" HEAD 2>/dev/null | grep "^A" | cut -f2 | grep -E "\.(ts|js)$"); do
+    git diff --name-status "$SINCE_COMMIT" HEAD 2>/dev/null | grep "^A" | cut -f2 | grep -E "\.(ts|js)$" | while IFS= read -r file; do
       if [ -f "$file" ]; then
         FILE_EXPORTS=$(grep -oE "export\s+(const|function|class|type|interface|enum)\s+\w+" "$file" 2>/dev/null | sed 's/export\s*\(const\|function\|class\|type\|interface\|enum\)\s*//' | jq -R -s -c 'split("\n") | map(select(length > 0))')
         EXPORTS=$(echo "$EXPORTS $FILE_EXPORTS" | jq -s 'add | unique')
@@ -188,8 +188,14 @@ case "$COMMAND" in
     MISSING='[]'
 
     for name in $(echo "$NAMES_JSON" | jq -r '.[]'); do
-      # Search in codebase
-      FOUND=$(grep -r "export.*$name" --include="*.ts" --include="*.js" src/ 2>/dev/null | head -1)
+      # Search in codebase (check common source directories)
+      FOUND=""
+      for src_dir in "$PROJECT_DIR/src" "$PROJECT_DIR/lib" "$PROJECT_DIR/app" "$PROJECT_DIR"; do
+        if [ -d "$src_dir" ]; then
+          FOUND=$(grep -r "export.*$name" --include="*.ts" --include="*.js" "$src_dir" 2>/dev/null | head -1)
+          [ -n "$FOUND" ] && break
+        fi
+      done
 
       if [ -n "$FOUND" ]; then
         RESULTS=$(echo "$RESULTS" | jq --arg n "$name" '. + {($n): {"found": true, "source": "codebase"}}')

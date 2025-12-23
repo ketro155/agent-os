@@ -76,7 +76,11 @@ cat > "$CHECKPOINT_FILE" << EOF
 EOF
 
 # 6. Cleanup old checkpoints (keep last 10)
-ls -t "$STATE_DIR/checkpoints/"*.json 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
+# Use find + sort to handle paths with spaces correctly
+find "$STATE_DIR/checkpoints" -name "*.json" -type f -print0 2>/dev/null | \
+  xargs -0 ls -t 2>/dev/null | tail -n +11 | while IFS= read -r file; do
+    rm -f "$file" 2>/dev/null || true
+  done
 
 # 7. Clear session state
 rm -f "$STATE_DIR/session.json"

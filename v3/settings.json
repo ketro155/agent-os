@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/session-start.sh",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start.sh\"",
             "timeout": 10
           }
         ]
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/session-end.sh",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-end.sh\"",
             "timeout": 10
           }
         ]
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/post-file-change.sh",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-file-change.sh\"",
             "timeout": 5
           }
         ]
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/pre-commit-gate.sh",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-commit-gate.sh\"",
             "timeout": 120
           }
         ]
@@ -77,6 +77,6 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "3.0.0"
+    "AGENT_OS_VERSION": "3.0.5"
   }
 }
