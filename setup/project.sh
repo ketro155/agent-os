@@ -5,9 +5,17 @@
 
 set -e  # Exit on error
 
-# Version information
-AGENT_OS_VERSION="3.0.4"
-AGENT_OS_RELEASE_DATE="2025-12-22"
+# Version information - read from v3/settings.json as single source of truth
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
+
+# Read version from settings.json (fallback to hardcoded if jq not available or file missing)
+if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "3.0.5"' "$BASE_AGENT_OS/v3/settings.json")
+else
+    AGENT_OS_VERSION="3.0.5"
+fi
+AGENT_OS_RELEASE_DATE="2025-12-23"
 AGENT_OS_V2_VERSION="2.2.0"  # Legacy version for --v2 flag
 
 # Track installation progress for cleanup

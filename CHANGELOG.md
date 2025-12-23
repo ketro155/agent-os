@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `collect-artifacts`: Changed `for` loop to `while read` for filenames with spaces
   - `validate-names`: Fixed hardcoded `src/` to check `$PROJECT_DIR/src`, `lib`, `app` directories
 
+### Changed
+
+- **project.sh**: Version now read dynamically from `v3/settings.json` instead of hardcoded
+  - Single source of truth for version: `v3/settings.json` → `env.AGENT_OS_VERSION`
+  - Falls back to hardcoded value if `jq` unavailable or file missing
+
 ### Technical Details
 
 Root cause: OneDrive-synced projects often have paths like `/Users/.../AI Projects/...` where the space in "AI Projects" breaks shell path resolution when not properly quoted.
