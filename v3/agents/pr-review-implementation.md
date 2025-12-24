@@ -175,16 +175,20 @@ FOR each SUGGESTION:
 
 #### Priority 6: FUTURE (Capture for Later)
 
-> **Important:** Items from Claude Code's "Can Be Addressed in Future Waves" section are categorized as FUTURE. These should be captured, not implemented in this PR.
+> **Important:** Items categorized as FUTURE by LLM classification should be captured, not implemented in this PR. The LLM classifier provides `future_type` (WAVE_TASK or ROADMAP_ITEM) based on scope analysis.
 
 ```
 FOR each FUTURE comment:
   1. DO NOT implement code changes
-  2. DETERMINE destination:
-     - WAVE_TASK: If scoped within current feature, effort < 1 day
-     - ROADMAP_ITEM: If cross-cutting or significant effort
-  3. CAPTURE to appropriate location
-  4. REPLY with capture confirmation
+  2. USE pre-classified future_type from discovery context:
+     - WAVE_TASK: Goes to tasks.json (scoped to current feature)
+     - ROADMAP_ITEM: Goes to roadmap.md (cross-cutting or major)
+  3. IF future_type not provided, determine destination:
+     - Check comment.summary for scope indicators
+     - WAVE_TASK: mentions specific file/function, "minor", "extend"
+     - ROADMAP_ITEM: "v2", "redesign", "system-wide", "new feature"
+  4. CAPTURE to appropriate location
+  5. REPLY with capture confirmation
 ```
 
 **Capture to tasks.json (WAVE_TASK):**

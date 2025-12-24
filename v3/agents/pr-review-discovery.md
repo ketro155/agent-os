@@ -85,40 +85,95 @@ EXTRACT:
 
 ---
 
-### 2. Comment Analysis & Categorization
+### 2. Comment Analysis & Categorization (LLM-Based)
+
+> **v3.1**: Uses LLM-based classification for reliable categorization regardless of Claude Code's output format variations.
+
+#### 2a. Collect All Comments
+
+Combine comments from all three endpoints:
+
+```javascript
+const all_comments = [
+  ...comments.inline.map(c => ({ ...c, type: "inline" })),
+  ...comments.reviews.map(c => ({ ...c, type: "review" })),
+  ...comments.conversation.map(c => ({ ...c, type: "conversation" }))
+];
+```
+
+#### 2b. LLM Classification (Primary Method)
+
+```javascript
+Task({
+  subagent_type: "comment-classifier",
+  model: "haiku",
+  prompt: `Classify these PR review comments:
+
+    ${JSON.stringify({
+      comments: all_comments,
+      pr_context: {
+        title: pr_info.title,
+        files_changed: scope.files
+      }
+    })}
+
+    Return JSON array with classification for each comment including:
+    - category, priority, confidence, reasoning
+    - For FUTURE items: future_type (WAVE_TASK or ROADMAP_ITEM)
+    - summary of what needs to be done`
+})
+```
+
+#### 2c. Classification Categories
+
+| Category | Priority | Description | Action Required |
+|----------|----------|-------------|-----------------|
+| SECURITY | 1 | Security vulnerabilities, auth issues | Fix immediately |
+| BUG | 2 | Broken functionality, crashes | Fix before merge |
+| LOGIC | 2 | Incorrect behavior, edge cases | Fix before merge |
+| HIGH | 2 | Reviewer-marked as must-fix | Fix before merge |
+| MISSING | 3 | Required functionality missing | Implement or explain |
+| PERF | 3 | Performance issues | Evaluate and fix |
+| STYLE | 4 | Naming, formatting | Apply project standards |
+| DOCS | 4 | Documentation needs | Add clarification |
+| SUGGESTION | 5 | Optional improvements | Evaluate and decide |
+| QUESTION | 5 | Needs explanation | Reply only, no code change |
+| FUTURE | 6 | Deferred items, future waves | Capture for later |
+| PRAISE | 7 | Positive feedback | No action needed |
+
+> **Why LLM-Based?**: Claude Code's output format varies based on context, prompts, and version. LLM classification understands intent regardless of exact phrasing, handling variations like "Future Improvements" vs "Can Be Addressed in Future Waves" vs "Backlog Items".
+
+#### 2d. Fallback: Regex-Based Classification
+
+If LLM classification fails or times out, fall back to script-based categorization:
 
 ```bash
-# Categorize all comments by priority
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize '[COMBINED_COMMENTS_JSON]'
 ```
 
-**Claude Code GitHub App Section Detection:**
+**Fallback Section Patterns:**
+- `Critical Issues|Must Fix|Blocking` → SECURITY
+- `Should Fix Before Merge|Recommended` → HIGH
+- `Can Be Addressed in Future|Future Waves|Tech Debt` → FUTURE
+- `Nice to Have|Optional|Low Priority` → SUGGESTION
 
-The categorization script detects section headers from Claude Code's reviewer output:
+#### 2e. Build Comment Index
 
-| Section Header | Category | Priority | Action |
-|---------------|----------|----------|--------|
-| "Critical Issues", "Must Fix", "Blocking" | SECURITY | 1 | Fix immediately |
-| "Should Fix Before Merge", "Recommended" | HIGH | 2 | Fix before merge |
-| "Can Be Addressed in Future Waves" | FUTURE | 6 | Capture to tasks.json/roadmap |
-| "Nice to Have", "Optional", "Low Priority" | SUGGESTION | 5 | Evaluate and decide |
-| "APPROVE", "LGTM", "Looks Good" | PRAISE | 6 | No action needed |
-
-> **Important:** Section-based categorization takes precedence over keyword detection. This ensures items marked as "Future Waves" are correctly routed for capture even if their content contains keywords like "missing" or "add".
-
-**Build Comment Index:**
 ```
-FOR each comment:
+FOR each classified comment:
   RECORD:
     - id
     - type (inline/review/conversation)
-    - category (SECURITY/BUG/LOGIC/MISSING/PERF/STYLE/DOCS/QUESTION/SUGGESTION/FUTURE/HIGH)
-    - priority (1-6)
-    - source ("claude_section" or "keyword") - indicates how category was determined
+    - category (from LLM classification)
+    - priority (1-7)
+    - confidence (HIGH/MEDIUM/LOW from LLM)
+    - classification_source ("llm" or "regex_fallback")
     - file_path (if inline)
     - line_number (if inline)
     - diff_hunk (context)
-    - potential_references (patterns that suggest comparison to other code)
+    - summary (LLM-generated action summary)
+    - future_type (WAVE_TASK/ROADMAP_ITEM if category is FUTURE)
+    - potential_references (patterns suggesting comparison to other code)
 ```
 
 ---
@@ -238,11 +293,14 @@ Compile all findings into structured context:
       {
         "id": 123,
         "category": "BUG",
-        "source": "keyword",
+        "priority": 2,
+        "confidence": "HIGH",
+        "classification_source": "llm",
         "file": "src/auth/login.ts",
         "line": 45,
         "body": "This doesn't handle null case",
-        "context_needed": "null handling pattern"
+        "summary": "Add null check for user object before accessing properties",
+        "reasoning": "Describes potential null pointer dereference in active code path"
       }
     ],
     "medium": [...],
@@ -252,11 +310,15 @@ Compile all findings into structured context:
       {
         "id": 789,
         "category": "FUTURE",
-        "source": "claude_section",
+        "priority": 6,
+        "confidence": "HIGH",
+        "classification_source": "llm",
+        "future_type": "WAVE_TASK",
         "file": "src/api/handlers.ts",
         "line": 102,
         "body": "Missing transaction rollback for partial failures",
-        "original_section": "Can Be Addressed in Future Waves"
+        "summary": "Add transaction rollback for partial failure handling",
+        "reasoning": "Comment is under 'Can Be Addressed in Future Waves' section - deferred enhancement"
       }
     ]
   },

@@ -5,6 +5,52 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2025-12-23
+
+### Added
+
+- **LLM-Based Comment Classification**: New `comment-classifier` agent uses Claude Haiku for intelligent PR review comment categorization
+  - Replaces fragile regex-based pattern matching as primary classification method
+  - Understands context and intent regardless of Claude Code's output format variations
+  - Handles section headers like "Future Waves", "Future Improvements", "Backlog Items" reliably
+  - Provides confidence scoring for quality control
+  - Returns structured output with `summary`, `reasoning`, and `future_type` fields
+
+- **Enhanced FUTURE Item Detection**: Reliable capture of deferred items for `tasks.json` and `roadmap.md`
+  - LLM classifier determines `future_type` (WAVE_TASK or ROADMAP_ITEM) based on scope analysis
+  - Understands timing indicators, deferral language, and scope markers
+  - Prevents misclassification of items under "Future Waves" sections as actionable "MISSING"
+
+### Changed
+
+- **pr-review-discovery.md**: Updated Step 2 to use LLM classification with regex fallback
+  - Invokes `comment-classifier` agent (Haiku model) for primary categorization
+  - Falls back to regex patterns if LLM unavailable
+  - Output now includes `confidence`, `classification_source`, `summary`, and `reasoning` fields
+
+- **pr-review-implementation.md**: Updated FUTURE handling to use pre-classified `future_type`
+  - Uses LLM-determined routing for WAVE_TASK vs ROADMAP_ITEM
+  - Fallback heuristics if `future_type` not provided
+
+- **pr-review-operations.sh**: Enhanced regex fallback patterns
+  - Added severity markers: `**CRITICAL**`, `**HIGH**`, `**MEDIUM**`, `**LOW**`
+  - Added emoji markers: 🔴, 🟠, 🟡, ⚪
+  - Added more Claude Code section variations: "Future Improvements", "Potential Enhancements", "Deferred"
+  - Added code quality sections: "Code Quality", "Testing", "Documentation"
+  - Clear comment noting this is fallback - primary is LLM
+
+### Technical Details
+
+The reliability issue was that Claude Code's PR review output format is NOT standardized - it varies based on:
+- Custom prompts (if using Actions)
+- The specific task/context
+- Whether using GitHub App or Actions integration
+- Model version and temperature
+
+LLM-based classification solves this by understanding intent rather than matching exact text patterns. The Haiku model provides fast, cost-effective classification while maintaining high accuracy.
+
+---
+
 ## [3.0.6] - 2025-12-23
 
 ### Fixed

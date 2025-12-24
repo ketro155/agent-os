@@ -459,7 +459,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             # Install v3 agents (native subagents for phases)
             echo ""
             echo "  📂 Agents (v3 - phase subagents):"
-            for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier; do
+            for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier; do
                 if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                     copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
                 fi
