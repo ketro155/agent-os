@@ -93,6 +93,48 @@ ELSE:
 cat .agent-os/specs/[spec-name]/tasks.json | jq '.tasks, .execution_strategy'
 ```
 
+### 1.5. Auto-Promote Future Tasks (v3.1.0)
+
+> **Automated Backlog Integration**: Before determining tasks, check if there are future tasks from PR reviews that should be promoted to the next wave.
+
+```bash
+# Check for future tasks
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spec-name]
+```
+
+**Auto-Promotion Logic:**
+```
+1. DETERMINE next_wave:
+   - Find highest wave number with pending tasks
+   - OR if all complete, check for future_tasks tagged with next sequential wave
+
+2. CHECK future_tasks for matching wave:
+   MATCHING = future_tasks WHERE priority == "wave_[next_wave]"
+
+3. IF MATCHING.length > 0:
+   # Auto-promote without asking - these were pre-tagged during PR review
+   bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" promote-wave [next_wave] [spec-name]
+
+   # Track what was promoted
+   promoted_tasks = [list of promoted task IDs]
+
+   # Log the promotion
+   INFORM: "Auto-promoted [N] future tasks to wave [next_wave]"
+
+4. INCLUDE in output:
+   "auto_promoted": {
+     "count": N,
+     "wave": next_wave,
+     "tasks": [promoted task details]
+   }
+```
+
+**Why Auto-Promote:**
+- Future tasks were already triaged during PR review
+- `priority: "wave_5"` means the reviewer decided it belongs in wave 5
+- Manual promotion adds friction without adding value
+- Maintains flow from capture → execution
+
 ### 2. Determine Tasks to Execute
 
 ```
@@ -172,6 +214,14 @@ Return this JSON:
       { "wave_id": 2, "tasks": ["3"] }
     ],
     "estimated_speedup": 1.5
+  },
+  "auto_promoted": {
+    "count": 2,
+    "wave": 5,
+    "tasks": [
+      { "id": "5.3", "promoted_from": "F2", "title": "Implement parallel batch processing" },
+      { "id": "5.4", "promoted_from": "F3", "title": "Add idempotency keys for commits" }
+    ]
   },
   "git_branch": {
     "current": "main",
