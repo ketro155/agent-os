@@ -68,6 +68,7 @@ TodoWrite([
   { content: "Address MEDIUM priority (MISSING/PERF)", status: "pending", activeForm: "Implementing changes" },
   { content: "Address LOW priority (STYLE/DOCS)", status: "pending", activeForm: "Applying style fixes" },
   { content: "Reply to QUESTION/SUGGESTION comments", status: "pending", activeForm: "Responding to questions" },
+  { content: "Capture FUTURE items to tasks.json/roadmap", status: "pending", activeForm: "Capturing future recommendations" },
   { content: "Commit, push, and update PR", status: "pending", activeForm: "Completing review cycle" }
 ])
 ```
@@ -168,6 +169,60 @@ FOR each SUGGESTION:
   - IF improves code: Implement
   - IF doesn't: Prepare explanation
   - NEVER implement without clear benefit
+```
+
+---
+
+#### Priority 6: FUTURE (Capture for Later)
+
+> **Important:** Items from Claude Code's "Can Be Addressed in Future Waves" section are categorized as FUTURE. These should be captured, not implemented in this PR.
+
+```
+FOR each FUTURE comment:
+  1. DO NOT implement code changes
+  2. DETERMINE destination:
+     - WAVE_TASK: If scoped within current feature, effort < 1 day
+     - ROADMAP_ITEM: If cross-cutting or significant effort
+  3. CAPTURE to appropriate location
+  4. REPLY with capture confirmation
+```
+
+**Capture to tasks.json (WAVE_TASK):**
+```bash
+# Read current tasks.json
+SPEC_FOLDER=$(ls -d .agent-os/specs/*/ 2>/dev/null | head -1)
+
+# Add to future_tasks section
+jq '.future_tasks += [{
+  "id": "F[N]",
+  "source": "pr_review",
+  "pr_number": [PR_NUMBER],
+  "reviewer": "claude-code",
+  "description": "[SUMMARIZED_RECOMMENDATION]",
+  "original_comment": "[FULL_COMMENT_TEXT]",
+  "file_context": "[FILE:LINE]",
+  "captured_at": "[ISO_TIMESTAMP]",
+  "priority": "backlog"
+}]' "$SPEC_FOLDER/tasks.json" > tmp && mv tmp "$SPEC_FOLDER/tasks.json"
+```
+
+**Capture to roadmap.md (ROADMAP_ITEM):**
+```bash
+cat >> .agent-os/product/roadmap.md << 'EOF'
+
+### [ITEM_TITLE] (from PR #[NUMBER] review)
+- **Source:** PR review by Claude Code
+- **Description:** [SUMMARIZED_RECOMMENDATION]
+- **Status:** Proposed
+- **Added:** [DATE]
+EOF
+```
+
+**Reply Template for FUTURE:**
+```markdown
+# FUTURE Captured:
+Captured for future work. Added to [tasks.json future_tasks | roadmap.md].
+This will be addressed in a subsequent wave/release.
 ```
 
 ---
@@ -304,6 +359,12 @@ gh pr comment [PR_NUMBER] --body "$(cat <<'EOF'
 
 ### Comments Addressed: [TOTAL]
 
+### Future Recommendations Captured: [FUTURE_COUNT]
+| Description | Destination |
+|-------------|-------------|
+| [FUTURE_ITEM_1] | tasks.json |
+| [FUTURE_ITEM_2] | roadmap.md |
+
 All feedback has been addressed. Ready for re-review.
 
 ---
@@ -386,8 +447,22 @@ Return this JSON when complete:
       "BUG": 2,
       "LOGIC": 1,
       "STYLE": 2,
-      "QUESTION": 2
+      "QUESTION": 2,
+      "FUTURE": 1
     }
+  },
+
+  "future_captured": {
+    "total": 1,
+    "wave_tasks": [
+      {
+        "id": "F1",
+        "description": "Add transaction rollback for partial failures",
+        "file_context": "src/api/impact_analysis.py:102",
+        "destination": "tasks.json"
+      }
+    ],
+    "roadmap_items": []
   },
 
   "changes_made": {
@@ -462,5 +537,6 @@ Before returning "completed":
 - [ ] Changes committed with descriptive message
 - [ ] Pushed to remote
 - [ ] Reply posted for each comment
-- [ ] PR updated with completion summary
+- [ ] FUTURE items captured to tasks.json/roadmap.md
+- [ ] PR updated with completion summary (including future captures)
 - [ ] Skipped items documented with reasons

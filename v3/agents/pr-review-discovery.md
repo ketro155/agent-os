@@ -92,14 +92,29 @@ EXTRACT:
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize '[COMBINED_COMMENTS_JSON]'
 ```
 
+**Claude Code GitHub App Section Detection:**
+
+The categorization script detects section headers from Claude Code's reviewer output:
+
+| Section Header | Category | Priority | Action |
+|---------------|----------|----------|--------|
+| "Critical Issues", "Must Fix", "Blocking" | SECURITY | 1 | Fix immediately |
+| "Should Fix Before Merge", "Recommended" | HIGH | 2 | Fix before merge |
+| "Can Be Addressed in Future Waves" | FUTURE | 6 | Capture to tasks.json/roadmap |
+| "Nice to Have", "Optional", "Low Priority" | SUGGESTION | 5 | Evaluate and decide |
+| "APPROVE", "LGTM", "Looks Good" | PRAISE | 6 | No action needed |
+
+> **Important:** Section-based categorization takes precedence over keyword detection. This ensures items marked as "Future Waves" are correctly routed for capture even if their content contains keywords like "missing" or "add".
+
 **Build Comment Index:**
 ```
 FOR each comment:
   RECORD:
     - id
     - type (inline/review/conversation)
-    - category (SECURITY/BUG/LOGIC/MISSING/PERF/STYLE/DOCS/QUESTION/SUGGESTION)
+    - category (SECURITY/BUG/LOGIC/MISSING/PERF/STYLE/DOCS/QUESTION/SUGGESTION/FUTURE/HIGH)
     - priority (1-6)
+    - source ("claude_section" or "keyword") - indicates how category was determined
     - file_path (if inline)
     - line_number (if inline)
     - diff_hunk (context)
@@ -223,6 +238,7 @@ Compile all findings into structured context:
       {
         "id": 123,
         "category": "BUG",
+        "source": "keyword",
         "file": "src/auth/login.ts",
         "line": 45,
         "body": "This doesn't handle null case",
@@ -231,7 +247,18 @@ Compile all findings into structured context:
     ],
     "medium": [...],
     "low": [...],
-    "info": [...]
+    "info": [...],
+    "future": [
+      {
+        "id": 789,
+        "category": "FUTURE",
+        "source": "claude_section",
+        "file": "src/api/handlers.ts",
+        "line": 102,
+        "body": "Missing transaction rollback for partial failures",
+        "original_section": "Can Be Addressed in Future Waves"
+      }
+    ]
   },
 
   "conventions_discovered": {
@@ -279,11 +306,12 @@ Return this JSON to the orchestrator:
   "total_comments": 8,
   "actionable_comments": 6,
   "questions_only": 2,
+  "future_items": 1,
 
   "execution_recommendation": {
     "estimated_complexity": "low" | "medium" | "high",
-    "reason": "3 style fixes, 1 bug fix, 2 questions",
-    "suggested_order": ["BUG", "SECURITY", "LOGIC", "MISSING", "STYLE", "DOCS"]
+    "reason": "3 style fixes, 1 bug fix, 2 questions, 1 future item to capture",
+    "suggested_order": ["BUG", "SECURITY", "LOGIC", "MISSING", "STYLE", "DOCS", "FUTURE"]
   },
 
   "context": {

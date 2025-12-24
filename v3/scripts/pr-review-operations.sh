@@ -130,6 +130,7 @@ case "$COMMAND" in
     ;;
 
   # Categorize comments by priority
+  # Enhanced to detect Claude Code reviewer section headers
   categorize)
     COMMENTS_JSON="$1"
 
@@ -139,30 +140,64 @@ case "$COMMAND" in
     fi
 
     echo "$COMMENTS_JSON" | jq '
-      def categorize_body:
+      # Claude Code reviewer section header patterns
+      # These override keyword-based categorization when present
+      def detect_section_category:
+        . as $body |
+        # Critical/Blocking issues
+        if ($body | test("Critical Issues|Must Fix|Blocking"; "i")) then
+          { category: "SECURITY", priority: 1, source: "claude_section" }
+        # Should fix before merge (high priority)
+        elif ($body | test("Should Fix Before Merge|Recommended.*Fix|Fix Before Merge"; "i")) then
+          { category: "HIGH", priority: 2, source: "claude_section" }
+        # Future waves / deferred items - CAPTURE these
+        elif ($body | test("Can Be Addressed in Future|Future Waves|Address Later|Future Considerations|Backlog|Tech Debt|Out of Scope"; "i")) then
+          { category: "FUTURE", priority: 6, source: "claude_section" }
+        # Nice to have / optional
+        elif ($body | test("Nice to Have|Optional|Consider for Future|Low Priority"; "i")) then
+          { category: "SUGGESTION", priority: 5, source: "claude_section" }
+        # Approved with notes
+        elif ($body | test("APPROVE|LGTM|Looks Good"; "i")) then
+          { category: "PRAISE", priority: 6, source: "claude_section" }
+        else
+          null
+        end;
+
+      # Keyword-based categorization (fallback)
+      def categorize_by_keywords:
         . as $body |
         if ($body | test("security|vulnerability|unsafe|injection|XSS|SQL|CSRF|auth"; "i")) then
-          { category: "SECURITY", priority: 1 }
+          { category: "SECURITY", priority: 1, source: "keyword" }
         elif ($body | test("bug|broken|doesn.t work|error|crash|exception|fail"; "i")) then
-          { category: "BUG", priority: 2 }
+          { category: "BUG", priority: 2, source: "keyword" }
         elif ($body | test("incorrect|wrong|should be|logic error|off.by.one"; "i")) then
-          { category: "LOGIC", priority: 2 }
+          { category: "LOGIC", priority: 2, source: "keyword" }
         elif ($body | test("missing|add|implement|include|need|require"; "i")) then
-          { category: "MISSING", priority: 3 }
+          { category: "MISSING", priority: 3, source: "keyword" }
         elif ($body | test("performance|slow|optimize|cache|memory|leak"; "i")) then
-          { category: "PERF", priority: 3 }
+          { category: "PERF", priority: 3, source: "keyword" }
         elif ($body | test("naming|format|style|convention|lint|indent"; "i")) then
-          { category: "STYLE", priority: 4 }
+          { category: "STYLE", priority: 4, source: "keyword" }
         elif ($body | test("comment|document|explain|unclear|confusing"; "i")) then
-          { category: "DOCS", priority: 4 }
+          { category: "DOCS", priority: 4, source: "keyword" }
         elif ($body | test("\\?$"; "m")) then
-          { category: "QUESTION", priority: 5 }
+          { category: "QUESTION", priority: 5, source: "keyword" }
         elif ($body | test("consider|might|could|optional|alternative"; "i")) then
-          { category: "SUGGESTION", priority: 5 }
+          { category: "SUGGESTION", priority: 5, source: "keyword" }
         elif ($body | test("great|nice|good|excellent|well done|lgtm"; "i")) then
-          { category: "PRAISE", priority: 6 }
+          { category: "PRAISE", priority: 6, source: "keyword" }
         else
-          { category: "OTHER", priority: 5 }
+          { category: "OTHER", priority: 5, source: "keyword" }
+        end;
+
+      # Main categorization: section headers take precedence over keywords
+      def categorize_body:
+        . as $body |
+        (detect_section_category) as $section_cat |
+        if $section_cat != null then
+          $section_cat
+        else
+          categorize_by_keywords
         end;
 
       . | map(. + ((.body // "") | categorize_body)) | sort_by(.priority)
