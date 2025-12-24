@@ -5,6 +5,34 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2025-12-24
+
+### Fixed
+
+- **Critical: File Corruption in promote-wave Command**: Fixed bug where `task-operations.sh promote-wave` could corrupt `tasks.json` to empty `{}`
+  - Root cause: Shell output redirection (`>`) truncates file BEFORE command executes - if jq failed, file was already destroyed
+  - Fix: Use two-stage temp file approach with validation before atomic move
+  - Added defensive checks: verify future_tasks exists, validate output before overwriting
+  - Added proper `set +e` handling in loop to continue on individual failures
+  - Promote command now uses `_promote_error` internal field instead of separate error object
+
+### Changed
+
+- **promote command**: Complete rewrite with safer file handling
+  - Uses separate `TMP_FILE` and `RESULT_FILE` to prevent original corruption
+  - Validates temp file exists and is non-empty before proceeding
+  - Validates result file has `.tasks` array before atomic move
+  - Cleans up temp files on all error paths
+
+- **promote-wave command**: Enhanced error handling
+  - Verifies `has("future_tasks")` before processing
+  - Disables `set -e` during promotion loop to handle individual failures
+  - Reports both `promoted_count` and `failed_count` in result
+  - Uses script directory path for recursive calls (not `$0`)
+  - Returns detailed `promoted` array with new IDs and source
+
+---
+
 ## [3.1.0] - 2025-12-24
 
 ### Added

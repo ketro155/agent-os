@@ -374,16 +374,25 @@ case "$COMMAND" in
       exit 1
     fi
 
+    # Verify file has future_tasks array (defensive check)
+    if ! jq -e '.future_tasks // empty' "$TASKS_FILE" > /dev/null 2>&1; then
+      echo '{"error": "No future_tasks array in tasks.json"}'
+      exit 1
+    fi
+
     TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    TMP_FILE="${TASKS_FILE}.promote.tmp"
+    RESULT_FILE="${TASKS_FILE}.result.tmp"
 
     # Find the future task and promote it
-    jq --arg fid "$FUTURE_ID" --arg wave "$TARGET_WAVE" --arg ts "$TIMESTAMP" '
+    # IMPORTANT: Output goes to separate result file to avoid truncating original on failure
+    if ! jq --arg fid "$FUTURE_ID" --arg wave "$TARGET_WAVE" --arg ts "$TIMESTAMP" '
       # Find the future task
       (.future_tasks // []) as $future |
       ($future | map(select(.id == $fid)) | first) as $item |
 
       if $item == null then
-        {error: ("Future task " + $fid + " not found")}
+        {_promote_error: ("Future task " + $fid + " not found")}
       else
         # Generate new task ID: wave.N where N is next in wave
         ((.tasks // []) | map(select(.id | startswith($wave + "."))) | length + 1) as $next_num |
@@ -406,9 +415,13 @@ case "$COMMAND" in
           original_file_context: $item.file_context
         } as $new_task |
 
-        # Update tasks.json
-        .tasks += [$new_task] |
-        .future_tasks = ($future | map(select(.id != $fid))) |
+        # Update tasks.json - keep original structure, add new task, remove from future
+        . + {
+          tasks: (.tasks + [$new_task]),
+          future_tasks: ($future | map(select(.id != $fid))),
+          _promoted_task: $new_task,
+          _removed_future_id: $fid
+        } |
 
         # Update wave parent if exists
         .tasks = (.tasks | map(
@@ -416,23 +429,49 @@ case "$COMMAND" in
             .subtasks = ((.subtasks // []) + [$new_id])
           else .
           end
-        )) |
-
-        {success: true, promoted_task: $new_task, removed_future_id: $fid}
+        ))
       end
-    ' "$TASKS_FILE" > "${TASKS_FILE}.tmp"
-
-    # Check if promotion succeeded
-    if jq -e '.error' "${TASKS_FILE}.tmp" > /dev/null 2>&1; then
-      cat "${TASKS_FILE}.tmp"
-      rm "${TASKS_FILE}.tmp"
+    ' "$TASKS_FILE" > "$TMP_FILE" 2>/dev/null; then
+      echo '{"error": "jq processing failed"}'
+      rm -f "$TMP_FILE"
       exit 1
     fi
 
-    # Extract result, update file
-    RESULT=$(jq '{success, promoted_task, removed_future_id}' "${TASKS_FILE}.tmp")
-    jq 'del(.success, .promoted_task, .removed_future_id)' "${TASKS_FILE}.tmp" > "$TASKS_FILE"
-    rm "${TASKS_FILE}.tmp"
+    # Verify tmp file was created and is valid JSON
+    if [ ! -s "$TMP_FILE" ]; then
+      echo '{"error": "Failed to create temp file (empty output)"}'
+      rm -f "$TMP_FILE"
+      exit 1
+    fi
+
+    # Check if promotion had an error
+    if jq -e '._promote_error' "$TMP_FILE" > /dev/null 2>&1; then
+      ERROR_MSG=$(jq -r '._promote_error' "$TMP_FILE")
+      echo '{"error": "'"$ERROR_MSG"'"}'
+      rm -f "$TMP_FILE"
+      exit 1
+    fi
+
+    # Extract result before modifying file
+    RESULT=$(jq '{success: true, promoted_task: ._promoted_task, removed_future_id: ._removed_future_id}' "$TMP_FILE")
+
+    # Create clean version without internal fields
+    if ! jq 'del(._promoted_task, ._removed_future_id, ._promote_error)' "$TMP_FILE" > "$RESULT_FILE" 2>/dev/null; then
+      echo '{"error": "Failed to clean temp file"}'
+      rm -f "$TMP_FILE" "$RESULT_FILE"
+      exit 1
+    fi
+
+    # Verify result file is valid before atomic move
+    if ! jq -e '.tasks' "$RESULT_FILE" > /dev/null 2>&1; then
+      echo '{"error": "Result file validation failed - tasks array missing"}'
+      rm -f "$TMP_FILE" "$RESULT_FILE"
+      exit 1
+    fi
+
+    # Atomic move - only now do we touch the original file
+    mv "$RESULT_FILE" "$TASKS_FILE"
+    rm -f "$TMP_FILE"
 
     echo "$RESULT"
     ;;
@@ -454,23 +493,64 @@ case "$COMMAND" in
       exit 1
     fi
 
+    # Verify file has future_tasks array
+    if ! jq -e 'has("future_tasks")' "$TASKS_FILE" > /dev/null 2>&1; then
+      echo '{"warning": "No future_tasks field in tasks.json"}'
+      exit 0
+    fi
+
+    # Check if future_tasks is null or empty
+    FUTURE_COUNT=$(jq '(.future_tasks // []) | length' "$TASKS_FILE")
+    if [ "$FUTURE_COUNT" = "0" ] || [ -z "$FUTURE_COUNT" ]; then
+      echo '{"warning": "future_tasks is empty or null"}'
+      exit 0
+    fi
+
     # Find future tasks with priority matching wave_N
     WAVE_PRIORITY="wave_${TARGET_WAVE}"
     MATCHING=$(jq --arg wp "$WAVE_PRIORITY" '(.future_tasks // []) | map(select(.priority == $wp)) | length' "$TASKS_FILE")
 
-    if [ "$MATCHING" = "0" ]; then
+    if [ "$MATCHING" = "0" ] || [ -z "$MATCHING" ]; then
       echo '{"warning": "No future tasks found with priority '"$WAVE_PRIORITY"'"}'
       exit 0
     fi
 
-    PROMOTED=0
-    # Promote each matching task
-    for FID in $(jq -r --arg wp "$WAVE_PRIORITY" '(.future_tasks // []) | map(select(.priority == $wp)) | .[].id' "$TASKS_FILE"); do
-      bash "$0" promote "$FID" "$TARGET_WAVE" "$SPEC_NAME" > /dev/null
-      PROMOTED=$((PROMOTED + 1))
-    done
+    # Get list of FIDs to promote (save to avoid re-reading modified file)
+    FID_LIST=$(jq -r --arg wp "$WAVE_PRIORITY" '(.future_tasks // []) | map(select(.priority == $wp)) | .[].id' "$TASKS_FILE")
 
-    echo '{"success": true, "promoted_count": '"$PROMOTED"', "target_wave": '"$TARGET_WAVE"'}'
+    if [ -z "$FID_LIST" ]; then
+      echo '{"warning": "No future task IDs extracted"}'
+      exit 0
+    fi
+
+    PROMOTED=0
+    FAILED=0
+    PROMOTED_IDS="[]"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Promote each matching task
+    # Disable set -e for this loop so we can handle individual failures
+    set +e
+    for FID in $FID_LIST; do
+      RESULT=$("$SCRIPT_DIR/task-operations.sh" promote "$FID" "$TARGET_WAVE" "$SPEC_NAME" 2>&1)
+      if echo "$RESULT" | jq -e '.success' > /dev/null 2>&1; then
+        PROMOTED=$((PROMOTED + 1))
+        NEW_ID=$(echo "$RESULT" | jq -r '.promoted_task.id')
+        PROMOTED_IDS=$(echo "$PROMOTED_IDS" | jq --arg id "$NEW_ID" --arg fid "$FID" '. + [{new_id: $id, from_future: $fid}]')
+      else
+        FAILED=$((FAILED + 1))
+        # Log the error but continue with other tasks
+        echo "Warning: Failed to promote $FID: $RESULT" >&2
+      fi
+    done
+    set -e
+
+    if [ "$PROMOTED" -gt 0 ]; then
+      echo '{"success": true, "promoted_count": '"$PROMOTED"', "failed_count": '"$FAILED"', "target_wave": '"$TARGET_WAVE"', "promoted": '"$PROMOTED_IDS"'}'
+    else
+      echo '{"error": "No tasks were promoted", "failed_count": '"$FAILED"'}'
+      exit 1
+    fi
     ;;
 
   help|*)
