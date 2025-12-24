@@ -301,6 +301,140 @@ case "$COMMAND" in
     echo '{"success": true, "entry_id": "'"$ENTRY_ID"'"}'
     ;;
 
+  # List future tasks (from PR reviews, backlog)
+  list-future)
+    SPEC_NAME="$1"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    jq '{
+      total: (.future_tasks // [] | length),
+      future_tasks: (.future_tasks // []),
+      by_priority: (.future_tasks // [] | group_by(.priority) | map({(.[0].priority // "unset"): .}))
+    }' "$TASKS_FILE"
+    ;;
+
+  # Promote future task to a wave task
+  promote)
+    FUTURE_ID="$1"
+    TARGET_WAVE="$2"
+    SPEC_NAME="$3"
+
+    if [ -z "$FUTURE_ID" ] || [ -z "$TARGET_WAVE" ]; then
+      echo '{"error": "Usage: task-operations.sh promote <future_id> <wave_number> [spec_name]"}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # Find the future task and promote it
+    jq --arg fid "$FUTURE_ID" --arg wave "$TARGET_WAVE" --arg ts "$TIMESTAMP" '
+      # Find the future task
+      (.future_tasks // []) as $future |
+      ($future | map(select(.id == $fid)) | first) as $item |
+
+      if $item == null then
+        {error: ("Future task " + $fid + " not found")}
+      else
+        # Generate new task ID: wave.N where N is next in wave
+        ((.tasks // []) | map(select(.id | startswith($wave + "."))) | length + 1) as $next_num |
+        ($wave + "." + ($next_num | tostring)) as $new_id |
+
+        # Create the new task
+        {
+          id: $new_id,
+          parent: $wave,
+          wave: ($wave | tonumber),
+          type: "subtask",
+          title: $item.description,
+          description: ("From PR #" + ($item.pr_number | tostring) + ": " + $item.original_comment),
+          status: "pending",
+          priority: "should",
+          estimated_loc: 50,
+          actual_loc: null,
+          created_at: $ts,
+          promoted_from: $fid,
+          original_file_context: $item.file_context
+        } as $new_task |
+
+        # Update tasks.json
+        .tasks += [$new_task] |
+        .future_tasks = ($future | map(select(.id != $fid))) |
+
+        # Update wave parent if exists
+        .tasks = (.tasks | map(
+          if .id == $wave then
+            .subtasks = ((.subtasks // []) + [$new_id])
+          else .
+          end
+        )) |
+
+        {success: true, promoted_task: $new_task, removed_future_id: $fid}
+      end
+    ' "$TASKS_FILE" > "${TASKS_FILE}.tmp"
+
+    # Check if promotion succeeded
+    if jq -e '.error' "${TASKS_FILE}.tmp" > /dev/null 2>&1; then
+      cat "${TASKS_FILE}.tmp"
+      rm "${TASKS_FILE}.tmp"
+      exit 1
+    fi
+
+    # Extract result, update file
+    RESULT=$(jq '{success, promoted_task, removed_future_id}' "${TASKS_FILE}.tmp")
+    jq 'del(.success, .promoted_task, .removed_future_id)' "${TASKS_FILE}.tmp" > "$TASKS_FILE"
+    rm "${TASKS_FILE}.tmp"
+
+    echo "$RESULT"
+    ;;
+
+  # Promote all future tasks for a wave (e.g., all wave_5 priority tasks)
+  promote-wave)
+    TARGET_WAVE="$1"
+    SPEC_NAME="$2"
+
+    if [ -z "$TARGET_WAVE" ]; then
+      echo '{"error": "Usage: task-operations.sh promote-wave <wave_number> [spec_name]"}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Find future tasks with priority matching wave_N
+    WAVE_PRIORITY="wave_${TARGET_WAVE}"
+    MATCHING=$(jq --arg wp "$WAVE_PRIORITY" '(.future_tasks // []) | map(select(.priority == $wp)) | length' "$TASKS_FILE")
+
+    if [ "$MATCHING" = "0" ]; then
+      echo '{"warning": "No future tasks found with priority '"$WAVE_PRIORITY"'"}'
+      exit 0
+    fi
+
+    PROMOTED=0
+    # Promote each matching task
+    for FID in $(jq -r --arg wp "$WAVE_PRIORITY" '(.future_tasks // []) | map(select(.priority == $wp)) | .[].id' "$TASKS_FILE"); do
+      bash "$0" promote "$FID" "$TARGET_WAVE" "$SPEC_NAME" > /dev/null
+      PROMOTED=$((PROMOTED + 1))
+    done
+
+    echo '{"success": true, "promoted_count": '"$PROMOTED"', "target_wave": '"$TARGET_WAVE"'}'
+    ;;
+
   help|*)
     cat << 'EOF'
 Agent OS v3.0 Task Operations
@@ -315,12 +449,18 @@ Commands:
   validate-names <names_json>           Validate names exist in codebase
   progress [count] [type]               Get progress log entries
   log-progress <type> <desc> [args]     Log progress entry
+  list-future [spec_name]               List future tasks (backlog)
+  promote <future_id> <wave> [spec]     Promote future task to wave
+  promote-wave <wave_num> [spec]        Promote all tasks for a wave
 
 Status values: pending, in_progress, pass, blocked
 
 Examples:
   task-operations.sh status auth-feature
   task-operations.sh update "1.2" "pass"
+  task-operations.sh list-future
+  task-operations.sh promote F1 5
+  task-operations.sh promote-wave 5
   task-operations.sh collect-artifacts HEAD~3
   task-operations.sh validate-names '["login", "validateToken"]'
   task-operations.sh log-progress task_completed "Implemented login"

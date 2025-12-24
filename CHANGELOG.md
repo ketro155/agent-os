@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Understands timing indicators, deferral language, and scope markers
   - Prevents misclassification of items under "Future Waves" sections as actionable "MISSING"
 
+- **Future Task Promotion**: New operations to move `future_tasks` into executable wave tasks
+  - `task-operations.sh list-future` - View all backlog items from PR reviews
+  - `task-operations.sh promote <future_id> <wave>` - Promote single item to a wave
+  - `task-operations.sh promote-wave <wave_num>` - Promote all items tagged for that wave
+  - Promoted tasks get proper wave structure with `promoted_from` traceability
+  - Future tasks are removed from backlog after promotion
+
 ### Fixed
 
 - **FUTURE Items Captured on Approved PRs**: Fixed critical bug where `/pr-review-cycle` would exit early on approved PRs without capturing FUTURE items
