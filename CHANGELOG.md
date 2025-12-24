@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Approved PRs with "Future Enhancements" sections now properly save items to tasks.json/roadmap.md
   - Updated completion summary to show captured FUTURE items count
 
+- **CLAUDE_PROJECT_DIR Not Exported to Bash**: Fixed environment variable not being available when Claude Code runs Bash commands
+  - Added `CLAUDE_PROJECT_DIR` to the `env` section in settings.json
+  - Commands like `/pr-review-cycle` can now properly invoke scripts at `${CLAUDE_PROJECT_DIR}/.claude/scripts/...`
+  - Error was: `bash: /.claude/scripts/pr-review-operations.sh: No such file or directory`
+
 ### Changed
 
 - **pr-review-discovery.md**: Updated Step 2 to use LLM classification with regex fallback
