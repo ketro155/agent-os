@@ -91,13 +91,46 @@ IF state == "CLOSED":
   INFORM: "PR is closed"
   EXIT
 
-IF reviewDecision == "APPROVED":
-  INFORM: "PR is approved! Ready to merge: gh pr merge [NUMBER]"
-  EXIT
-
 IF no comments across all endpoints:
   INFORM: "No actionable feedback found. PR may be waiting for review."
   EXIT
+
+# IMPORTANT: Even if PR is approved, we still need to check for FUTURE items!
+# Don't short-circuit here - proceed to discovery to capture future enhancements
+```
+
+### Step 2.5: Check for FUTURE Items (Even on Approved PRs)
+
+> **CRITICAL**: FUTURE items must be captured even when PR is approved. Reviews often include "Future Enhancements" sections that should be saved to `tasks.json` or `roadmap.md`.
+
+```javascript
+// Quick classification check for FUTURE items
+Task({
+  subagent_type: "comment-classifier",
+  model: "haiku",
+  prompt: `Quickly scan these PR comments for FUTURE items:
+           ${JSON.stringify(comments)}
+
+           Look for sections like:
+           - "Future Enhancements"
+           - "Nice to Have"
+           - "Follow-up PRs"
+           - "Wave X Enhancements"
+           - "Should Address Soon"
+           - "Low Priority"
+
+           Return: { has_future_items: boolean, count: number }`
+})
+```
+
+```
+IF reviewDecision == "APPROVED" AND has_future_items == false:
+  INFORM: "PR is approved! Ready to merge: gh pr merge [NUMBER]"
+  EXIT
+
+IF reviewDecision == "APPROVED" AND has_future_items == true:
+  INFORM: "PR is approved. Capturing ${count} future enhancement items before merge..."
+  CONTINUE to Step 3 (Discovery)
 ```
 
 ### Step 3: Invoke Discovery Agent
@@ -181,12 +214,40 @@ Display completion summary:
 ║ PR Updated: ✅                                                ║
 ║ Re-Review Triggered: ✅                                       ║
 ╠══════════════════════════════════════════════════════════════╣
+║ FUTURE ITEMS CAPTURED: [COUNT]                                ║
+║   • tasks.json: [WAVE_TASK_COUNT] items                      ║
+║   • roadmap.md: [ROADMAP_COUNT] items                        ║
+╠══════════════════════════════════════════════════════════════╣
 ║ NEXT STEPS:                                                   ║
 ║                                                               ║
 ║ Automated re-review requested via @claude-code mention.      ║
 ║ After re-review completes:                                   ║
 ║   • Run /pr-review-cycle again (if more feedback)            ║
 ║   • Merge: gh pr merge [NUMBER] --squash                     ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+**For approved PRs with only FUTURE items:**
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║              PR APPROVED - FUTURE ITEMS CAPTURED              ║
+╠══════════════════════════════════════════════════════════════╣
+║ PR: #[NUMBER] - [TITLE]                                      ║
+║ Status: ✅ APPROVED - Ready to merge                         ║
+╠══════════════════════════════════════════════════════════════╣
+║ FUTURE ITEMS CAPTURED: [COUNT]                                ║
+║                                                               ║
+║ Saved to tasks.json:                                         ║
+║   • F1: [Description]                                        ║
+║   • F2: [Description]                                        ║
+║                                                               ║
+║ Saved to roadmap.md:                                         ║
+║   • [Title] - [Brief description]                            ║
+╠══════════════════════════════════════════════════════════════╣
+║ NEXT STEPS:                                                   ║
+║   • Merge: gh pr merge [NUMBER] --squash                     ║
+║   • Future items will be available in next wave              ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 

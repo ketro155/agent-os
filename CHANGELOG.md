@@ -5,7 +5,7 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.1.0] - 2025-12-23
+## [3.1.0] - 2025-12-24
 
 ### Added
 
@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - LLM classifier determines `future_type` (WAVE_TASK or ROADMAP_ITEM) based on scope analysis
   - Understands timing indicators, deferral language, and scope markers
   - Prevents misclassification of items under "Future Waves" sections as actionable "MISSING"
+
+### Fixed
+
+- **FUTURE Items Captured on Approved PRs**: Fixed critical bug where `/pr-review-cycle` would exit early on approved PRs without capturing FUTURE items
+  - Added Step 2.5: Quick scan for FUTURE items before early exit
+  - Approved PRs with "Future Enhancements" sections now properly save items to tasks.json/roadmap.md
+  - Updated completion summary to show captured FUTURE items count
 
 ### Changed
 
