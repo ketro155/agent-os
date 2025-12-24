@@ -273,10 +273,10 @@ git push origin [BRANCH_NAME]
 
 ```bash
 # For each inline comment
-.claude/scripts/pr-review-operations.sh reply-inline [PR] [COMMENT_ID] "[REPLY_BODY]"
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" reply-inline [PR] [COMMENT_ID] "[REPLY_BODY]"
 
 # For conversation comments (if needed)
-.claude/scripts/pr-review-operations.sh reply-conversation [COMMENT_ID] "[REPLY_BODY]"
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" reply-conversation [COMMENT_ID] "[REPLY_BODY]"
 ```
 
 ---
@@ -365,7 +365,7 @@ IF only low-priority changes (STYLE, DOCS):
 ### 8. Generate Summary
 
 ```bash
-.claude/scripts/pr-review-operations.sh summary [PR] [COMMENTS_ADDRESSED] [REPLIES_POSTED]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" summary [PR] [COMMENTS_ADDRESSED] [REPLIES_POSTED]
 ```
 
 ## Output Format

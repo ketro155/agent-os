@@ -100,25 +100,25 @@ All task management uses `.claude/scripts/task-operations.sh`:
 
 ```bash
 # Get status
-.claude/scripts/task-operations.sh status [spec_name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status [spec_name]
 
 # Update task
-.claude/scripts/task-operations.sh update <task_id> <status>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update <task_id> <status>
 
 # Add artifacts
-.claude/scripts/task-operations.sh artifacts <task_id> <json>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts <task_id> <json>
 
 # Collect artifacts from git
-.claude/scripts/task-operations.sh collect-artifacts [since_commit]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" collect-artifacts [since_commit]
 
 # Validate names exist in codebase
-.claude/scripts/task-operations.sh validate-names '["functionName"]'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" validate-names '["functionName"]'
 
 # Get progress log
-.claude/scripts/task-operations.sh progress [count] [type]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" progress [count] [type]
 
 # Log progress entry
-.claude/scripts/task-operations.sh log-progress <type> <description>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" log-progress <type> <description>
 ```
 
 ## Native Claude Code Agent Integration (v3.0.0)

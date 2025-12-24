@@ -59,7 +59,7 @@ SessionEnd hook → Log progress, checkpoint
 
 ```bash
 # Check current task status
-.claude/scripts/task-operations.sh status auth-feature
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status auth-feature
 ```
 
 ### Step 2: Invoke Phase 1 Discovery
@@ -139,14 +139,14 @@ After each task completes:
 
 ```bash
 # Mark task complete
-.claude/scripts/task-operations.sh update "1.2" "pass"
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "1.2" "pass"
 
 # Add artifacts
-.claude/scripts/task-operations.sh artifacts "1.2" '{"files_created":["src/auth/login.ts"],"exports_added":["login"]}'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts "1.2" '{"files_created":["src/auth/login.ts"],"exports_added":["login"]}'
 
 # Or collect artifacts automatically from git
-ARTIFACTS=$(.claude/scripts/task-operations.sh collect-artifacts HEAD~1)
-.claude/scripts/task-operations.sh artifacts "1.2" "$ARTIFACTS"
+ARTIFACTS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" collect-artifacts HEAD~1)
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts "1.2" "$ARTIFACTS"
 ```
 
 ### Step 5.5: Completion Gate (MANDATORY)
@@ -200,25 +200,25 @@ All task operations use `.claude/scripts/task-operations.sh`:
 
 ```bash
 # Get status
-.claude/scripts/task-operations.sh status [spec_name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status [spec_name]
 
 # Update task
-.claude/scripts/task-operations.sh update <task_id> <status> [spec_name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update <task_id> <status> [spec_name]
 
 # Add artifacts
-.claude/scripts/task-operations.sh artifacts <task_id> <json> [spec_name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts <task_id> <json> [spec_name]
 
 # Collect artifacts from git
-.claude/scripts/task-operations.sh collect-artifacts [since_commit]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" collect-artifacts [since_commit]
 
 # Validate names exist
-.claude/scripts/task-operations.sh validate-names '["functionName"]'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" validate-names '["functionName"]'
 
 # Get progress
-.claude/scripts/task-operations.sh progress [count] [type]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" progress [count] [type]
 
 # Log progress
-.claude/scripts/task-operations.sh log-progress <type> <description>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" log-progress <type> <description>
 ```
 
 ## Hooks (Automatic)

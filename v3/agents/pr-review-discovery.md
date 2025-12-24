@@ -71,7 +71,7 @@ ELSE:
 
 ```bash
 # Get files changed and analyze scope
-.claude/scripts/pr-review-operations.sh scope [PR_NUMBER]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" scope [PR_NUMBER]
 ```
 
 **Parse Result:**
@@ -89,7 +89,7 @@ EXTRACT:
 
 ```bash
 # Categorize all comments by priority
-.claude/scripts/pr-review-operations.sh categorize '[COMBINED_COMMENTS_JSON]'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize '[COMBINED_COMMENTS_JSON]'
 ```
 
 **Build Comment Index:**
