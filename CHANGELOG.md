@@ -5,6 +5,23 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.6] - 2025-12-23
+
+### Fixed
+
+- **Command/Agent Script Paths**: Extended path-with-spaces fix to all command and agent files that invoke shell scripts
+  - `pr-review-cycle.md`: All `pr-review-operations.sh` invocations now use `bash "${CLAUDE_PROJECT_DIR}/..."` pattern
+  - `pr-review-discovery.md`: Script invocations updated
+  - `pr-review-implementation.md`: Script invocations updated
+  - `execute-tasks.md`: All `task-operations.sh` invocations updated
+  - `v3/README.md`: Documentation examples updated for consistency
+
+### Technical Details
+
+Root cause: While v3.0.5 fixed hook execution in `settings.json`, the command and agent markdown files still used relative paths (e.g., `.claude/scripts/task-operations.sh`) which fail when Claude's working directory differs from the project root or when paths contain spaces.
+
+---
+
 ## [3.0.5] - 2025-12-23
 
 ### Fixed
