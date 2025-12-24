@@ -28,11 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Promoted tasks get proper wave structure with `promoted_from` traceability
   - Future tasks are removed from backlog after promotion
 
-- **Auto-Promotion in Phase 1 Discovery**: Future tasks are automatically promoted when executing tasks
-  - Step 1.5 added to `phase1-discovery.md` - checks for wave-tagged future tasks
+- **Auto-Promotion in Execute Tasks (Step 0)**: Future tasks are automatically promoted BEFORE Phase 1
+  - Step 0 added to `execute-tasks.md` as MANDATORY pre-flight step
+  - Runs `promote-wave` script directly, not dependent on agent following instructions
   - Tasks with `priority: "wave_5"` auto-promote when starting wave 5
-  - No manual intervention needed - capture → execute flow is seamless
-  - Output includes `auto_promoted` field showing what was promoted
+  - Execution flow now: SessionStart → **Step 0 (promote)** → Phase 1 → Phase 2 → Phase 3
+  - Also documented in `phase1-discovery.md` Step 1.5 as secondary check
 
 ### Fixed
 

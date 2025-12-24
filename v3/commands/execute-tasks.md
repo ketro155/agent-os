@@ -35,6 +35,8 @@ v3.0 uses native Claude Code features instead of embedded instructions:
 ```
 SessionStart hook → Load progress context
         ↓
+Step 0 → Auto-promote future_tasks to current wave (MANDATORY)
+        ↓
 Phase 1 Agent → Task discovery, mode selection, branch validation
         ↓
 [User confirms execution mode]
@@ -55,10 +57,40 @@ SessionEnd hook → Log progress, checkpoint
 
 ## For Claude Code
 
+### Step 0: Auto-Promote Future Tasks (MANDATORY)
+
+> ⚠️ **MUST RUN BEFORE PHASE 1** - This step promotes backlog items from PR reviews into the current wave.
+
+```bash
+# 1. Get the next wave number to execute
+SPEC_NAME="[spec_name]"
+NEXT_WAVE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status "$SPEC_NAME" | jq -r '
+  .next_task.wave //
+  (.tasks | map(select(.status == "pending")) | first | .wave) //
+  empty
+')
+
+# 2. Check for future tasks tagged for this wave
+FUTURE_COUNT=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future "$SPEC_NAME" | jq -r --arg w "wave_$NEXT_WAVE" '
+  [.future_tasks[] | select(.priority == $w)] | length
+')
+
+# 3. If there are future tasks, promote them
+if [ "$FUTURE_COUNT" -gt 0 ]; then
+  echo "🔄 Auto-promoting $FUTURE_COUNT future tasks to wave $NEXT_WAVE..."
+  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" promote-wave "$NEXT_WAVE" "$SPEC_NAME"
+fi
+```
+
+**Why this step exists:**
+- PR review captures deferred items to `future_tasks` with `priority: "wave_5"`
+- This step ensures those items become real tasks BEFORE Phase 1 discovers tasks
+- Without this, backlog items would never get executed
+
 ### Step 1: Get Task Status
 
 ```bash
-# Check current task status
+# Check current task status (now includes promoted tasks)
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status auth-feature
 ```
 
