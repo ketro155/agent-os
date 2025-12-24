@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Commands like `/pr-review-cycle` can now properly invoke scripts at `${CLAUDE_PROJECT_DIR}/.claude/scripts/...`
   - Error was: `bash: /.claude/scripts/pr-review-operations.sh: No such file or directory`
 
+- **Robust Project Directory Detection in Scripts**: task-operations.sh now auto-detects project root
+  - No longer relies solely on `CLAUDE_PROJECT_DIR` environment variable
+  - Detection priority: CLAUDE_PROJECT_DIR → pwd (if .agent-os exists) → script location → search upward
+  - Fixes "tasks.json not found" errors when env var isn't properly set
+
 ### Changed
 
 - **pr-review-discovery.md**: Updated Step 2 to use LLM classification with regex fallback

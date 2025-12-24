@@ -8,7 +8,45 @@ set -e
 COMMAND="${1:-help}"
 shift || true
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+# Robust project directory detection
+# Priority: CLAUDE_PROJECT_DIR > pwd (if .agent-os exists) > script location
+detect_project_dir() {
+  # 1. Try CLAUDE_PROJECT_DIR if set and valid
+  if [ -n "$CLAUDE_PROJECT_DIR" ] && [ -d "$CLAUDE_PROJECT_DIR/.agent-os" ]; then
+    echo "$CLAUDE_PROJECT_DIR"
+    return
+  fi
+
+  # 2. Try current working directory
+  if [ -d "./.agent-os" ]; then
+    pwd
+    return
+  fi
+
+  # 3. Try to find from script location (go up from .claude/scripts/)
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local project_dir="${script_dir%/.claude/scripts}"
+  if [ -d "$project_dir/.agent-os" ]; then
+    echo "$project_dir"
+    return
+  fi
+
+  # 4. Search upward from pwd
+  local current="$(pwd)"
+  while [ "$current" != "/" ]; do
+    if [ -d "$current/.agent-os" ]; then
+      echo "$current"
+      return
+    fi
+    current="$(dirname "$current")"
+  done
+
+  # Fallback to current directory
+  pwd
+}
+
+PROJECT_DIR="$(detect_project_dir)"
 
 # Find tasks.json
 find_tasks_json() {
