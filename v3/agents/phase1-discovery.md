@@ -99,7 +99,7 @@ cat .agent-os/specs/[spec-name]/tasks.json | jq '.tasks, .execution_strategy'
 
 ```bash
 # Check for future tasks
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spec-name]
+bash .claude/scripts/task-operations.sh list-future [spec-name]
 ```
 
 **Auto-Promotion Logic:**
@@ -113,7 +113,7 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spe
 
 3. IF MATCHING.length > 0:
    # Auto-promote without asking - these were pre-tagged during PR review
-   bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" promote-wave [next_wave] [spec-name]
+   bash .claude/scripts/task-operations.sh promote-wave [next_wave] [spec-name]
 
    # Track what was promoted
    promoted_tasks = [list of promoted task IDs]

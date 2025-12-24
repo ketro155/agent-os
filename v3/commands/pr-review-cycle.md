@@ -75,10 +75,10 @@ EXIT
 
 ```bash
 # Get PR status
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" status [PR_NUMBER]
+bash .claude/scripts/pr-review-operations.sh status [PR_NUMBER]
 
 # Get all review comments
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" comments [PR_NUMBER]
+bash .claude/scripts/pr-review-operations.sh comments [PR_NUMBER]
 ```
 
 **Check Review Decision:**
@@ -280,25 +280,25 @@ All GitHub operations use `.claude/scripts/pr-review-operations.sh`:
 
 ```bash
 # Get PR status
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" status [pr_number]
+bash .claude/scripts/pr-review-operations.sh status [pr_number]
 
 # Get all review comments
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" comments [pr_number]
+bash .claude/scripts/pr-review-operations.sh comments [pr_number]
 
 # Get files changed
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" files [pr_number]
+bash .claude/scripts/pr-review-operations.sh files [pr_number]
 
 # Analyze PR scope
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" scope [pr_number]
+bash .claude/scripts/pr-review-operations.sh scope [pr_number]
 
 # Categorize comments
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize '[comments_json]'
+bash .claude/scripts/pr-review-operations.sh categorize '[comments_json]'
 
 # Reply to inline comment
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" reply-inline [pr] [comment_id] "[body]"
+bash .claude/scripts/pr-review-operations.sh reply-inline [pr] [comment_id] "[body]"
 
 # Generate summary
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" summary [pr] [addressed] [replies]
+bash .claude/scripts/pr-review-operations.sh summary [pr] [addressed] [replies]
 ```
 
 ## Native Agent Benefits

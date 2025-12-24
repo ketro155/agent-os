@@ -5,6 +5,19 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2025-12-24
+
+### Fixed
+
+- **Script Path Resolution in Commands/Agents**: Fixed script invocations failing when Claude runs Bash commands directly
+  - Root cause: `${CLAUDE_PROJECT_DIR}` is only set by Claude Code during hook execution, not when Claude runs Bash directly
+  - Previous "fix" (3.1.0) added the variable to settings.json env, but this only works for hooks, not direct Bash calls
+  - Real fix: Use relative paths `.claude/scripts/...` instead of `${CLAUDE_PROJECT_DIR}/.claude/scripts/...`
+  - Updated files: `execute-tasks.md`, `pr-review-cycle.md`, `phase1-discovery.md`, `pr-review-discovery.md`, `pr-review-implementation.md`, `README.md`
+  - This works because Claude Code always runs from the project root directory
+
+---
+
 ## [3.1.1] - 2025-12-24
 
 ### Fixed

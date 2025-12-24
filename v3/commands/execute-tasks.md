@@ -64,21 +64,21 @@ SessionEnd hook → Log progress, checkpoint
 ```bash
 # 1. Get the next wave number to execute
 SPEC_NAME="[spec_name]"
-NEXT_WAVE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status "$SPEC_NAME" | jq -r '
+NEXT_WAVE=$(bash .claude/scripts/task-operations.sh status "$SPEC_NAME" | jq -r '
   .next_task.wave //
   (.tasks | map(select(.status == "pending")) | first | .wave) //
   empty
 ')
 
 # 2. Check for future tasks tagged for this wave
-FUTURE_COUNT=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future "$SPEC_NAME" | jq -r --arg w "wave_$NEXT_WAVE" '
+FUTURE_COUNT=$(bash .claude/scripts/task-operations.sh list-future "$SPEC_NAME" | jq -r --arg w "wave_$NEXT_WAVE" '
   [.future_tasks[] | select(.priority == $w)] | length
 ')
 
 # 3. If there are future tasks, promote them
 if [ "$FUTURE_COUNT" -gt 0 ]; then
   echo "🔄 Auto-promoting $FUTURE_COUNT future tasks to wave $NEXT_WAVE..."
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" promote-wave "$NEXT_WAVE" "$SPEC_NAME"
+  bash .claude/scripts/task-operations.sh promote-wave "$NEXT_WAVE" "$SPEC_NAME"
 fi
 ```
 
@@ -91,7 +91,7 @@ fi
 
 ```bash
 # Check current task status (now includes promoted tasks)
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status auth-feature
+bash .claude/scripts/task-operations.sh status auth-feature
 ```
 
 ### Step 2: Invoke Phase 1 Discovery
@@ -171,14 +171,14 @@ After each task completes:
 
 ```bash
 # Mark task complete
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "1.2" "pass"
+bash .claude/scripts/task-operations.sh update "1.2" "pass"
 
 # Add artifacts
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts "1.2" '{"files_created":["src/auth/login.ts"],"exports_added":["login"]}'
+bash .claude/scripts/task-operations.sh artifacts "1.2" '{"files_created":["src/auth/login.ts"],"exports_added":["login"]}'
 
 # Or collect artifacts automatically from git
-ARTIFACTS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" collect-artifacts HEAD~1)
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts "1.2" "$ARTIFACTS"
+ARTIFACTS=$(bash .claude/scripts/task-operations.sh collect-artifacts HEAD~1)
+bash .claude/scripts/task-operations.sh artifacts "1.2" "$ARTIFACTS"
 ```
 
 ### Step 5.5: Completion Gate (MANDATORY)
@@ -232,25 +232,25 @@ All task operations use `.claude/scripts/task-operations.sh`:
 
 ```bash
 # Get status
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status [spec_name]
+bash .claude/scripts/task-operations.sh status [spec_name]
 
 # Update task
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update <task_id> <status> [spec_name]
+bash .claude/scripts/task-operations.sh update <task_id> <status> [spec_name]
 
 # Add artifacts
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts <task_id> <json> [spec_name]
+bash .claude/scripts/task-operations.sh artifacts <task_id> <json> [spec_name]
 
 # Collect artifacts from git
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" collect-artifacts [since_commit]
+bash .claude/scripts/task-operations.sh collect-artifacts [since_commit]
 
 # Validate names exist
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" validate-names '["functionName"]'
+bash .claude/scripts/task-operations.sh validate-names '["functionName"]'
 
 # Get progress
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" progress [count] [type]
+bash .claude/scripts/task-operations.sh progress [count] [type]
 
 # Log progress
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" log-progress <type> <description>
+bash .claude/scripts/task-operations.sh log-progress <type> <description>
 ```
 
 ## Hooks (Automatic)
