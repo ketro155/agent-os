@@ -793,14 +793,15 @@ EOF
     fi
 
     # Find the highest wave number from parent tasks
-    # Wave is either in .wave field or extracted from .priority "wave_N"
+    # Wave can be in: .wave, .parallelization.wave, or extracted from .priority "wave_N"
     HIGHEST=$(jq '
       [
         (.tasks // [])[] |
         select(.type == "parent") |
         (
           if .wave then .wave
-          elif .priority and (.priority | test("^wave_[0-9]+$")) then
+          elif .parallelization.wave then .parallelization.wave
+          elif .priority and (.priority | type == "string") and (.priority | test("^wave_[0-9]+$")) then
             (.priority | capture("wave_(?<n>[0-9]+)") | .n | tonumber)
           else 0
           end
