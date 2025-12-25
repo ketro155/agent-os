@@ -243,6 +243,9 @@ IF subagent fails OR timeout:
 
 **Step 3.5.2: Create Future Task Entries**
 
+> **CRITICAL: Future items get their OWN task entries in a `future_tasks` section.**
+> **DO NOT attach `future_enhancement` fields to existing tasks - this breaks semantics when parent tasks are completed.**
+
 For `WAVE_TASK` items:
 
 ```bash
@@ -251,7 +254,7 @@ cat .agent-os/specs/[SPEC_FOLDER]/tasks.json
 ```
 
 ```json
-// Add to tasks.json under new "future_tasks" section
+// Add to tasks.json under new "future_tasks" section (NOT as a field on existing tasks!)
 {
   "future_tasks": [
     {
@@ -265,6 +268,23 @@ cat .agent-os/specs/[SPEC_FOLDER]/tasks.json
       "captured_at": "[ISO_TIMESTAMP]",
       "priority": "backlog"
     }
+  ]
+}
+```
+
+**Anti-Pattern (DO NOT DO THIS):**
+```json
+// ❌ WRONG: Attaching to existing task
+{
+  "id": "3.9",
+  "status": "pending",
+  "future_enhancement": { ... }  // ❌ Task 3 may already be complete!
+}
+
+// ✓ CORRECT: Separate future_tasks section
+{
+  "future_tasks": [
+    { "id": "F1", ... }  // ✓ Independent entry that won't be orphaned
   ]
 }
 ```

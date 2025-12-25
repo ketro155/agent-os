@@ -125,7 +125,9 @@ DETAILS:
   file_context: "[file:line if applicable]"
 
 [If WAVE_TASK:]
-  suggested_task_id: "F[N]"
+  # NOTE: This creates a NEW task in the future_tasks section with an F-prefix ID
+  # It does NOT attach to existing tasks (which may have completed parents)
+  suggested_task_id: "F[N]"               # NEW task ID in future_tasks section
   suggested_priority: "wave_[N]"          # v3.4.0: Pre-assign wave instead of "backlog"
   target_wave: [N]                        # v3.4.0: Explicit wave number
   complexity: "[LOW | MEDIUM | HIGH]"     # v3.4.0: Hint for subtask count
@@ -217,6 +219,7 @@ DETAILS:
 3. **Preserve original comment**: Always include the full original text
 4. **Provide reasoning**: Every classification must have clear reasoning
 5. **Fast execution**: This is a classification task, not implementation - be quick
+6. **CRITICAL - Correct destination**: WAVE_TASK items go into a **`future_tasks` section** with F-prefixed IDs (F1, F2, etc.) - they are **NOT** attached as `future_enhancement` fields on existing tasks. This distinction matters because parent tasks may already be completed.
 
 ## Error Handling
 
