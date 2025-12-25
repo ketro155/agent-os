@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v3.4.0 Wave Assignment in PR Review**: Wave/roadmap assignments for future tasks now happen at the end of `/pr-review-cycle` instead of during `/execute-tasks`. Tasks arrive pre-tagged with `priority: "wave_N"`, simplifying the execute-tasks flow.
+
 **v3.0.5 Paths with Spaces Fix**: Fixed hook execution and script failures when project paths contain spaces (common with OneDrive-synced projects like `AI Projects/`). All hooks now use `bash "${CLAUDE_PROJECT_DIR}/..."` pattern for proper quoting.
 
 **v3.0.2 Git Workflow Enforcement + v2.x Removal**: Adds mandatory branch validation gates to v3 native subagents to prevent direct commits to main/master. `phase1-discovery.md` has Step 0 MANDATORY Gate that blocks if on protected branch. `phase2-implementation.md` has defense-in-depth validation. Also adds `/pr-review-cycle` command for automated PR review feedback processing. **BREAKING**: v2.x architecture removed entirely (phase files, task-orchestrator, codebase-indexer).

@@ -93,47 +93,47 @@ ELSE:
 cat .agent-os/specs/[spec-name]/tasks.json | jq '.tasks, .execution_strategy'
 ```
 
-### 1.5. Auto-Promote Future Tasks (v3.1.0)
+### 1.5. Verify Pre-Assigned Future Tasks (v3.4.0)
 
-> **Automated Backlog Integration**: Before determining tasks, check if there are future tasks from PR reviews that should be promoted to the next wave.
+> **Simplified Flow**: Future tasks now arrive with wave assignments already made during `/pr-review-cycle`. This step just verifies they're ready for expansion.
 
 ```bash
-# Check for future tasks
+# Check for future tasks with wave assignments
 bash .claude/scripts/task-operations.sh list-future [spec-name]
 ```
 
-**Auto-Promotion Logic:**
+**Verification Logic:**
 ```
-1. DETERMINE next_wave:
-   - Find highest wave number with pending tasks
-   - OR if all complete, check for future_tasks tagged with next sequential wave
+1. LIST future_tasks from tasks.json
 
-2. CHECK future_tasks for matching wave:
-   MATCHING = future_tasks WHERE priority == "wave_[next_wave]"
+2. CATEGORIZE by priority:
+   - wave_assigned = future_tasks WHERE priority MATCHES "wave_[N]"
+   - backlog = future_tasks WHERE priority == "backlog"
 
-3. IF MATCHING.length > 0:
-   # Auto-promote without asking - these were pre-tagged during PR review
-   bash .claude/scripts/task-operations.sh promote-wave [next_wave] [spec-name]
+3. IF backlog.length > 0:
+   # Legacy items from before v3.4.0 - assign them now
+   WARN: "[N] future tasks have no wave assignment (legacy backlog items)"
 
-   # Track what was promoted
-   promoted_tasks = [list of promoted task IDs]
+   # Determine target wave and assign
+   target_wave = highest_wave + 1
+   FOR each backlog_task:
+     UPDATE: priority = "wave_[target_wave]"
 
-   # Log the promotion
-   INFORM: "Auto-promoted [N] future tasks to wave [next_wave]"
+4. REPORT:
+   "Future tasks ready: [wave_assigned.count] assigned to wave(s) [list]"
 
-4. INCLUDE in output:
-   "auto_promoted": {
-     "count": N,
-     "wave": next_wave,
-     "tasks": [promoted task details]
+5. INCLUDE in output:
+   "future_tasks_ready": {
+     "count": wave_assigned.length,
+     "waves": [distinct wave numbers],
+     "legacy_migrated": backlog.length
    }
 ```
 
-**Why Auto-Promote:**
-- Future tasks were already triaged during PR review
-- `priority: "wave_5"` means the reviewer decided it belongs in wave 5
-- Manual promotion adds friction without adding value
-- Maintains flow from capture → execution
+**Why Simplified (v3.4.0):**
+- Wave assignment now happens in `/pr-review-cycle` (Phase 3.6)
+- Tasks arrive pre-tagged with `priority: "wave_N"`
+- No promotion logic needed - just verification and legacy migration
 
 ### 1.7. Auto-Expand WAVE_TASK Items (v3.3.0)
 
@@ -309,12 +309,13 @@ Return this JSON:
     ],
     "estimated_speedup": 1.5
   },
-  "auto_promoted": {
+  "future_tasks_ready": {
     "count": 2,
-    "wave": 5,
+    "waves": [5, 6],
+    "legacy_migrated": 0,
     "tasks": [
-      { "id": "5.3", "promoted_from": "F2", "title": "Implement parallel batch processing" },
-      { "id": "5.4", "promoted_from": "F3", "title": "Add idempotency keys for commits" }
+      { "id": "F2", "wave": 5, "title": "Implement parallel batch processing" },
+      { "id": "F3", "wave": 6, "title": "Add idempotency keys for commits" }
     ]
   },
   "auto_expanded": {

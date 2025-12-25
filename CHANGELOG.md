@@ -5,6 +5,37 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2025-12-24
+
+### Added
+
+- **Wave Assignment in PR Review Cycle**: Future tasks now get their wave assignments immediately during `/pr-review-cycle` instead of during `/execute-tasks`
+  - New Phase 3.6 in `pr-review-cycle.md`: Assigns waves to WAVE_TASK items after capture
+  - Wave numbers are determined by analyzing current `execution_strategy.waves`
+  - Optional immediate expansion for simple items (≤2 items, LOW complexity)
+  - Tasks arrive at execute-tasks pre-tagged with `priority: "wave_N"`
+
+### Changed
+
+- **future-classifier.md (v3.4.0)**: Now includes wave assignment in classification output
+  - New Step 5: Determine Wave Assignment
+  - Output includes `target_wave`, `complexity`, and `suggested_priority: "wave_N"`
+  - ASK_USER cases now include `suggested_wave` for pre-computed fallback
+
+- **phase1-discovery.md**: Simplified Step 1.5 from "Auto-Promote" to "Verify Pre-Assigned"
+  - Removed promotion logic - tasks arrive pre-assigned from PR review
+  - Added legacy migration for tasks with `priority: "backlog"` (pre-v3.4.0 items)
+  - Output changed from `auto_promoted` to `future_tasks_ready`
+
+### Why This Change
+
+- **Better context**: Wave assignment happens when PR feedback context is fresh
+- **Separation of concerns**: PR review captures & classifies; execute-tasks just executes
+- **Reduced complexity**: Execute-tasks no longer needs to determine wave assignments
+- **Immediate visibility**: After PR review, you can see wave assignments before execution
+
+---
+
 ## [3.3.0] - 2025-12-24
 
 ### Added

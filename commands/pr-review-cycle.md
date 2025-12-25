@@ -35,6 +35,7 @@ const todos = [
   { content: "Parse review comments into todos", status: "pending", activeForm: "Parsing review comments" },
   { content: "Address review comments", status: "pending", activeForm: "Addressing review comments" },
   { content: "Capture future recommendations", status: "pending", activeForm: "Capturing future recommendations" },
+  { content: "Assign waves to future tasks", status: "pending", activeForm: "Assigning waves to future tasks" },
   { content: "Commit and push fixes", status: "pending", activeForm: "Committing and pushing fixes" }
 ];
 ```
@@ -295,6 +296,99 @@ gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
 
 ---
 
+### Phase 3.6: Assign Waves to Future Tasks (v3.4.0)
+
+> **Purpose:** Assign wave numbers to WAVE_TASK items immediately after capture, while context is fresh. This eliminates the need for wave assignment during execute-tasks.
+
+**Step 3.6.1: Determine Next Wave Number**
+
+```bash
+# Read current tasks.json to find the highest wave
+cat .agent-os/specs/[SPEC_FOLDER]/tasks.json | jq '
+  .execution_strategy.waves |
+  if . then (map(.wave_id) | max) else 0 end
+'
+```
+
+**Wave Assignment Logic:**
+```
+1. GET highest_wave from execution_strategy.waves
+   IF no waves exist: highest_wave = 0
+
+2. GET pending_tasks from tasks where status != "completed"
+
+3. DETERMINE target_wave:
+   IF pending_tasks in highest_wave exist:
+     target_wave = highest_wave + 1  # New wave after current work
+   ELSE:
+     target_wave = highest_wave + 1  # Next sequential wave
+
+4. STORE: target_wave for assignment
+```
+
+**Step 3.6.2: Update WAVE_TASK Priorities**
+
+For each WAVE_TASK item just added to future_tasks:
+
+```bash
+# Update the priority from "backlog" to "wave_N"
+bash .claude/scripts/task-operations.sh update-future-priority [FUTURE_ID] "wave_[TARGET_WAVE]" [spec-name]
+```
+
+**Alternative (direct JSON update):**
+```json
+// Change from:
+{
+  "id": "F1",
+  "priority": "backlog",
+  ...
+}
+
+// To:
+{
+  "id": "F1",
+  "priority": "wave_8",
+  "assigned_wave": 8,
+  "wave_assigned_at": "[ISO_TIMESTAMP]",
+  ...
+}
+```
+
+**Step 3.6.3: Optional Immediate Expansion**
+
+> For simple WAVE_TASK items, expand immediately to save time during execute-tasks.
+
+```
+IF wave_tasks.count <= 2 AND all items are LOW complexity:
+  # Expand now while context is fresh
+  INVOKE: expand-backlog skill
+  INPUT:
+    spec_folder: [SPEC_FOLDER]
+    wave_tasks: [CAPTURED_WAVE_TASKS]
+    target_wave: [TARGET_WAVE]
+
+  # Update reply to indicate task was expanded
+  REPLY: "Captured and expanded into wave [N] tasks. Ready for execution."
+
+ELSE:
+  # Defer expansion to execute-tasks for complex items
+  REPLY: "Captured for wave [N]. Will be expanded during task execution."
+```
+
+**Step 3.6.4: Update Summary with Wave Assignments**
+
+Include wave assignments in the Phase 6 summary:
+
+```
+╠══════════════════════════════════════════════════════════════╣
+║ FUTURE RECOMMENDATIONS CAPTURED:                              ║
+║   • Wave Tasks: [COUNT] → tasks.json (assigned to wave [N])  ║
+║   • Roadmap Items: [COUNT] → roadmap.md                      ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+---
+
 ### Phase 4: Reply to Comments (Optional)
 
 **Step 4.1: Reply to Inline Comments**
@@ -368,7 +462,8 @@ git push origin [BRANCH_NAME]
 ║ Commit: [SHORT_SHA]                                          ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ FUTURE RECOMMENDATIONS CAPTURED:                              ║
-║   • Wave Tasks: [COUNT] → tasks.json (future_tasks)          ║
+║   • Wave Tasks: [COUNT] → assigned to wave [N]               ║
+║   • Expanded: [COUNT] tasks ready for execution              ║
 ║   • Roadmap Items: [COUNT] → roadmap.md                      ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ NEXT STEPS:                                                   ║
@@ -376,21 +471,21 @@ git push origin [BRANCH_NAME]
 ║ Wait for re-review, then either:                             ║
 ║   • Run /pr-review-cycle again (if more feedback)            ║
 ║   • Merge: gh pr merge [NUMBER] --squash                     ║
-║   • Continue to next wave                                     ║
-║   • Review captured future items in tasks.json/roadmap.md    ║
+║   • Continue to next wave (future tasks auto-assigned)       ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
 **Future Items Detail (if any captured):**
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ CAPTURED FUTURE RECOMMENDATIONS                              │
-├──────────────┬──────────────────────────────────────────────┤
-│ Type         │ Description                                  │
-├──────────────┼──────────────────────────────────────────────┤
-│ WAVE_TASK    │ [DESCRIPTION] → tasks.json:F1               │
-│ ROADMAP      │ [DESCRIPTION] → roadmap.md                  │
-└──────────────┴──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ CAPTURED FUTURE RECOMMENDATIONS                                       │
+├──────────────┬────────┬──────────────────────────────────────────────┤
+│ Type         │ Wave   │ Description                                  │
+├──────────────┼────────┼──────────────────────────────────────────────┤
+│ WAVE_TASK    │ 8      │ [DESCRIPTION] → tasks.json:F1 (expanded)    │
+│ WAVE_TASK    │ 8      │ [DESCRIPTION] → tasks.json:F2 (pending)     │
+│ ROADMAP      │ -      │ [DESCRIPTION] → roadmap.md                  │
+└──────────────┴────────┴──────────────────────────────────────────────┘
 ```
 
 ---
