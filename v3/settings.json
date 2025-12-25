@@ -77,7 +77,7 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "3.1.2",
+    "AGENT_OS_VERSION": "3.2.0",
     "CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"
   }
 }

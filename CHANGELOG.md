@@ -5,6 +5,31 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2025-12-24
+
+### Added
+
+- **Backlog Graduation System**: New workflow to prevent orphaned future_tasks when specs complete
+  - `graduate` command: Move individual future tasks to roadmap, next-spec queue, or drop
+  - `graduate-all` command: Auto-process all backlog items based on their `future_type`
+  - `import-backlog` command: Import pending backlog items into a new spec with wave tagging
+  - **ROADMAP_ITEM** items auto-migrate to `.agent-os/product/roadmap.md`
+  - **WAVE_TASK** items prompt user for decision (next spec, promote to wave, or drop)
+  - New global backlog queue at `.agent-os/backlog/pending.json`
+
+- **Phase 3 Graduation Gate (Mandatory)**: Step 5.5 in delivery ensures no orphaned backlog
+  - Blocks PR creation until all future_tasks are triaged
+  - Reports graduation status in PR summary
+  - Quality checklist updated to verify backlog graduation
+
+### Changed
+
+- **phase3-delivery.md**: Renumbered steps (old 6-8.5 → new 7-9.5) to accommodate new Step 5.5
+- **PR Template**: Now includes "Backlog Status" section showing graduation results
+- **Output Format**: Added `backlog_graduation` object with counts for each destination
+
+---
+
 ## [3.1.2] - 2025-12-24
 
 ### Fixed

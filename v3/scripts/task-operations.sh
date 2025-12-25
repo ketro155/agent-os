@@ -553,6 +553,235 @@ case "$COMMAND" in
     fi
     ;;
 
+  # Graduate a single future task to roadmap or next-spec queue
+  graduate)
+    FUTURE_ID="$1"
+    DESTINATION="$2"  # roadmap, next-spec, or drop
+    REASON="$3"       # Optional reason (required for drop)
+    SPEC_NAME="$4"
+
+    if [ -z "$FUTURE_ID" ] || [ -z "$DESTINATION" ]; then
+      echo '{"error": "Usage: task-operations.sh graduate <future_id> <destination> [reason] [spec_name]"}'
+      echo '{"destinations": ["roadmap", "next-spec", "drop"]}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Get the future task
+    ITEM=$(jq --arg fid "$FUTURE_ID" '.future_tasks // [] | map(select(.id == $fid)) | first' "$TASKS_FILE")
+
+    if [ "$ITEM" = "null" ] || [ -z "$ITEM" ]; then
+      echo '{"error": "Future task '"$FUTURE_ID"' not found"}'
+      exit 1
+    fi
+
+    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    SPEC_PATH=$(jq -r '.spec_path // .spec' "$TASKS_FILE")
+
+    case "$DESTINATION" in
+      roadmap)
+        # Append to roadmap.md
+        ROADMAP_FILE="$PROJECT_DIR/.agent-os/product/roadmap.md"
+
+        # Create roadmap file if it doesn't exist
+        if [ ! -f "$ROADMAP_FILE" ]; then
+          mkdir -p "$(dirname "$ROADMAP_FILE")"
+          cat > "$ROADMAP_FILE" << 'ROADMAP_HEADER'
+# Product Roadmap
+
+## Backlog (from PR Reviews)
+
+Items captured during code review that need future planning.
+
+ROADMAP_HEADER
+        fi
+
+        # Extract item details
+        DESCRIPTION=$(echo "$ITEM" | jq -r '.description')
+        PR_NUM=$(echo "$ITEM" | jq -r '.pr_number // "N/A"')
+        FILE_CTX=$(echo "$ITEM" | jq -r '.file_context // "N/A"')
+        ORIGINAL=$(echo "$ITEM" | jq -r '.original_comment // ""')
+
+        # Append to roadmap
+        cat >> "$ROADMAP_FILE" << EOF
+
+### $FUTURE_ID: $DESCRIPTION
+- **Source**: PR #$PR_NUM
+- **Context**: \`$FILE_CTX\`
+- **Captured**: $TIMESTAMP
+- **Details**: $ORIGINAL
+EOF
+
+        # Remove from future_tasks
+        jq --arg fid "$FUTURE_ID" '
+          .future_tasks = (.future_tasks // [] | map(select(.id != $fid)))
+        ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+
+        echo '{"success": true, "future_id": "'"$FUTURE_ID"'", "destination": "roadmap", "file": "'"$ROADMAP_FILE"'"}'
+        ;;
+
+      next-spec)
+        # Move to global backlog queue for next spec
+        BACKLOG_FILE="$PROJECT_DIR/.agent-os/backlog/pending.json"
+
+        # Create backlog file if it doesn't exist
+        if [ ! -f "$BACKLOG_FILE" ]; then
+          mkdir -p "$(dirname "$BACKLOG_FILE")"
+          echo '{"items": [], "created": "'"$TIMESTAMP"'"}' > "$BACKLOG_FILE"
+        fi
+
+        # Add source spec info and move to backlog
+        ENRICHED_ITEM=$(echo "$ITEM" | jq --arg spec "$SPEC_PATH" --arg ts "$TIMESTAMP" '
+          . + {source_spec: $spec, graduated_at: $ts}
+        ')
+
+        jq --argjson item "$ENRICHED_ITEM" '
+          .items += [$item] |
+          .updated = "'"$TIMESTAMP"'"
+        ' "$BACKLOG_FILE" > "${BACKLOG_FILE}.tmp" && mv "${BACKLOG_FILE}.tmp" "$BACKLOG_FILE"
+
+        # Remove from future_tasks
+        jq --arg fid "$FUTURE_ID" '
+          .future_tasks = (.future_tasks // [] | map(select(.id != $fid)))
+        ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+
+        echo '{"success": true, "future_id": "'"$FUTURE_ID"'", "destination": "next-spec", "file": "'"$BACKLOG_FILE"'"}'
+        ;;
+
+      drop)
+        if [ -z "$REASON" ]; then
+          echo '{"error": "Reason required when dropping a future task"}'
+          exit 1
+        fi
+
+        # Log the drop to progress
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        "$SCRIPT_DIR/task-operations.sh" log-progress "backlog_dropped" "Dropped $FUTURE_ID: $REASON" "$SPEC_PATH" "" "" 2>/dev/null || true
+
+        # Remove from future_tasks
+        jq --arg fid "$FUTURE_ID" '
+          .future_tasks = (.future_tasks // [] | map(select(.id != $fid)))
+        ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+
+        echo '{"success": true, "future_id": "'"$FUTURE_ID"'", "destination": "dropped", "reason": "'"$REASON"'"}'
+        ;;
+
+      *)
+        echo '{"error": "Invalid destination. Use: roadmap, next-spec, or drop"}'
+        exit 1
+        ;;
+    esac
+    ;;
+
+  # Graduate all backlog items based on their future_type
+  graduate-all)
+    SPEC_NAME="$1"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Check for future_tasks
+    FUTURE_COUNT=$(jq '(.future_tasks // []) | length' "$TASKS_FILE")
+    if [ "$FUTURE_COUNT" = "0" ] || [ -z "$FUTURE_COUNT" ]; then
+      echo '{"success": true, "message": "No future tasks to graduate", "roadmap_items": 0, "wave_tasks": 0}'
+      exit 0
+    fi
+
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    ROADMAP_GRADUATED=0
+    WAVE_TASKS_REMAINING=0
+    WAVE_TASK_IDS="[]"
+
+    # Process ROADMAP_ITEM types - auto-graduate to roadmap.md
+    ROADMAP_IDS=$(jq -r '.future_tasks // [] | map(select(.future_type == "ROADMAP_ITEM")) | .[].id' "$TASKS_FILE")
+
+    set +e
+    for FID in $ROADMAP_IDS; do
+      if [ -n "$FID" ]; then
+        RESULT=$("$SCRIPT_DIR/task-operations.sh" graduate "$FID" "roadmap" "" "$SPEC_NAME" 2>&1)
+        if echo "$RESULT" | jq -e '.success' > /dev/null 2>&1; then
+          ROADMAP_GRADUATED=$((ROADMAP_GRADUATED + 1))
+        else
+          echo "Warning: Failed to graduate $FID to roadmap: $RESULT" >&2
+        fi
+      fi
+    done
+    set -e
+
+    # Collect remaining WAVE_TASK items (need user decision)
+    # Re-read the file since we modified it
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+    WAVE_TASK_IDS=$(jq '[.future_tasks // [] | map(select(.future_type == "WAVE_TASK" or .future_type == null)) | .[].id]' "$TASKS_FILE")
+    WAVE_TASKS_REMAINING=$(echo "$WAVE_TASK_IDS" | jq 'length')
+
+    # Get details of remaining wave tasks for user review
+    WAVE_TASKS_DETAIL=$(jq '[.future_tasks // [] | map(select(.future_type == "WAVE_TASK" or .future_type == null)) | .[] | {id, description, file_context, priority}]' "$TASKS_FILE")
+
+    echo '{
+      "success": true,
+      "roadmap_graduated": '"$ROADMAP_GRADUATED"',
+      "wave_tasks_remaining": '"$WAVE_TASKS_REMAINING"',
+      "wave_tasks": '"$WAVE_TASKS_DETAIL"',
+      "message": "ROADMAP_ITEM items auto-graduated to roadmap.md. WAVE_TASK items require user decision."
+    }'
+    ;;
+
+  # Import items from global backlog into current spec
+  import-backlog)
+    TARGET_WAVE="$1"
+    SPEC_NAME="$2"
+
+    if [ -z "$TARGET_WAVE" ]; then
+      echo '{"error": "Usage: task-operations.sh import-backlog <target_wave> [spec_name]"}'
+      exit 1
+    fi
+
+    BACKLOG_FILE="$PROJECT_DIR/.agent-os/backlog/pending.json"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$BACKLOG_FILE" ]; then
+      echo '{"success": true, "message": "No pending backlog items", "imported": 0}'
+      exit 0
+    fi
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Count items in backlog
+    BACKLOG_COUNT=$(jq '.items | length' "$BACKLOG_FILE")
+    if [ "$BACKLOG_COUNT" = "0" ]; then
+      echo '{"success": true, "message": "Backlog is empty", "imported": 0}'
+      exit 0
+    fi
+
+    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # Move all pending backlog items to current spec's future_tasks with wave priority
+    WAVE_PRIORITY="wave_${TARGET_WAVE}"
+
+    jq --slurpfile backlog "$BACKLOG_FILE" --arg wp "$WAVE_PRIORITY" --arg ts "$TIMESTAMP" '
+      .future_tasks = (.future_tasks // []) + [
+        $backlog[0].items[] | . + {priority: $wp, imported_at: $ts}
+      ]
+    ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+
+    # Clear the backlog
+    echo '{"items": [], "created": "'"$TIMESTAMP"'", "cleared_at": "'"$TIMESTAMP"'"}' > "$BACKLOG_FILE"
+
+    echo '{"success": true, "imported": '"$BACKLOG_COUNT"', "target_wave": '"$TARGET_WAVE"', "priority": "'"$WAVE_PRIORITY"'"}'
+    ;;
+
   help|*)
     cat << 'EOF'
 Agent OS v3.0 Task Operations
@@ -570,6 +799,11 @@ Commands:
   list-future [spec_name]               List future tasks (backlog)
   promote <future_id> <wave> [spec]     Promote future task to wave
   promote-wave <wave_num> [spec]        Promote all tasks for a wave
+  graduate <fid> <dest> [reason] [spec] Graduate future task to destination
+  graduate-all [spec_name]              Auto-graduate all backlog items
+  import-backlog <wave> [spec]          Import pending backlog into spec
+
+Graduation destinations: roadmap, next-spec, drop
 
 Status values: pending, in_progress, pass, blocked
 
@@ -579,6 +813,11 @@ Examples:
   task-operations.sh list-future
   task-operations.sh promote F1 5
   task-operations.sh promote-wave 5
+  task-operations.sh graduate F1 roadmap
+  task-operations.sh graduate F2 next-spec
+  task-operations.sh graduate F3 drop "Not needed"
+  task-operations.sh graduate-all
+  task-operations.sh import-backlog 8
   task-operations.sh collect-artifacts HEAD~3
   task-operations.sh validate-names '["login", "validateToken"]'
   task-operations.sh log-progress task_completed "Implemented login"
