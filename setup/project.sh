@@ -11,11 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "3.0.5"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "3.4.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="3.0.5"
+    AGENT_OS_VERSION="3.4.0"
 fi
-AGENT_OS_RELEASE_DATE="2025-12-23"
+AGENT_OS_RELEASE_DATE="2025-12-24"
 AGENT_OS_V2_VERSION="2.2.0"  # Legacy version for --v2 flag
 
 # Track installation progress for cleanup
