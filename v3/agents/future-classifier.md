@@ -104,6 +104,33 @@ ELSE (ambiguous):
   PROVIDE: Both options with reasoning
 ```
 
+### Step 5: Determine Wave Assignment (v3.4.0)
+
+> For WAVE_TASK classifications, determine the target wave number immediately.
+
+```
+IF classification == WAVE_TASK:
+  # Read execution_strategy to find current waves
+  READ: tasks.json → execution_strategy.waves
+
+  # Find highest existing wave
+  highest_wave = max(waves.map(w => w.wave_id)) OR 0
+
+  # Check if there are pending tasks in highest wave
+  pending_in_highest = tasks.filter(t =>
+    t.wave == highest_wave AND t.status != "completed"
+  )
+
+  # Assign to next wave after current work
+  target_wave = highest_wave + 1
+
+  # Estimate complexity for expansion hints
+  COMPLEXITY = estimate from:
+    - Single file change → LOW (3 subtasks)
+    - Multiple files, one pattern → MEDIUM (4 subtasks)
+    - New patterns, integrations → HIGH (5 subtasks)
+```
+
 ## Output Format
 
 Return a structured classification:
@@ -122,7 +149,9 @@ DETAILS:
 
 [If WAVE_TASK:]
   suggested_task_id: "F[N]"
-  suggested_priority: "backlog"
+  suggested_priority: "wave_[N]"          # v3.4.0: Pre-assign wave instead of "backlog"
+  target_wave: [N]                        # v3.4.0: Explicit wave number
+  complexity: "[LOW | MEDIUM | HIGH]"     # v3.4.0: Hint for subtask count
   related_tasks: ["[existing related task IDs]"]
 
 [If ROADMAP_ITEM:]
@@ -132,6 +161,7 @@ DETAILS:
 [If ASK_USER:]
   wave_task_rationale: "[Why it could be WAVE_TASK]"
   roadmap_rationale: "[Why it could be ROADMAP_ITEM]"
+  suggested_wave: [N]                     # v3.4.0: Pre-compute wave if user chooses WAVE_TASK
 ```
 
 ## Classification Examples
@@ -153,7 +183,9 @@ DETAILS:
   summary: "Add transaction rollback for partial failure handling"
   original_section: "Can Be Addressed in Future Waves"
   suggested_task_id: "F1"
-  suggested_priority: "backlog"
+  suggested_priority: "wave_5"
+  target_wave: 5
+  complexity: "LOW"
   related_tasks: ["4.3"]
 ```
 
