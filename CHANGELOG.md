@@ -5,6 +5,27 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2025-12-24
+
+### Added
+
+- **Automatic WAVE_TASK Expansion**: WAVE_TASK backlog items are automatically expanded into proper parent/subtask structure during Phase 1 discovery
+  - New `expand-backlog` skill: Uses writing-plans patterns to generate TDD-structured subtasks
+  - New `determine-next-wave` command: Returns next available wave number for task placement
+  - New `add-expanded-task` command: Adds expanded parent+subtasks to tasks.json
+  - New `list-wave-tasks` command: Returns WAVE_TASK items ready for expansion
+  - Step 1.7 in phase1-discovery.md: Auto-expands WAVE_TASK items before task selection
+  - Each WAVE_TASK generates 3-5 subtasks following TDD structure (RED-GREEN-VERIFY)
+  - Eliminates manual intervention in backlog-to-task flow
+  - Output includes `auto_expanded` field with expansion details
+
+### Changed
+
+- **phase1-discovery.md**: Added Step 1.7 for automatic backlog expansion after auto-promotion
+- **task-operations.sh**: Added three new commands for expansion workflow
+
+---
+
 ## [3.2.0] - 2025-12-24
 
 ### Added

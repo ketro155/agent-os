@@ -135,6 +135,100 @@ bash .claude/scripts/task-operations.sh list-future [spec-name]
 - Manual promotion adds friction without adding value
 - Maintains flow from capture → execution
 
+### 1.7. Auto-Expand WAVE_TASK Items (v3.3.0)
+
+> **Automated Backlog Expansion**: Before determining tasks, automatically expand any WAVE_TASK items from future_tasks into proper parent/subtask structure.
+
+```bash
+# Check for WAVE_TASK items needing expansion
+bash .claude/scripts/task-operations.sh list-wave-tasks [spec-name]
+```
+
+**Auto-Expansion Logic:**
+```
+1. GET WAVE_TASK items:
+   RESULT = list-wave-tasks command output
+
+   IF RESULT.count == 0:
+     SKIP: No WAVE_TASK items to expand
+     CONTINUE: to step 2
+
+2. FOR EACH wave_task in RESULT.wave_tasks:
+
+   # Use expand-backlog skill patterns to generate subtasks
+   INVOKE: expand-backlog skill with:
+     - description: wave_task.description
+     - file_context: wave_task.file_context
+     - rationale: wave_task.rationale
+     - target_wave: RESULT.target_wave
+
+   # Skill generates parent + subtasks structure following:
+   # - TDD structure (test-first)
+   # - 2-5 minute micro-tasks
+   # - Exact file paths
+
+   # Create expanded task JSON
+   EXPANDED = {
+     "future_id": wave_task.id,
+     "parent_task": {
+       "id": "[target_wave]",
+       "type": "parent",
+       "description": wave_task.description,
+       "status": "pending",
+       "wave": target_wave,
+       "expanded_from": wave_task.id,
+       "subtasks": ["[wave].1", "[wave].2", ...],
+       "file_context": wave_task.file_context
+     },
+     "subtasks": [
+       {
+         "id": "[wave].1",
+         "type": "subtask",
+         "parent": "[wave]",
+         "description": "Write tests for [functionality] (TDD RED)",
+         "status": "pending",
+         "tdd_phase": "red"
+       },
+       ...
+     ]
+   }
+
+   # Add to tasks.json
+   bash .claude/scripts/task-operations.sh add-expanded-task '$EXPANDED' [spec-name]
+
+3. TRACK expansions:
+   expanded_tasks = [list of expanded task details]
+
+4. INCLUDE in output:
+   "auto_expanded": {
+     "count": N,
+     "target_wave": wave_number,
+     "tasks": [
+       { "from": "F1", "to_parent": "8", "subtasks": 4 }
+     ]
+   }
+```
+
+**Why Auto-Expand:**
+- WAVE_TASK items contain enough context (description, file_context, rationale) for task generation
+- Eliminates manual intervention in the flow
+- Uses writing-plans patterns for consistent task quality
+- Creates proper TDD structure automatically
+
+**Expansion Heuristics:**
+```
+SUBTASK COUNT based on complexity:
+- Simple (add function, fix bug): 3 subtasks
+- Medium (add feature to existing file): 4 subtasks
+- Complex (new integration, multiple files): 5 subtasks
+
+ALWAYS include:
+- First subtask: Write failing tests (RED)
+- Last subtask: Verify and commit
+```
+
+---
+
 ### 2. Determine Tasks to Execute
 
 ```
@@ -221,6 +315,14 @@ Return this JSON:
     "tasks": [
       { "id": "5.3", "promoted_from": "F2", "title": "Implement parallel batch processing" },
       { "id": "5.4", "promoted_from": "F3", "title": "Add idempotency keys for commits" }
+    ]
+  },
+  "auto_expanded": {
+    "count": 3,
+    "target_wave": 8,
+    "tasks": [
+      { "from": "F1", "to_parent": "8", "subtasks": 4, "description": "Add retry logic for API calls" },
+      { "from": "F6", "to_parent": "9", "subtasks": 3, "description": "Implement cache invalidation" }
     ]
   },
   "git_branch": {

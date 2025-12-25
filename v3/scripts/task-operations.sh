@@ -782,6 +782,171 @@ EOF
     echo '{"success": true, "imported": '"$BACKLOG_COUNT"', "target_wave": '"$TARGET_WAVE"', "priority": "'"$WAVE_PRIORITY"'"}'
     ;;
 
+  # Determine the next available wave number
+  determine-next-wave)
+    SPEC_NAME="$1"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Find the highest wave number from parent tasks
+    # Wave is either in .wave field or extracted from .priority "wave_N"
+    HIGHEST=$(jq '
+      [
+        (.tasks // [])[] |
+        select(.type == "parent") |
+        (
+          if .wave then .wave
+          elif .priority and (.priority | test("^wave_[0-9]+$")) then
+            (.priority | capture("wave_(?<n>[0-9]+)") | .n | tonumber)
+          else 0
+          end
+        )
+      ] | max // 0
+    ' "$TASKS_FILE")
+
+    NEXT_WAVE=$((HIGHEST + 1))
+
+    echo '{
+      "success": true,
+      "current_highest": '"$HIGHEST"',
+      "next_wave": '"$NEXT_WAVE"'
+    }'
+    ;;
+
+  # Add expanded task (parent + subtasks) from backlog expansion
+  add-expanded-task)
+    EXPANDED_JSON="$1"
+    SPEC_NAME="$2"
+
+    if [ -z "$EXPANDED_JSON" ]; then
+      echo '{"error": "Usage: task-operations.sh add-expanded-task <expanded_json> [spec_name]"}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    TMP_FILE="${TASKS_FILE}.expand.tmp"
+
+    # Parse the expanded JSON
+    FUTURE_ID=$(echo "$EXPANDED_JSON" | jq -r '.future_id')
+    PARENT_TASK=$(echo "$EXPANDED_JSON" | jq '.parent_task')
+    SUBTASKS=$(echo "$EXPANDED_JSON" | jq '.subtasks')
+
+    if [ "$FUTURE_ID" = "null" ] || [ "$PARENT_TASK" = "null" ]; then
+      echo '{"error": "Invalid expanded_json format. Required: future_id, parent_task, subtasks"}'
+      exit 1
+    fi
+
+    # Add parent task, subtasks, remove from future_tasks, update summary
+    if ! jq --arg fid "$FUTURE_ID" \
+           --argjson parent "$PARENT_TASK" \
+           --argjson subs "$SUBTASKS" \
+           --arg ts "$TIMESTAMP" '
+      # Add parent task with timestamp
+      .tasks += [($parent + {created_at: $ts})] |
+
+      # Add subtasks with timestamps
+      .tasks += [$subs[] | . + {created_at: $ts}] |
+
+      # Remove from future_tasks
+      .future_tasks = (.future_tasks // [] | map(select(.id != $fid))) |
+
+      # Update the timestamp
+      .updated = $ts |
+
+      # Recalculate summary
+      .summary = {
+        total_tasks: (.tasks | length),
+        parent_tasks: (.tasks | map(select(.type == "parent")) | length),
+        subtasks: (.tasks | map(select(.type == "subtask")) | length),
+        completed: (.tasks | map(select(.status == "pass")) | length),
+        in_progress: (.tasks | map(select(.status == "in_progress")) | length),
+        blocked: (.tasks | map(select(.status == "blocked")) | length),
+        pending: (.tasks | map(select(.status == "pending")) | length),
+        overall_percent: (((.tasks | map(select(.status == "pass")) | length) / (.tasks | length)) * 100 | floor)
+      }
+    ' "$TASKS_FILE" > "$TMP_FILE" 2>/dev/null; then
+      echo '{"error": "jq processing failed"}'
+      rm -f "$TMP_FILE"
+      exit 1
+    fi
+
+    # Validate result
+    if ! jq -e '.tasks' "$TMP_FILE" > /dev/null 2>&1; then
+      echo '{"error": "Result validation failed"}'
+      rm -f "$TMP_FILE"
+      exit 1
+    fi
+
+    # Atomic move
+    mv "$TMP_FILE" "$TASKS_FILE"
+
+    # Extract parent task ID for response
+    PARENT_ID=$(echo "$PARENT_TASK" | jq -r '.id')
+    SUBTASK_COUNT=$(echo "$SUBTASKS" | jq 'length')
+
+    echo '{
+      "success": true,
+      "expanded_from": "'"$FUTURE_ID"'",
+      "parent_task_id": "'"$PARENT_ID"'",
+      "subtasks_added": '"$SUBTASK_COUNT"',
+      "message": "Expanded '"$FUTURE_ID"' into parent task '"$PARENT_ID"' with '"$SUBTASK_COUNT"' subtasks"
+    }'
+    ;;
+
+  # Expand all WAVE_TASK items in future_tasks (returns data for skill to process)
+  list-wave-tasks)
+    SPEC_NAME="$1"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Get next wave number
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    NEXT_WAVE_RESULT=$("$SCRIPT_DIR/task-operations.sh" determine-next-wave "$SPEC_NAME" 2>&1)
+    NEXT_WAVE=$(echo "$NEXT_WAVE_RESULT" | jq -r '.next_wave // 1')
+
+    # Get all WAVE_TASK items with full details
+    WAVE_TASKS=$(jq --arg nw "$NEXT_WAVE" '[
+      .future_tasks // [] |
+      map(select(.future_type == "WAVE_TASK" or .future_type == null)) |
+      .[] |
+      {
+        id,
+        description,
+        file_context,
+        rationale: .original_comment,
+        future_type: (.future_type // "WAVE_TASK"),
+        priority
+      }
+    ]' "$TASKS_FILE")
+
+    WAVE_TASK_COUNT=$(echo "$WAVE_TASKS" | jq 'length')
+    SPEC_FOLDER=$(jq -r '.spec_path // .spec' "$TASKS_FILE")
+
+    echo '{
+      "success": true,
+      "spec_folder": "'"$SPEC_FOLDER"'",
+      "target_wave": '"$NEXT_WAVE"',
+      "wave_tasks": '"$WAVE_TASKS"',
+      "count": '"$WAVE_TASK_COUNT"',
+      "message": "Found '"$WAVE_TASK_COUNT"' WAVE_TASK items ready for expansion into wave '"$NEXT_WAVE"'"
+    }'
+    ;;
+
   help|*)
     cat << 'EOF'
 Agent OS v3.0 Task Operations
@@ -802,6 +967,9 @@ Commands:
   graduate <fid> <dest> [reason] [spec] Graduate future task to destination
   graduate-all [spec_name]              Auto-graduate all backlog items
   import-backlog <wave> [spec]          Import pending backlog into spec
+  determine-next-wave [spec]            Get next available wave number
+  add-expanded-task <json> [spec]       Add expanded parent+subtasks
+  list-wave-tasks [spec]                List WAVE_TASK items for expansion
 
 Graduation destinations: roadmap, next-spec, drop
 
@@ -818,6 +986,9 @@ Examples:
   task-operations.sh graduate F3 drop "Not needed"
   task-operations.sh graduate-all
   task-operations.sh import-backlog 8
+  task-operations.sh determine-next-wave
+  task-operations.sh list-wave-tasks
+  task-operations.sh add-expanded-task '{"future_id":"F1","parent_task":{...},"subtasks":[...]}'
   task-operations.sh collect-artifacts HEAD~3
   task-operations.sh validate-names '["login", "validateToken"]'
   task-operations.sh log-progress task_completed "Implemented login"
