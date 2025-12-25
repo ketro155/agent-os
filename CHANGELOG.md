@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **phase1-discovery.md**: Added Step 1.7 for automatic backlog expansion after auto-promotion
 - **task-operations.sh**: Added three new commands for expansion workflow
 
+### Fixed
+
+- **determine-next-wave**: Now checks `.parallelization.wave` field in addition to `.wave` and `.priority` for existing specs that store wave numbers in nested location
+- **add-expanded-task**: Now also updates `execution_strategy.waves` array when adding expanded tasks, ensuring orchestrator knows about new waves
+
 ---
 
 ## [3.2.0] - 2025-12-24
