@@ -577,7 +577,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer; do
+            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer expand-backlog; do
                 if [ -f "$BASE_AGENT_OS/claude-code/skills/${skill}.md" ]; then
                     copy_file "$BASE_AGENT_OS/claude-code/skills/${skill}.md" "./.claude/skills/${skill}.md" "$OVERWRITE_CLAUDE" "skills/${skill}.md"
                 else
@@ -634,7 +634,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
             echo ""
             echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer; do
+            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer expand-backlog; do
                 download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
                     "./.claude/skills/${skill}.md" \
                     "$OVERWRITE_CLAUDE" \
