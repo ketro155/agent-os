@@ -75,10 +75,10 @@ EXIT
 
 ```bash
 # Get PR status
-bash .claude/scripts/pr-review-operations.sh status [PR_NUMBER]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" status [PR_NUMBER]
 
 # Get all review comments
-bash .claude/scripts/pr-review-operations.sh comments [PR_NUMBER]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" comments [PR_NUMBER]
 ```
 
 **Check Review Decision:**
@@ -276,29 +276,29 @@ This creates an automated feedback loop:
 
 ## PR Review Operations (Shell Script)
 
-All GitHub operations use `.claude/scripts/pr-review-operations.sh`:
+All GitHub operations use `"${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh"`:
 
 ```bash
 # Get PR status
-bash .claude/scripts/pr-review-operations.sh status [pr_number]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" status [pr_number]
 
 # Get all review comments
-bash .claude/scripts/pr-review-operations.sh comments [pr_number]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" comments [pr_number]
 
 # Get files changed
-bash .claude/scripts/pr-review-operations.sh files [pr_number]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" files [pr_number]
 
 # Analyze PR scope
-bash .claude/scripts/pr-review-operations.sh scope [pr_number]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" scope [pr_number]
 
 # Categorize comments
-bash .claude/scripts/pr-review-operations.sh categorize '[comments_json]'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize '[comments_json]'
 
 # Reply to inline comment
-bash .claude/scripts/pr-review-operations.sh reply-inline [pr] [comment_id] "[body]"
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" reply-inline [pr] [comment_id] "[body]"
 
 # Generate summary
-bash .claude/scripts/pr-review-operations.sh summary [pr] [addressed] [replies]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" summary [pr] [addressed] [replies]
 ```
 
 ## Native Agent Benefits

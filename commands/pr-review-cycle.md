@@ -409,7 +409,7 @@ For each WAVE_TASK item just added to future_tasks:
 
 ```bash
 # Update the priority from "backlog" to "wave_N"
-bash .claude/scripts/task-operations.sh update-future-priority [FUTURE_ID] "wave_[TARGET_WAVE]" [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update-future-priority [FUTURE_ID] "wave_[TARGET_WAVE]" [spec-name]
 ```
 
 **Alternative (direct JSON update):**

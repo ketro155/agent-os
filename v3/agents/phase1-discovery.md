@@ -99,7 +99,7 @@ cat .agent-os/specs/[spec-name]/tasks.json | jq '.tasks, .execution_strategy'
 
 ```bash
 # Check for future tasks with wave assignments
-bash .claude/scripts/task-operations.sh list-future [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spec-name]
 ```
 
 **Verification Logic:**
@@ -141,7 +141,7 @@ bash .claude/scripts/task-operations.sh list-future [spec-name]
 
 ```bash
 # Check for WAVE_TASK items needing expansion
-bash .claude/scripts/task-operations.sh list-wave-tasks [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-wave-tasks [spec-name]
 ```
 
 **Auto-Expansion Logic:**
@@ -194,7 +194,7 @@ bash .claude/scripts/task-operations.sh list-wave-tasks [spec-name]
    }
 
    # Add to tasks.json
-   bash .claude/scripts/task-operations.sh add-expanded-task '$EXPANDED' [spec-name]
+   bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" add-expanded-task '$EXPANDED' [spec-name]
 
 3. TRACK expansions:
    expanded_tasks = [list of expanded task details]

@@ -90,7 +90,7 @@ Before delivery, all `future_tasks` must be triaged to prevent orphaned backlog 
 
 ```bash
 # Run automatic graduation based on future_type
-bash .claude/scripts/task-operations.sh graduate-all [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" graduate-all [spec-name]
 ```
 
 **Automatic Behavior:**
@@ -122,20 +122,20 @@ AskUserQuestion({
 
 ```bash
 # For "Next Spec"
-bash .claude/scripts/task-operations.sh graduate F1 next-spec [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" graduate F1 next-spec [spec-name]
 
 # For "Tag for Wave N" (e.g., wave 8)
-bash .claude/scripts/task-operations.sh promote F1 8 [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" promote F1 8 [spec-name]
 
 # For "Drop"
-bash .claude/scripts/task-operations.sh graduate F1 drop "User decision: not needed" [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" graduate F1 drop "User decision: not needed" [spec-name]
 ```
 
 **Validation:**
 
 ```bash
 # Verify no orphaned items remain
-REMAINING=$(bash .claude/scripts/task-operations.sh list-future [spec-name] | jq '.total')
+REMAINING=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spec-name] | jq '.total')
 
 IF $REMAINING > 0:
   ⛔ CANNOT PROCEED - Still have $REMAINING orphaned backlog items

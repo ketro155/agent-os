@@ -96,29 +96,29 @@ Agent OS v3.0 is a major architectural refactor that leverages Claude Code's nat
 
 ## Task Operations
 
-All task management uses `.claude/scripts/task-operations.sh`:
+All task management uses `"${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh"`:
 
 ```bash
 # Get status
-bash .claude/scripts/task-operations.sh status [spec_name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status [spec_name]
 
 # Update task
-bash .claude/scripts/task-operations.sh update <task_id> <status>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update <task_id> <status>
 
 # Add artifacts
-bash .claude/scripts/task-operations.sh artifacts <task_id> <json>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" artifacts <task_id> <json>
 
 # Collect artifacts from git
-bash .claude/scripts/task-operations.sh collect-artifacts [since_commit]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" collect-artifacts [since_commit]
 
 # Validate names exist in codebase
-bash .claude/scripts/task-operations.sh validate-names '["functionName"]'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" validate-names '["functionName"]'
 
 # Get progress log
-bash .claude/scripts/task-operations.sh progress [count] [type]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" progress [count] [type]
 
 # Log progress entry
-bash .claude/scripts/task-operations.sh log-progress <type> <description>
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" log-progress <type> <description>
 ```
 
 ## Native Claude Code Agent Integration (v3.0.0)

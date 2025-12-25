@@ -5,6 +5,25 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.1] - 2025-12-25
+
+### Fixed
+
+- **Script Path Resolution**: Fixed "No such file or directory" errors when Claude's working directory differs from project root
+  - Affected files: `execute-tasks.md`, `pr-review-cycle.md`, `phase1-discovery.md`, `phase3-delivery.md`, `pr-review-implementation.md`, `pr-review-discovery.md`, `expand-backlog.md`, `v3/README.md`
+  - Changed all relative paths `.claude/scripts/task-operations.sh` to `"${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh"`
+  - Changed all relative paths `.claude/scripts/pr-review-operations.sh` to `"${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh"`
+
+### Why This Fix
+
+While v3.0.5 fixed hook execution in `settings.json` by using the `CLAUDE_PROJECT_DIR` pattern, the command and agent markdown files still instructed Claude to use relative paths (e.g., `bash .claude/scripts/task-operations.sh`). This caused script-not-found errors when:
+- Claude's working directory was not the project root
+- Project paths contained spaces (e.g., `/Users/.../AI Projects/...`)
+
+The scripts themselves already had robust project detection once running - the issue was that bash couldn't find them in the first place.
+
+---
+
 ## [3.5.0] - 2025-12-25
 
 ### Added

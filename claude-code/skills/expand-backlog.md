@@ -135,7 +135,7 @@ And for each subtask:
 Use the add-expanded-task command:
 
 ```bash
-bash .claude/scripts/task-operations.sh add-expanded-task '<tasks_json>' [spec-name]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" add-expanded-task '<tasks_json>' [spec-name]
 ```
 
 Where `<tasks_json>` is:

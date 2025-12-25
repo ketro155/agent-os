@@ -71,7 +71,7 @@ ELSE:
 
 ```bash
 # Get files changed and analyze scope
-bash .claude/scripts/pr-review-operations.sh scope [PR_NUMBER]
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" scope [PR_NUMBER]
 ```
 
 **Parse Result:**
@@ -148,7 +148,7 @@ Task({
 If LLM classification fails or times out, fall back to script-based categorization:
 
 ```bash
-bash .claude/scripts/pr-review-operations.sh categorize '[COMBINED_COMMENTS_JSON]'
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize '[COMBINED_COMMENTS_JSON]'
 ```
 
 **Fallback Section Patterns:**
