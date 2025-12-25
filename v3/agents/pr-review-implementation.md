@@ -192,11 +192,14 @@ FOR each FUTURE comment:
 ```
 
 **Capture to tasks.json (WAVE_TASK):**
+
+> **CRITICAL**: Add to `future_tasks` section with F-prefixed ID. **DO NOT** attach as `future_enhancement` field on existing tasks (parent may be completed).
+
 ```bash
 # Read current tasks.json
 SPEC_FOLDER=$(ls -d .agent-os/specs/*/ 2>/dev/null | head -1)
 
-# Add to future_tasks section
+# Add to future_tasks section (NOT as a field on existing tasks!)
 jq '.future_tasks += [{
   "id": "F[N]",
   "source": "pr_review",

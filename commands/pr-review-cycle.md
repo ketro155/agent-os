@@ -289,12 +289,69 @@ cat .agent-os/specs/[SPEC_FOLDER]/tasks.json
 }
 ```
 
-**Step 3.5.3: Create Roadmap Entries**
+**Step 3.5.3: Integrate Roadmap Items (v3.5.0)**
 
-For `ROADMAP_ITEM` items:
+For `ROADMAP_ITEM` items, determine optimal phase placement before adding:
 
+**Step 3.5.3a: Determine Placement**
+
+```
+INVOKE: Task tool with subagent_type="roadmap-integrator"
+INPUT:
+  ITEM_TITLE: "[SUGGESTED_TITLE from future-classifier]"
+  ITEM_DESCRIPTION: "[SUMMARIZED_RECOMMENDATION]"
+  ITEM_SOURCE: "PR #[NUMBER] review by @[REVIEWER]"
+  ROADMAP_PATH: ".agent-os/product/roadmap.md"
+  CURRENT_SPEC: "[SPEC_FOLDER]"
+```
+
+The subagent will:
+1. Parse roadmap phase structure (goals, status, features)
+2. Score each phase for theme similarity, dependency satisfaction, effort grouping
+3. Return placement recommendation: existing_phase, new_phase, or ask_user
+
+**Step 3.5.3b: Apply Placement Decision**
+
+| Recommendation | Action |
+|----------------|--------|
+| `existing_phase` | Insert item into target phase at recommended position |
+| `new_phase` | Create new phase section, then add item |
+| `ask_user` | Present options, await user decision |
+
+**For `existing_phase`:**
+```
+LOCATE: Target phase section in roadmap.md
+INSERT at recommended position:
+  - [ ] [ITEM_TITLE] `[EFFORT]` (from PR #[NUMBER])
+    - Source: @[REVIEWER]
+    - [SUMMARIZED_RECOMMENDATION]
+```
+
+**For `new_phase`:**
+```markdown
+## [SUGGESTED_PHASE_NAME]
+
+**Goal:** [SUGGESTED_GOAL]
+
+**Status:** Proposed
+
+### Features
+
+- [ ] [ITEM_TITLE] `[EFFORT]` (from PR #[NUMBER])
+  - Source: @[REVIEWER]
+  - [SUMMARIZED_RECOMMENDATION]
+```
+
+**For `ask_user`:**
+```
+PRESENT options from roadmap-integrator output
+AWAIT user selection
+APPLY selected placement
+```
+
+**Fallback (if subagent unavailable):**
 ```bash
-# Append to roadmap.md
+# Append to end of roadmap.md (legacy behavior)
 cat >> .agent-os/product/roadmap.md << 'EOF'
 
 ### [ITEM_TITLE] (from PR #[NUMBER] review)

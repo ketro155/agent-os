@@ -11,11 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "3.4.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "3.4.1"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="3.4.0"
+    AGENT_OS_VERSION="3.4.1"
 fi
-AGENT_OS_RELEASE_DATE="2025-12-24"
+AGENT_OS_RELEASE_DATE="2025-12-25"
 AGENT_OS_V2_VERSION="2.2.0"  # Legacy version for --v2 flag
 
 # Track installation progress for cleanup
@@ -459,7 +459,7 @@ if [ "$CLAUDE_CODE" = true ]; then
             # Install v3 agents (native subagents for phases)
             echo ""
             echo "  📂 Agents (v3 - phase subagents):"
-            for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier; do
+            for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator; do
                 if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                     copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
                 fi

@@ -5,6 +5,29 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.1] - 2025-12-25
+
+### Fixed
+
+- **Future Task Capture Pattern**: Fixed incorrect `future_enhancement` field attachment to existing tasks
+  - Added explicit anti-pattern warning in `pr-review-cycle.md` (Step 3.5.2)
+  - Shows correct vs incorrect JSON structure with ❌/✓ visual markers
+  - Future items now correctly go into a separate `future_tasks` section with F-prefixed IDs
+  - Prevents orphaned enhancements when parent tasks are already completed
+
+- **future-classifier.md**: Reinforced correct destination pattern
+  - Added constraint #6: WAVE_TASK items go into `future_tasks` section, NOT attached to existing tasks
+  - Added clarifying comments in output format specification
+
+### Why This Fix
+
+When Claude processed PR review feedback, it was improvising a `future_enhancement` field pattern instead of following the documented `future_tasks` section approach. This caused issues when:
+- Parent tasks were already marked complete (orphaned enhancements)
+- Future work items became invisible/non-actionable
+- Semantic confusion about task relationships
+
+---
+
 ## [3.4.0] - 2025-12-24
 
 ### Added

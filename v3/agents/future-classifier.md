@@ -233,6 +233,7 @@ DETAILS:
 3. **Always check for duplicates**: Don't create duplicate entries
 4. **Preserve original context**: Always include the original section header and comment text
 5. **Fast execution**: This is a classification task, not implementation - be quick
+6. **CRITICAL - Correct destination**: WAVE_TASK items go into a **`future_tasks` section** with F-prefixed IDs (F1, F2, etc.) - they are **NOT** attached as `future_enhancement` fields on existing tasks. This distinction matters because parent tasks may already be completed.
 
 ## Error Handling
 
