@@ -842,17 +842,23 @@ EOF
     FUTURE_ID=$(echo "$EXPANDED_JSON" | jq -r '.future_id')
     PARENT_TASK=$(echo "$EXPANDED_JSON" | jq '.parent_task')
     SUBTASKS=$(echo "$EXPANDED_JSON" | jq '.subtasks')
+    TARGET_WAVE=$(echo "$PARENT_TASK" | jq -r '.wave // 0')
 
     if [ "$FUTURE_ID" = "null" ] || [ "$PARENT_TASK" = "null" ]; then
       echo '{"error": "Invalid expanded_json format. Required: future_id, parent_task, subtasks"}'
       exit 1
     fi
 
-    # Add parent task, subtasks, remove from future_tasks, update summary
+    # Extract parent task ID for wave update
+    PARENT_ID=$(echo "$PARENT_TASK" | jq -r '.id')
+
+    # Add parent task, subtasks, remove from future_tasks, update summary AND execution_strategy
     if ! jq --arg fid "$FUTURE_ID" \
            --argjson parent "$PARENT_TASK" \
            --argjson subs "$SUBTASKS" \
-           --arg ts "$TIMESTAMP" '
+           --arg ts "$TIMESTAMP" \
+           --arg pid "$PARENT_ID" \
+           --argjson wave "$TARGET_WAVE" '
       # Add parent task with timestamp
       .tasks += [($parent + {created_at: $ts})] |
 
@@ -861,6 +867,26 @@ EOF
 
       # Remove from future_tasks
       .future_tasks = (.future_tasks // [] | map(select(.id != $fid))) |
+
+      # Update execution_strategy.waves - add to existing wave or create new one
+      .execution_strategy.waves = (
+        if (.execution_strategy.waves | map(select(.wave_id == $wave)) | length) > 0 then
+          # Wave exists - add parent task ID to it (if not already present)
+          .execution_strategy.waves | map(
+            if .wave_id == $wave then
+              .tasks = (.tasks + [$pid] | unique)
+            else .
+            end
+          )
+        else
+          # Wave does not exist - create it
+          .execution_strategy.waves + [{
+            wave_id: $wave,
+            tasks: [$pid],
+            rationale: "Expanded from WAVE_TASK backlog items"
+          }]
+        end
+      ) |
 
       # Update the timestamp
       .updated = $ts |
@@ -892,16 +918,15 @@ EOF
     # Atomic move
     mv "$TMP_FILE" "$TASKS_FILE"
 
-    # Extract parent task ID for response
-    PARENT_ID=$(echo "$PARENT_TASK" | jq -r '.id')
     SUBTASK_COUNT=$(echo "$SUBTASKS" | jq 'length')
 
     echo '{
       "success": true,
       "expanded_from": "'"$FUTURE_ID"'",
       "parent_task_id": "'"$PARENT_ID"'",
+      "target_wave": '"$TARGET_WAVE"',
       "subtasks_added": '"$SUBTASK_COUNT"',
-      "message": "Expanded '"$FUTURE_ID"' into parent task '"$PARENT_ID"' with '"$SUBTASK_COUNT"' subtasks"
+      "message": "Expanded '"$FUTURE_ID"' into parent task '"$PARENT_ID"' (wave '"$TARGET_WAVE"') with '"$SUBTASK_COUNT"' subtasks"
     }'
     ;;
 
