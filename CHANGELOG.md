@@ -5,6 +5,35 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2025-12-25
+
+### Added
+
+- **Intelligent Roadmap Integration**: New `roadmap-integrator` subagent determines optimal phase placement for ROADMAP_ITEM entries
+  - Parses roadmap phase structure (goals, status, features, dependencies)
+  - Scores phases for theme similarity, dependency satisfaction, effort grouping
+  - Recommends: existing_phase, new_phase, or ask_user
+  - Items now integrate into appropriate phases instead of appending to bottom
+
+- **pr-review-cycle.md Step 3.5.3**: Enhanced ROADMAP_ITEM handling (v3.5.0)
+  - New Step 3.5.3a: Determine placement via roadmap-integrator
+  - New Step 3.5.3b: Apply placement decision
+  - Supports inserting into existing phase at optimal position
+  - Supports creating new phase with suggested goal
+  - Falls back to legacy append behavior if subagent unavailable
+
+### Why This Change
+
+Previously, ROADMAP_ITEMs from PR reviews were appended to the end of roadmap.md without considering:
+- Phase themes and goals
+- Dependencies between phases
+- Related features already grouped together
+- Effort-based grouping patterns
+
+Now items are intelligently placed where they belong in the roadmap structure.
+
+---
+
 ## [3.4.1] - 2025-12-25
 
 ### Fixed

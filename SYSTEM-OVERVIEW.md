@@ -140,7 +140,8 @@ Target Project/
 │   │   ├── phase3-delivery.md       # Completion workflow (sonnet)
 │   │   ├── git-workflow.md          # Git operations
 │   │   ├── project-manager.md       # Task/roadmap updates
-│   │   └── future-classifier.md     # PR review future item classification
+│   │   ├── future-classifier.md     # PR review future item classification
+│   │   └── roadmap-integrator.md    # Roadmap phase placement (v3.5.0)
 │   │
 │   ├── skills/             # Model-invoked skills
 │   │   ├── build-check.md
@@ -450,6 +451,7 @@ Planning Mode provides:
 | **git-workflow** | Branch management, commits, PRs | execute-tasks, debug |
 | **project-manager** | Task/roadmap updates, notifications | execute-tasks, create-spec |
 | **future-classifier** | Classify PR review future items (haiku) | pr-review-cycle |
+| **roadmap-integrator** | Determine optimal roadmap phase placement (haiku) | pr-review-cycle |
 
 ### Native Subagent Architecture (v3.0+)
 

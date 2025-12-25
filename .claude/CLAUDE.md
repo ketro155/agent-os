@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v3.5.0 Intelligent Roadmap Integration**: New `roadmap-integrator` subagent determines optimal phase placement for ROADMAP_ITEMs during `/pr-review-cycle`. Analyzes phase themes, dependencies, and effort grouping to place items in the right phase instead of appending to the end.
+
 **v3.4.0 Wave Assignment in PR Review**: Wave/roadmap assignments for future tasks now happen at the end of `/pr-review-cycle` instead of during `/execute-tasks`. Tasks arrive pre-tagged with `priority: "wave_N"`, simplifying the execute-tasks flow.
 
 **v3.0.5 Paths with Spaces Fix**: Fixed hook execution and script failures when project paths contain spaces (common with OneDrive-synced projects like `AI Projects/`). All hooks now use `bash "${CLAUDE_PROJECT_DIR}/..."` pattern for proper quoting.
