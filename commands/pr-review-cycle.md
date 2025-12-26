@@ -36,6 +36,7 @@ const todos = [
   { content: "Address review comments", status: "pending", activeForm: "Addressing review comments" },
   { content: "Capture future recommendations", status: "pending", activeForm: "Capturing future recommendations" },
   { content: "Assign waves to future tasks", status: "pending", activeForm: "Assigning waves to future tasks" },
+  { content: "Expand WAVE_TASK items into actual tasks", status: "pending", activeForm: "Expanding WAVE_TASK items" },
   { content: "Commit and push fixes", status: "pending", activeForm: "Committing and pushing fixes" }
 ];
 ```
@@ -433,6 +434,17 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update-future-pr
 
 **Step 3.6.3: Immediate Task Expansion (v3.6.0)**
 
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ⚠️  MANDATORY - DO NOT SKIP THIS STEP                                        ║
+║                                                                              ║
+║  ALL WAVE_TASK items MUST be expanded into actual tasks in this step.        ║
+║  If you skip this, Phase 5.0 gate will BLOCK your commit.                    ║
+║                                                                              ║
+║  This step converts future_tasks → main tasks array + waves section          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
 > **MANDATORY**: Expand ALL WAVE_TASK items immediately into actual tasks. This prevents orphan future_tasks and ensures the task list is immediately actionable.
 
 ```
@@ -540,6 +552,24 @@ Reply formats:
 ---
 
 ### Phase 5: Commit and Push
+
+**Step 5.0: MANDATORY Gate - Verify Expansion Completed**
+
+> **CRITICAL**: Before committing, verify that ALL captured WAVE_TASK items have been expanded into actual tasks. This prevents orphan future_tasks.
+
+```bash
+# Check if there are unexpanded WAVE_TASK items in future_tasks
+UNEXPANDED=$(jq '.future_tasks // [] | map(select(.future_type == "WAVE_TASK" or .future_type == null)) | length' .agent-os/specs/[SPEC_FOLDER]/tasks.json)
+```
+
+```
+IF UNEXPANDED > 0:
+  ERROR: "GATE FAILED: ${UNEXPANDED} WAVE_TASK items in future_tasks have not been expanded."
+  ERROR: "You MUST complete Phase 3.6.3 (Immediate Task Expansion) before committing."
+  ERROR: "Go back to Phase 3.6.3 and expand each WAVE_TASK item using:"
+  ERROR: "  bash \"\${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh\" add-expanded-task '<json>' [spec-name]"
+  BLOCK: Do not proceed until future_tasks is empty or contains only ROADMAP_ITEMs
+```
 
 **Step 5.1: Check for Changes**
 

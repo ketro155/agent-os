@@ -5,6 +5,30 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.1] - 2025-12-25
+
+### Fixed
+
+- **PR Review Cycle Expansion Step Being Skipped**: Fixed issue where Phase 3.6.3 (Immediate Task Expansion) was being skipped, leaving WAVE_TASK items orphaned in `future_tasks` instead of being expanded into actual tasks
+  - **Root cause**: Task Tracking section was missing "Expand WAVE_TASK items" todo item, so Claude didn't track or execute this step
+  - **Fix 1**: Added "Expand WAVE_TASK items into actual tasks" to Task Tracking todos
+  - **Fix 2**: Added Step 5.0 mandatory gate that blocks commit if unexpanded WAVE_TASK items remain
+  - **Fix 3**: Added prominent warning box to Step 3.6.3 making it visually unmissable
+
+### Why This Fix
+
+When executing `/pr-review-cycle`, Claude would:
+1. ✅ Capture WAVE_TASK items to `future_tasks` (Phase 3.5)
+2. ✅ Assign wave numbers (Phase 3.6.1-3.6.2)
+3. ❌ Skip expansion into actual tasks (Phase 3.6.3) - NOT IN TODO LIST
+4. ✅ Commit and push (Phase 5)
+
+Result: Items stayed in `future_tasks` and never appeared in `tasks` array or `waves` section.
+
+Now the expansion step is tracked in TodoWrite AND enforced by a gate check before commit.
+
+---
+
 ## [3.7.0] - 2025-12-25
 
 ### Added
