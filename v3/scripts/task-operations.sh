@@ -930,6 +930,49 @@ EOF
     }'
     ;;
 
+  # Remove a future task after it's been expanded into main tasks (v3.6.0)
+  remove-future-task)
+    FUTURE_ID="$1"
+    SPEC_NAME="$2"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ -z "$FUTURE_ID" ]; then
+      echo '{"error": "Usage: task-operations.sh remove-future-task <future_id> [spec_name]"}'
+      exit 1
+    fi
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Check if future task exists
+    EXISTS=$(jq --arg fid "$FUTURE_ID" '.future_tasks // [] | map(select(.id == $fid)) | length' "$TASKS_FILE")
+
+    if [ "$EXISTS" = "0" ]; then
+      echo '{
+        "success": false,
+        "error": "Future task '"$FUTURE_ID"' not found"
+      }'
+      exit 1
+    fi
+
+    # Create temp file and remove the future task
+    TEMP_FILE=$(mktemp)
+    jq --arg fid "$FUTURE_ID" '
+      .future_tasks = (.future_tasks // [] | map(select(.id != $fid)))
+    ' "$TASKS_FILE" > "$TEMP_FILE"
+
+    # Atomic replace
+    mv "$TEMP_FILE" "$TASKS_FILE"
+
+    echo '{
+      "success": true,
+      "removed": "'"$FUTURE_ID"'",
+      "message": "Future task '"$FUTURE_ID"' removed after expansion"
+    }'
+    ;;
+
   # Expand all WAVE_TASK items in future_tasks (returns data for skill to process)
   list-wave-tasks)
     SPEC_NAME="$1"
@@ -995,6 +1038,7 @@ Commands:
   import-backlog <wave> [spec]          Import pending backlog into spec
   determine-next-wave [spec]            Get next available wave number
   add-expanded-task <json> [spec]       Add expanded parent+subtasks
+  remove-future-task <id> [spec]        Remove future task after expansion
   list-wave-tasks [spec]                List WAVE_TASK items for expansion
 
 Graduation destinations: roadmap, next-spec, drop
@@ -1015,6 +1059,7 @@ Examples:
   task-operations.sh determine-next-wave
   task-operations.sh list-wave-tasks
   task-operations.sh add-expanded-task '{"future_id":"F1","parent_task":{...},"subtasks":[...]}'
+  task-operations.sh remove-future-task F1
   task-operations.sh collect-artifacts HEAD~3
   task-operations.sh validate-names '["login", "validateToken"]'
   task-operations.sh log-progress task_completed "Implemented login"

@@ -135,9 +135,12 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spe
 - Tasks arrive pre-tagged with `priority: "wave_N"`
 - No promotion logic needed - just verification and legacy migration
 
-### 1.7. Auto-Expand WAVE_TASK Items (v3.3.0)
+### 1.7. Auto-Expand WAVE_TASK Items (v3.3.0, Fallback v3.6.0)
 
-> **Automated Backlog Expansion**: Before determining tasks, automatically expand any WAVE_TASK items from future_tasks into proper parent/subtask structure.
+> **Fallback Expansion**: This step handles WAVE_TASK items that weren't expanded during `/pr-review-cycle`. As of v3.6.0, most items are expanded immediately during PR review, so this step primarily handles:
+> - Legacy items from before v3.6.0
+> - Items imported from external sources (backlog import, manual addition)
+> - Edge cases where pr-review-cycle expansion failed
 
 ```bash
 # Check for WAVE_TASK items needing expansion

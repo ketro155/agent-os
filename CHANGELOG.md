@@ -5,6 +5,40 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2025-12-25
+
+### Added
+
+- **Immediate Task Expansion in PR Review Cycle**: WAVE_TASK items are now expanded immediately into actual tasks during `/pr-review-cycle`, not deferred to `/execute-tasks`
+  - Step 3.6.3 changed from "Optional Immediate Expansion" to "Immediate Task Expansion (MANDATORY)"
+  - Future items are expanded into parent tasks with TDD-structured subtasks
+  - Items are removed from `future_tasks` after expansion
+  - Tasks immediately appear in the main `tasks` array, ready for execution
+
+- **`remove-future-task` Command**: New task-operations.sh command to remove future tasks after expansion
+  - Usage: `task-operations.sh remove-future-task <id> [spec]`
+  - Called automatically during immediate expansion
+
+### Changed
+
+- **Phase 1 Discovery Step 1.7**: Now documented as "Fallback" for:
+  - Legacy items from before v3.6.0
+  - Items imported from external sources
+  - Edge cases where pr-review-cycle expansion failed
+
+- **Phase 6 Summary**: Updated to reflect immediate expansion with new output format showing expanded tasks
+
+### Why This Change
+
+Previously, future items from PR reviews were staged in `future_tasks` and only expanded when `/execute-tasks` was run for the relevant wave. This created:
+- Orphan future_tasks that could sit indefinitely
+- Unclear task scope after PR review
+- Extra processing step during execute-tasks
+
+Now the task list is immediately actionable after PR review, with full visibility into the work scope.
+
+---
+
 ## [3.5.1] - 2025-12-25
 
 ### Fixed

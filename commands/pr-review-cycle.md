@@ -431,26 +431,78 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update-future-pr
 }
 ```
 
-**Step 3.6.3: Optional Immediate Expansion**
+**Step 3.6.3: Immediate Task Expansion (v3.6.0)**
 
-> For simple WAVE_TASK items, expand immediately to save time during execute-tasks.
+> **MANDATORY**: Expand ALL WAVE_TASK items immediately into actual tasks. This prevents orphan future_tasks and ensures the task list is immediately actionable.
 
 ```
-IF wave_tasks.count <= 2 AND all items are LOW complexity:
-  # Expand now while context is fresh
-  INVOKE: expand-backlog skill
+FOR EACH wave_task in captured WAVE_TASKs:
+
+  # 1. Read file context for intelligent subtask generation
+  IF wave_task.file_context exists:
+    READ: wave_task.file_context to understand code structure
+
+  # 2. Generate subtasks using expand-backlog patterns
+  INVOKE: expand-backlog skill (inline, no subagent needed)
   INPUT:
-    spec_folder: [SPEC_FOLDER]
-    wave_tasks: [CAPTURED_WAVE_TASKS]
+    description: wave_task.description
+    file_context: wave_task.file_context
+    category: wave_task.category
     target_wave: [TARGET_WAVE]
 
-  # Update reply to indicate task was expanded
-  REPLY: "Captured and expanded into wave [N] tasks. Ready for execution."
+  # 3. Determine next available task ID
+  next_task_id = max(existing_task_ids) + 1
 
-ELSE:
-  # Defer expansion to execute-tasks for complex items
-  REPLY: "Captured for wave [N]. Will be expanded during task execution."
+  # 4. Create parent task with subtasks
+  parent_task = {
+    "id": "[next_task_id]",
+    "type": "parent",
+    "description": wave_task.description,
+    "status": "pending",
+    "wave": [TARGET_WAVE],
+    "source": "PR #[NUMBER] review",
+    "expanded_from": wave_task.id,
+    "subtasks": ["[next_task_id].1", "[next_task_id].2", ...],
+    "created_at": "[ISO_TIMESTAMP]"
+  }
+
+  subtasks = [
+    {
+      "id": "[next_task_id].1",
+      "type": "subtask",
+      "parent": "[next_task_id]",
+      "description": "Write tests for [functionality] (TDD RED)",
+      "status": "pending",
+      "tdd_phase": "red",
+      "file_path": "[test_file_path]"
+    },
+    // ... additional subtasks based on complexity
+  ]
+
+  # 5. Add to main tasks array
+  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" add-expanded-task '<json>' [spec-name]
+
+  # 6. Remove from future_tasks (task is now in main tasks)
+  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" remove-future-task [wave_task.id] [spec-name]
+
+  TRACK: expanded_tasks.push({ from: wave_task.id, to: next_task_id })
 ```
+
+**Subtask Generation Guidelines:**
+
+| Category | Typical Subtasks |
+|----------|------------------|
+| REFACTOR | 1. Write characterization tests, 2. Extract/rename, 3. Verify |
+| DOCS | 1. Add documentation, 2. Verify renders correctly |
+| LOGGING | 1. Add log statements, 2. Test log output, 3. Verify |
+| TEST_COVERAGE | 1. Write tests, 2. Verify coverage, 3. Commit |
+| PERF | 1. Benchmark current, 2. Implement optimization, 3. Verify improvement |
+
+**Why Immediate Expansion (v3.6.0):**
+- No orphan `future_tasks` waiting indefinitely
+- Task list immediately reflects full scope
+- User can see and prioritize all work
+- `execute-tasks` fallback handles edge cases only
 
 **Step 3.6.4: Update Summary with Wave Assignments**
 
@@ -538,9 +590,9 @@ git push origin [BRANCH_NAME]
 ║ Replies Posted: [COUNT]                                       ║
 ║ Commit: [SHORT_SHA]                                          ║
 ╠══════════════════════════════════════════════════════════════╣
-║ FUTURE RECOMMENDATIONS CAPTURED:                              ║
-║   • Wave Tasks: [COUNT] → assigned to wave [N]               ║
-║   • Expanded: [COUNT] tasks ready for execution              ║
+║ FUTURE RECOMMENDATIONS EXPANDED (v3.6.0):                     ║
+║   • Wave Tasks: [COUNT] → expanded into wave [N] tasks       ║
+║   • New Parent Tasks: [IDS] with [SUBTASK_COUNT] subtasks    ║
 ║   • Roadmap Items: [COUNT] → roadmap.md                      ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ NEXT STEPS:                                                   ║
@@ -548,19 +600,23 @@ git push origin [BRANCH_NAME]
 ║ Wait for re-review, then either:                             ║
 ║   • Run /pr-review-cycle again (if more feedback)            ║
 ║   • Merge: gh pr merge [NUMBER] --squash                     ║
-║   • Continue to next wave (future tasks auto-assigned)       ║
+║   • Start wave [N]: /execute-tasks (tasks ready immediately) ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
-**Future Items Detail (if any captured):**
+**Expanded Tasks Detail (v3.6.0):**
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ CAPTURED FUTURE RECOMMENDATIONS                                       │
+│ EXPANDED FUTURE RECOMMENDATIONS → ACTUAL TASKS                        │
 ├──────────────┬────────┬──────────────────────────────────────────────┤
-│ Type         │ Wave   │ Description                                  │
+│ Source       │ Task   │ Description                                  │
 ├──────────────┼────────┼──────────────────────────────────────────────┤
-│ WAVE_TASK    │ 8      │ [DESCRIPTION] → tasks.json:F1 (expanded)    │
-│ WAVE_TASK    │ 8      │ [DESCRIPTION] → tasks.json:F2 (pending)     │
+│ F1 (REFACTOR)│ 8      │ [DESCRIPTION] (3 subtasks)                  │
+│ F2 (DOCS)    │ 9      │ [DESCRIPTION] (2 subtasks)                  │
+│ F3 (LOGGING) │ 10     │ [DESCRIPTION] (3 subtasks)                  │
+├──────────────┴────────┴──────────────────────────────────────────────┤
+│ ROADMAP ITEMS (not expanded - larger scope)                          │
+├──────────────┬────────┬──────────────────────────────────────────────┤
 │ ROADMAP      │ -      │ [DESCRIPTION] → roadmap.md                  │
 └──────────────┴────────┴──────────────────────────────────────────────┘
 ```
