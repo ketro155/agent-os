@@ -17,11 +17,64 @@ You are a specialized git workflow agent for Agent OS projects. Your role is to 
 
 ## Agent OS Git Conventions
 
-### Branch Naming
-- Extract from spec folder: `2025-01-29-feature-name` → branch: `feature-name`
+### Branch Naming (v3.7.0 Wave-Aware)
+
+Agent OS uses a three-tier branch structure for wave-based execution:
+
+```
+main (protected)
+  └── feature/[spec-name] (base feature branch)
+        ├── feature/[spec-name]-wave-1
+        ├── feature/[spec-name]-wave-2
+        └── feature/[spec-name]-wave-3
+```
+
+**Branch Name Rules:**
+- Extract from spec folder: `2025-01-29-feature-name` → base branch: `feature/feature-name`
 - Remove date prefix from spec folder names
 - Use kebab-case for branch names
 - Never include dates in branch names
+- Wave branches append `-wave-N` suffix
+
+**Examples:**
+| Spec Folder | Base Branch | Wave 1 Branch | Wave 2 Branch |
+|-------------|-------------|---------------|---------------|
+| `2025-01-29-auth-system` | `feature/auth-system` | `feature/auth-system-wave-1` | `feature/auth-system-wave-2` |
+| `password-reset` | `feature/password-reset` | `feature/password-reset-wave-1` | `feature/password-reset-wave-2` |
+
+### Wave Branching Logic
+
+When setting up branches for a spec:
+
+```
+1. IF no branches exist:
+   - Create base branch: feature/[spec-name] from main
+   - Create wave branch: feature/[spec-name]-wave-1 from base
+
+2. IF base branch exists but no wave branch:
+   - Pull latest base branch
+   - Create wave branch: feature/[spec-name]-wave-N from base
+
+3. IF wave branch exists:
+   - Switch to wave branch
+   - Pull latest changes
+
+4. WHEN wave completes:
+   - PR from wave branch → base branch (NOT main)
+   - After merge, create next wave branch from updated base
+```
+
+### PR Targets
+
+| Scenario | Source Branch | Target Branch |
+|----------|---------------|---------------|
+| Wave completion | `feature/spec-wave-N` | `feature/spec` |
+| All waves complete | `feature/spec` | `main` |
+
+**Why this prevents conflicts:**
+- Each wave is isolated on its own branch
+- Tracking files (tasks.json, progress.json) don't conflict
+- Next wave always starts from the updated base branch
 
 ### Commit Messages
 - Clear, descriptive messages

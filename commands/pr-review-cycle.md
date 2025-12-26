@@ -687,9 +687,130 @@ gh repo view --json owner,name --jq '"\(.owner.login)/\(.name)"'
 
 ---
 
-## Integration with execute-tasks
+## Integration with execute-tasks (Wave-Aware v3.7.0)
 
-After PR is approved:
-1. Merge PR: `gh pr merge [NUMBER] --squash`
-2. Switch to main: `git checkout main && git pull`
-3. Continue to next wave: `/execute-tasks [SPEC_PATH]`
+### Wave PR Workflow
+
+Agent OS v3.7.0 uses wave-specific branches to prevent merge conflicts:
+
+```
+main
+  └── feature/[spec-name] (base feature branch)
+        ├── feature/[spec-name]-wave-1 → PR targets feature/[spec-name]
+        ├── feature/[spec-name]-wave-2 → PR targets feature/[spec-name]
+        └── feature/[spec-name]-wave-3 → PR targets feature/[spec-name]
+                                         (final wave also creates PR to main)
+```
+
+### After Wave PR is Approved
+
+**Step 1: Detect PR Type**
+
+```bash
+# Get PR details
+PR_INFO=$(gh pr view [NUMBER] --json baseRefName,headRefName)
+BASE_BRANCH=$(echo "$PR_INFO" | jq -r '.baseRefName')
+HEAD_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName')
+```
+
+**Step 2: Handle Based on PR Type**
+
+```
+IF BASE_BRANCH == "main":
+  # This is the final PR (feature → main)
+  TYPE: "final"
+  ACTION: Merge completes the entire feature
+
+ELSE IF BASE_BRANCH starts with "feature/":
+  # This is a wave PR (wave-branch → feature-branch)
+  TYPE: "wave"
+  WAVE_NUMBER: extract from HEAD_BRANCH (e.g., "-wave-3" → 3)
+```
+
+### Wave PR Merge and Next Wave Setup
+
+```bash
+# 1. Merge the wave PR to the base feature branch
+gh pr merge [NUMBER] --squash --delete-branch
+
+# 2. Switch to the base feature branch (now has wave N changes)
+git checkout feature/[SPEC_NAME]
+git pull origin feature/[SPEC_NAME]
+
+# 3. Check if more waves exist
+REMAINING_WAVES=$(jq '.execution_strategy.waves | map(select(.tasks | all(. as $t | .tasks[] | select(.id == $t) | .status != "pass"))) | length' tasks.json)
+
+IF REMAINING_WAVES > 0:
+  # 4. Create next wave branch from updated feature branch
+  NEXT_WAVE=$((WAVE_NUMBER + 1))
+  git checkout -b feature/[SPEC_NAME]-wave-$NEXT_WAVE
+
+  # 5. Continue to next wave
+  OUTPUT: "Wave [N] merged. Ready for Wave [N+1]. Run /execute-tasks [SPEC_PATH]"
+
+ELSE:
+  # All waves complete - create final PR to main
+  git checkout feature/[SPEC_NAME]
+  git push origin feature/[SPEC_NAME]
+
+  gh pr create \
+    --base main \
+    --title "[SPEC_NAME] Implementation complete" \
+    --body "All waves completed. Ready for final review."
+
+  OUTPUT: "All waves merged to feature branch. Final PR created to main."
+```
+
+### Summary Table
+
+| PR Type | Source Branch | Target Branch | After Merge |
+|---------|---------------|---------------|-------------|
+| Wave PR | `feature/spec-wave-N` | `feature/spec` | Create next wave branch |
+| Final PR | `feature/spec` | `main` | Feature complete |
+
+### Next Steps Output
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║                 WAVE PR MERGED SUCCESSFULLY                   ║
+╠══════════════════════════════════════════════════════════════╣
+║ Wave [N] merged to feature/[SPEC_NAME]                       ║
+║                                                               ║
+║ NEXT STEPS:                                                   ║
+║                                                               ║
+║ IF more waves remain:                                         ║
+║   1. Already on correct branch for Wave [N+1]                ║
+║   2. Run: /execute-tasks [SPEC_PATH]                         ║
+║                                                               ║
+║ IF final wave:                                                ║
+║   1. Final PR created: feature/[SPEC] → main                 ║
+║   2. Await final review                                       ║
+║   3. Merge to complete feature: gh pr merge [NUMBER] --squash║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+### Conflict Prevention Explanation
+
+**Why this workflow prevents conflicts:**
+
+1. **Wave isolation**: Each wave works on its own branch (`-wave-1`, `-wave-2`, etc.)
+2. **Sequential merging**: Wave PRs merge to the shared feature branch one at a time
+3. **Fresh branches**: Each new wave branch is created from the updated feature branch (which includes all previous waves)
+4. **Tracking file safety**: `tasks.json`, `progress.json`, and `roadmap.md` are only modified on the current wave branch
+
+**Before v3.7.0 (caused conflicts):**
+```
+Wave 1 modifies tasks.json on feature/spec
+Wave 2 modifies tasks.json on feature/spec (same branch!)
+Wave 1 PR merges to main
+Wave 2 has stale tasks.json → CONFLICT
+```
+
+**After v3.7.0 (no conflicts):**
+```
+Wave 1 modifies tasks.json on feature/spec-wave-1
+Wave 1 PR merges to feature/spec
+Wave 2 creates fresh branch from updated feature/spec
+Wave 2 modifies tasks.json on feature/spec-wave-2 (has Wave 1 changes)
+No conflicts because each wave has its own branch
+```

@@ -5,6 +5,53 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] - 2025-12-25
+
+### Added
+
+- **Wave-Specific Branching**: Each wave now gets its own isolated branch to prevent merge conflicts when running parallel waves
+  - Branch structure: `main` → `feature/spec` → `feature/spec-wave-1`, `feature/spec-wave-2`, etc.
+  - Wave PRs target the base feature branch (not main)
+  - Final PR merges the feature branch to main after all waves complete
+
+### Changed
+
+- **phase1-discovery.md**: Step 0 enhanced to create wave-specific branches
+  - Detects current wave from tasks.json
+  - Creates base feature branch from main if needed
+  - Creates wave branch from base feature branch
+  - Validates correct branch before proceeding
+
+- **phase3-delivery.md**: Step 7 now wave-aware
+  - Wave PRs target `feature/spec` (base branch)
+  - Final wave triggers creation of `feature/spec` → `main` PR
+  - Includes wave number in commit messages and PR descriptions
+
+- **pr-review-cycle.md**: Enhanced with wave merge handling
+  - Detects wave vs final PRs
+  - After wave merge, creates next wave branch from updated base
+  - Provides clear next steps output
+
+- **git-workflow.md**: Updated with wave branching conventions
+  - Three-tier branch structure documentation
+  - PR target rules for wave vs final PRs
+  - Examples for branch naming
+
+### Why This Change
+
+Previously, all waves shared a single feature branch. When Wave 1 PR merged to main while Wave 2/3 were in progress:
+- Tracking files (tasks.json, progress.json, roadmap.md) had merge conflicts
+- Each wave had stale copies of shared files
+- Manual conflict resolution required for every wave
+
+Now each wave is isolated:
+- Wave 1 works on `feature/spec-wave-1`
+- Wave 1 PR merges to `feature/spec`
+- Wave 2 creates fresh branch from updated `feature/spec`
+- No conflicts because each wave has its own branch
+
+---
+
 ## [3.6.0] - 2025-12-25
 
 ### Added

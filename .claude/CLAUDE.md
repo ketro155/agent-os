@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v3.7.0 Wave-Specific Branching**: Each wave now gets its own isolated branch (`feature/spec-wave-1`, `feature/spec-wave-2`, etc.) to prevent merge conflicts. Wave PRs target the base feature branch (not main), and the final PR merges `feature/spec` to main. This eliminates conflicts in tasks.json, progress.json, and roadmap.md when running parallel waves.
+
 **v3.6.0 Immediate Task Expansion**: WAVE_TASK items from PR reviews are now expanded immediately into actual tasks during `/pr-review-cycle`, not deferred to `/execute-tasks`. This prevents orphan `future_tasks` and makes the task list immediately actionable. New `remove-future-task` command added to task-operations.sh.
 
 **v3.5.1 Script Path Fix**: Fixed "No such file or directory" errors for task-operations.sh and pr-review-operations.sh when Claude's working directory differs from project root. All script invocations now use `"${CLAUDE_PROJECT_DIR}/.claude/scripts/..."` pattern.
