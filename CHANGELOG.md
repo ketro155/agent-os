@@ -5,6 +5,40 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - 2025-12-25
+
+### Changed
+
+- **Gitignore Tracking Files**: Progress and task tracking files are now gitignored by default to prevent merge conflicts
+  - `progress.json`, `progress.md`, `progress/archive/` - session-specific, causes conflicts
+  - `specs/*/tasks.json`, `specs/*/tasks.md` - frequently updated, causes conflicts
+  - Cross-session memory still works locally on each machine
+  - Eliminates merge conflicts when multiple developers or parallel waves modify tracking files
+
+### Why This Change
+
+The wave-specific branching (v3.7.0) reduced but didn't eliminate conflicts because:
+1. Progress files append session entries with timestamps - impossible to auto-merge
+2. Task files update status on every task completion - frequent parallel modifications
+3. These files are developer-specific and don't need team synchronization
+
+**Trade-offs**:
+- ✅ No more merge conflicts in tracking files
+- ✅ Cleaner git history and PRs
+- ❌ No cross-machine sync of task/progress state (each machine is independent)
+- ❌ No git-based backup of session history
+
+**Migration**: For existing projects, add to `.gitignore`:
+```
+.agent-os/progress/progress.json
+.agent-os/progress/progress.md
+.agent-os/progress/archive/
+.agent-os/specs/*/tasks.json
+.agent-os/specs/*/tasks.md
+```
+
+---
+
 ## [3.7.1] - 2025-12-25
 
 ### Fixed

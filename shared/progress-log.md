@@ -27,6 +27,8 @@ Canonical patterns for persistent progress logging across Agent OS sessions. The
 
 **Important**: Progress files are NOT cached and do NOT expire. They persist permanently.
 
+> **Note (v3.8.0+)**: Progress files are **gitignored** to prevent merge conflicts. Session history is developer-specific and local-only. Cross-session memory still works perfectly on each machine.
+
 ---
 
 ## Pattern: Progress Entry Types

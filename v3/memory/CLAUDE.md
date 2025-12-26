@@ -98,7 +98,7 @@ Cross-session memory is maintained in `.agent-os/progress/progress.json`:
 
 - Automatically updated by hooks
 - Contains: session events, task completions, blockers
-- Git-tracked for team visibility
+- **Local-only** (gitignored v3.8.0+) to prevent merge conflicts
 
 ## Quick Reference
 

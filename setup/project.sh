@@ -810,13 +810,15 @@ EOF
     echo "  ✓ Installed post-command cleanup hook"
 fi
 
-# Update .gitignore for state and cache files
-# NOTE: .agent-os/progress/ is NOT in gitignore - progress logs should be version controlled
+# Update .gitignore for state, cache, and tracking files
+# NOTE: Progress and task tracking files are gitignored to prevent merge conflicts (v3.8.0)
 if [ -f .gitignore ]; then
     # Check if Agent-OS section already exists
-    if ! grep -q "# Agent-OS cache and state files" .gitignore; then
+    if ! grep -q "# Agent-OS state and tracking files" .gitignore; then
         echo "" >> .gitignore
-        echo "# Agent-OS cache and state files (excludes progress/ which is version controlled)" >> .gitignore
+        echo "# Agent-OS state and tracking files (local-only to prevent merge conflicts)" >> .gitignore
+        echo "" >> .gitignore
+        echo "# Session state (ephemeral)" >> .gitignore
         echo ".agent-os/state/session.json" >> .gitignore
         echo ".agent-os/state/session-cache.json" >> .gitignore
         echo ".agent-os/state/command-state.json" >> .gitignore
@@ -827,13 +829,23 @@ if [ -f .gitignore ]; then
         echo ".agent-os/debugging/" >> .gitignore
         echo ".agent-os/**/*.cache" >> .gitignore
         echo ".agent-os/**/*.tmp" >> .gitignore
-        echo "  ✓ Updated .gitignore with state exclusions"
-        echo "  ℹ️  Note: .agent-os/progress/ is version controlled (cross-session memory)"
+        echo "" >> .gitignore
+        echo "# Progress tracking (session-specific, causes merge conflicts)" >> .gitignore
+        echo ".agent-os/progress/progress.json" >> .gitignore
+        echo ".agent-os/progress/progress.md" >> .gitignore
+        echo ".agent-os/progress/archive/" >> .gitignore
+        echo "" >> .gitignore
+        echo "# Task tracking (frequently updated, causes merge conflicts)" >> .gitignore
+        echo ".agent-os/specs/*/tasks.json" >> .gitignore
+        echo ".agent-os/specs/*/tasks.md" >> .gitignore
+        echo "  ✓ Updated .gitignore with state and tracking exclusions"
     fi
 else
     # Create new .gitignore with Agent-OS entries
     cat > .gitignore << 'EOF'
-# Agent-OS cache and state files (excludes progress/ which is version controlled)
+# Agent-OS state and tracking files (local-only to prevent merge conflicts)
+
+# Session state (ephemeral)
 .agent-os/state/session.json
 .agent-os/state/session-cache.json
 .agent-os/state/command-state.json
@@ -844,9 +856,17 @@ else
 .agent-os/debugging/
 .agent-os/**/*.cache
 .agent-os/**/*.tmp
+
+# Progress tracking (session-specific, causes merge conflicts)
+.agent-os/progress/progress.json
+.agent-os/progress/progress.md
+.agent-os/progress/archive/
+
+# Task tracking (frequently updated, causes merge conflicts)
+.agent-os/specs/*/tasks.json
+.agent-os/specs/*/tasks.md
 EOF
-    echo "  ✓ Created .gitignore with state exclusions"
-    echo "  ℹ️  Note: .agent-os/progress/ is version controlled (cross-session memory)"
+    echo "  ✓ Created .gitignore with state and tracking exclusions"
 fi
 
 # Handle Cursor installation for project

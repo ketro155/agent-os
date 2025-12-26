@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v3.8.0 Gitignore Tracking Files**: Progress and task tracking files (`progress.json`, `tasks.json`, `tasks.md`) are now gitignored by default to prevent merge conflicts. Cross-session memory still works locally. This eliminates the remaining merge conflicts that wave-specific branching (v3.7.0) couldn't prevent.
+
 **v3.7.1 PR Review Expansion Fix**: Fixed issue where Phase 3.6.3 (Immediate Task Expansion) was being skipped during `/pr-review-cycle`, leaving WAVE_TASK items orphaned in `future_tasks` instead of being expanded into actual tasks. Added TodoWrite tracking for expansion step, mandatory gate check before commit, and prominent warning box.
 
-**v3.7.0 Wave-Specific Branching**: Each wave now gets its own isolated branch (`feature/spec-wave-1`, `feature/spec-wave-2`, etc.) to prevent merge conflicts. Wave PRs target the base feature branch (not main), and the final PR merges `feature/spec` to main. This eliminates conflicts in tasks.json, progress.json, and roadmap.md when running parallel waves.
+**v3.7.0 Wave-Specific Branching**: Each wave now gets its own isolated branch (`feature/spec-wave-1`, `feature/spec-wave-2`, etc.) to prevent merge conflicts. Wave PRs target the base feature branch (not main), and the final PR merges `feature/spec` to main.
 
 **v3.6.0 Immediate Task Expansion**: WAVE_TASK items from PR reviews are now expanded immediately into actual tasks during `/pr-review-cycle`, not deferred to `/execute-tasks`. This prevents orphan `future_tasks` and makes the task list immediately actionable. New `remove-future-task` command added to task-operations.sh.
 

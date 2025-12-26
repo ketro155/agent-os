@@ -47,8 +47,8 @@ Agent OS uses two complementary memory systems with different time horizons:
 - **Purpose**: Cross-session context and accomplishment tracking
 - **Lifespan**: Never expires (permanent record)
 - **Content**: Events, decisions, accomplishments, blockers
-- **Git tracked**: Yes (version controlled, team-visible)
-- **Recovery**: N/A - represents irreplaceable history
+- **Git tracked**: No (local-only to prevent merge conflicts, v3.8.0+)
+- **Recovery**: Local backup recommended; session history is developer-specific
 
 **Use for**: Session continuity, blocker tracking, understanding "what happened"
 
