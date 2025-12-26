@@ -430,6 +430,94 @@ IF only low-priority changes (STYLE, DOCS):
 
 ---
 
+### 7.5. Expand WAVE_TASK Items into Actual Tasks (v3.7.1)
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ⚠️  MANDATORY - DO NOT SKIP THIS STEP                                        ║
+║                                                                              ║
+║  ALL WAVE_TASK items in future_tasks MUST be expanded into actual tasks.    ║
+║  This ensures future_tasks → main tasks array + waves section               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+> **CRITICAL**: After capturing WAVE_TASK items, expand them immediately into actual tasks. This prevents orphan future_tasks.
+
+```bash
+# Get spec folder
+SPEC_FOLDER=$(ls -d .agent-os/specs/*/ 2>/dev/null | head -1)
+SPEC_NAME=$(basename "$SPEC_FOLDER")
+
+# Check for WAVE_TASK items needing expansion
+WAVE_TASKS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-wave-tasks "$SPEC_NAME")
+WAVE_COUNT=$(echo "$WAVE_TASKS" | jq '.count // 0')
+```
+
+```
+IF WAVE_COUNT > 0:
+  FOR EACH wave_task in WAVE_TASKS.wave_tasks:
+
+    # 1. Determine next available task ID
+    NEXT_ID = max(existing_task_ids) + 1
+
+    # 2. Generate subtasks based on task type
+    DETERMINE complexity from wave_task.description:
+      - REFACTOR → 3 subtasks (characterization tests, refactor, verify)
+      - DOCS → 2 subtasks (add docs, verify)
+      - TEST → 2 subtasks (write tests, verify coverage)
+      - OTHER → 2-3 subtasks based on scope
+
+    # 3. Create expanded task structure
+    EXPANDED_JSON = {
+      "future_id": wave_task.id,
+      "parent_task": {
+        "id": "${NEXT_ID}",
+        "type": "parent",
+        "description": wave_task.description,
+        "status": "pending",
+        "wave": wave_task.target_wave,
+        "source": "PR #[PR_NUMBER] review",
+        "expanded_from": wave_task.id,
+        "file_context": wave_task.file_context
+      },
+      "subtasks": [
+        {
+          "id": "${NEXT_ID}.1",
+          "type": "subtask",
+          "parent": "${NEXT_ID}",
+          "description": "[First subtask - typically write tests]",
+          "status": "pending",
+          "tdd_phase": "red"
+        },
+        // Additional subtasks...
+      ]
+    }
+
+    # 4. Add expanded task and remove from future_tasks
+    bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" add-expanded-task "${EXPANDED_JSON}" "$SPEC_NAME"
+
+    # Track expansion
+    EXPANDED_TASKS.push({ from: wave_task.id, to: NEXT_ID })
+
+  OUTPUT: "Expanded ${WAVE_COUNT} WAVE_TASK items into wave ${TARGET_WAVE} tasks"
+```
+
+**Update Output to Include Expansion:**
+```json
+{
+  "future_expanded": {
+    "count": 3,
+    "tasks": [
+      { "from": "F1", "to": "13", "subtasks": 3 },
+      { "from": "F2", "to": "14", "subtasks": 2 }
+    ],
+    "wave": 4
+  }
+}
+```
+
+---
+
 ### 8. Generate Summary
 
 ```bash
@@ -470,6 +558,14 @@ Return this JSON when complete:
       }
     ],
     "roadmap_items": []
+  },
+
+  "future_expanded": {
+    "count": 1,
+    "tasks": [
+      { "from": "F1", "to": "13", "subtasks": 3, "wave": 4 }
+    ],
+    "message": "Expanded 1 WAVE_TASK item into wave 4 tasks"
   },
 
   "changes_made": {

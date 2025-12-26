@@ -9,11 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **PR Review Cycle Expansion Step Being Skipped**: Fixed issue where Phase 3.6.3 (Immediate Task Expansion) was being skipped, leaving WAVE_TASK items orphaned in `future_tasks` instead of being expanded into actual tasks
-  - **Root cause**: Task Tracking section was missing "Expand WAVE_TASK items" todo item, so Claude didn't track or execute this step
-  - **Fix 1**: Added "Expand WAVE_TASK items into actual tasks" to Task Tracking todos
-  - **Fix 2**: Added Step 5.0 mandatory gate that blocks commit if unexpanded WAVE_TASK items remain
-  - **Fix 3**: Added prominent warning box to Step 3.6.3 making it visually unmissable
+- **PR Review Cycle Expansion Step Being Skipped**: Fixed issue where WAVE_TASK expansion was being skipped, leaving items orphaned in `future_tasks` instead of being expanded into actual tasks
+  - **Root cause (v2 command)**: Task Tracking section was missing "Expand WAVE_TASK items" todo item
+  - **Root cause (v3 agent)**: `pr-review-implementation.md` had no expansion step after capture
+  - **Fix 1**: Added "Expand WAVE_TASK items into actual tasks" to Task Tracking todos (v2)
+  - **Fix 2**: Added Step 5.0 mandatory gate that blocks commit if unexpanded items remain (v2)
+  - **Fix 3**: Added prominent warning box to Step 3.6.3 making it visually unmissable (v2)
+  - **Fix 4**: Added Step 7.5 to `v3/agents/pr-review-implementation.md` for mandatory expansion
+  - **Fix 5**: Updated output format to include `future_expanded` field showing expanded tasks
 
 ### Why This Fix
 
