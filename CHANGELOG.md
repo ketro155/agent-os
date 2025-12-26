@@ -5,6 +5,31 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.1] - 2025-12-25
+
+### Fixed
+
+- **CLAUDE_PROJECT_DIR Not Available in Commands**: Fixed "No such file or directory" errors when running `/execute-tasks` and other commands that reference `${CLAUDE_PROJECT_DIR}`
+  - **Root cause**: `CLAUDE_PROJECT_DIR` is only set by Claude Code during hook execution, NOT in regular Bash tool calls
+  - **Fix**: SessionStart hook now persists the variable via `CLAUDE_ENV_FILE`, which Claude Code sources before every Bash command
+  - Added `echo "export CLAUDE_PROJECT_DIR=\"$CLAUDE_PROJECT_DIR\"" >> "$CLAUDE_ENV_FILE"` to `session-start.sh`
+  - Removed useless circular reference `"CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"` from settings.json env section
+
+### Why This Fix
+
+When executing commands like `/execute-tasks`, the Bash tool runs scripts using:
+```bash
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" status
+```
+
+But `CLAUDE_PROJECT_DIR` was only available inside hooks (SessionStart, PostToolUse, etc.), not in regular command execution. By writing the variable to `$CLAUDE_ENV_FILE` during SessionStart, it becomes available for the entire session since Claude Code sources this file before every Bash tool call.
+
+**References**:
+- [Claude Code Hooks Documentation](https://code.claude.com/docs/en/hooks.md)
+- [CLAUDE_ENV_FILE behavior](https://github.com/anthropics/claude-code/issues/2508)
+
+---
+
 ## [3.8.0] - 2025-12-25
 
 ### Changed

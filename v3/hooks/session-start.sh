@@ -9,6 +9,13 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 STATE_DIR="$PROJECT_DIR/.agent-os/state"
 PROGRESS_DIR="$PROJECT_DIR/.agent-os/progress"
 
+# CRITICAL: Persist CLAUDE_PROJECT_DIR for all subsequent Bash commands
+# CLAUDE_ENV_FILE is sourced before every Bash tool call, making this variable
+# available in commands like /execute-tasks that reference it
+if [ -n "$CLAUDE_ENV_FILE" ] && [ -n "$CLAUDE_PROJECT_DIR" ]; then
+  echo "export CLAUDE_PROJECT_DIR=\"$CLAUDE_PROJECT_DIR\"" >> "$CLAUDE_ENV_FILE"
+fi
+
 # Initialize output
 OUTPUT='{}'
 
