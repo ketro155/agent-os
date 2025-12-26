@@ -135,7 +135,7 @@ Create BOTH files inside of the current feature's spec folder using the Write to
 **tasks.json Template (Machine-Readable):**
 ```json
 {
-  "version": "1.0",
+  "version": "3.0",
   "spec": "[SPEC_FOLDER_NAME]",
   "spec_path": ".agent-os/specs/[SPEC_FOLDER]/",
   "created": "[ISO_TIMESTAMP]",
@@ -291,7 +291,7 @@ CALCULATE: Total estimated tokens, average per task, parallel summary
 **context-summary.json Template:**
 ```json
 {
-  "version": "1.0",
+  "version": "3.0",
   "spec": "[SPEC_FOLDER_NAME]",
   "generated": "[ISO_TIMESTAMP]",
   "source_hashes": {

@@ -29,12 +29,12 @@ Canonical patterns for machine-readable task tracking alongside markdown. JSON p
 
 ## JSON Schema
 
-### tasks.json Structure (v2.1)
+### tasks.json Structure (v3.0)
 
 ```json
 {
-  "$schema": "https://agent-os.dev/schemas/tasks-v2.1.json",
-  "version": "2.1",
+  "$schema": "https://agent-os.dev/schemas/tasks-v3.json",
+  "version": "3.0",
   "spec": "feature-name",
   "spec_path": ".agent-os/specs/feature-name/",
   "created": "2025-12-08T10:00:00Z",

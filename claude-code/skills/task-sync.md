@@ -178,7 +178,7 @@ ACTION: Atomic write to tasks.json
 
 JSON structure:
 {
-  "version": "2.1",
+  "version": "3.0",
   "spec": "[spec-folder-name]",
   "spec_path": ".agent-os/specs/[spec-name]/",
   "created": "[original or now]",
