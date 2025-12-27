@@ -5,6 +5,30 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.2] - 2025-12-26
+
+### Changed
+
+- **Task Files Now Git-Tracked**: Reverted v3.8.0 change - `tasks.json` and `tasks.md` are now tracked in git again
+  - **Reason**: Enables claude-code-bot and other PR review tools to see task completion status
+  - Progress files (`progress.json`, `progress.md`) remain gitignored (session-specific, high conflict rate)
+  - Task files have lower conflict rate and provide valuable PR review context
+
+### Migration
+
+For existing projects upgraded from v3.8.0, manually remove these lines from `.gitignore`:
+```
+.agent-os/specs/*/tasks.json
+.agent-os/specs/*/tasks.md
+```
+
+Then add the task files back to git:
+```bash
+git add .agent-os/specs/*/tasks.json .agent-os/specs/*/tasks.md
+```
+
+---
+
 ## [3.8.1] - 2025-12-25
 
 ### Fixed

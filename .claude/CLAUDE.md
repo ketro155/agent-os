@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
 
+**v3.8.2 Task Files Git-Tracked**: Reverted v3.8.0 - task files (`tasks.json`, `tasks.md`) are now tracked in git again for PR review visibility. Progress files remain gitignored.
+
 **v3.8.1 CLAUDE_PROJECT_DIR Fix**: Fixed "No such file or directory" errors when running `/execute-tasks`. The SessionStart hook now persists `CLAUDE_PROJECT_DIR` via `CLAUDE_ENV_FILE` so it's available in all Bash commands, not just hooks.
 
-**v3.8.0 Gitignore Tracking Files**: Progress and task tracking files (`progress.json`, `tasks.json`, `tasks.md`) are now gitignored by default to prevent merge conflicts. Cross-session memory still works locally. This eliminates the remaining merge conflicts that wave-specific branching (v3.7.0) couldn't prevent.
+**v3.8.0 Gitignore Progress Files**: Progress tracking files (`progress.json`, `progress.md`) are gitignored to prevent merge conflicts. Cross-session memory still works locally.
 
 **v3.7.1 PR Review Expansion Fix**: Fixed issue where Phase 3.6.3 (Immediate Task Expansion) was being skipped during `/pr-review-cycle`, leaving WAVE_TASK items orphaned in `future_tasks` instead of being expanded into actual tasks. Added TodoWrite tracking for expansion step, mandatory gate check before commit, and prominent warning box.
 

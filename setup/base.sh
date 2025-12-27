@@ -8,7 +8,7 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="3.8.1"
+AGENT_OS_VERSION="3.8.2"
 AGENT_OS_RELEASE_DATE="2025-12-25"
 
 # Initialize flags
