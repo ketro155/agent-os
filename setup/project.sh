@@ -11,12 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "3.8.2"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.0.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="3.8.2"
+    AGENT_OS_VERSION="4.0.0"
 fi
-AGENT_OS_RELEASE_DATE="2025-12-25"
-AGENT_OS_V2_VERSION="2.2.0"  # Legacy version for --v2 flag
+AGENT_OS_RELEASE_DATE="2025-12-27"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -86,11 +85,7 @@ CLAUDE_CODE=false
 CURSOR=false
 PROJECT_TYPE=""
 WITH_HOOKS=false
-FULL_SKILLS=false
 UPGRADE=false
-USE_V3=true      # Default to v3 architecture
-USE_V2=false     # Legacy v2 architecture
-KEEP_LEGACY=false # Keep legacy files during v3 upgrade
 
 # Legacy v2.x files to clean up when upgrading to v3
 LEGACY_AGENTS=(
@@ -207,29 +202,10 @@ while [[ $# -gt 0 ]]; do
             WITH_HOOKS=true
             shift
             ;;
-        --full-skills)
-            FULL_SKILLS=true
-            shift
-            ;;
         --upgrade)
             UPGRADE=true
             OVERWRITE_INSTRUCTIONS=true
             OVERWRITE_STANDARDS=true
-            shift
-            ;;
-        --v3)
-            USE_V3=true
-            USE_V2=false
-            shift
-            ;;
-        --v2|--legacy)
-            USE_V2=true
-            USE_V3=false
-            AGENT_OS_VERSION="$AGENT_OS_V2_VERSION"
-            shift
-            ;;
-        --keep-legacy)
-            KEEP_LEGACY=true
             shift
             ;;
         --project-type=*)
@@ -242,12 +218,8 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --claude-code               Add Claude Code support"
             echo "  --cursor                    Add Cursor support"
-            echo "  --v3                        Use v3 architecture (default) - native hooks, single-source JSON"
-            echo "  --v2, --legacy              Use v2 architecture - embedded instructions, dual-format tasks"
-            echo "  --full-skills               Install all skills including optional Tier 2 skills (v2 only)"
             echo "  --upgrade                   Upgrade existing installation (overwrites all files)"
-            echo "  --keep-legacy               Keep legacy v2.x files during v3 upgrade (don't clean up)"
-            echo "  --with-hooks                Add optional validation hooks (v2 only, v3 has hooks by default)"
+            echo "  --with-hooks                Add additional validation hooks"
             echo "  --project-type=TYPE         Use specific project type for installation"
             echo "  --no-base                   Install from GitHub (not from a base installation)"
             echo "  --overwrite-instructions    Overwrite existing instruction files only"
@@ -255,12 +227,8 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help                  Show this help message"
             echo ""
             echo "Architecture:"
-            echo "  v3 (default): Native Claude Code hooks, single-source JSON tasks, simplified commands"
-            echo "  v2 (legacy):  Embedded instructions, dual MD+JSON tasks, phase files"
-            echo ""
-            echo "Upgrade behavior:"
-            echo "  When upgrading to v3 with --upgrade, legacy v2.x files are automatically removed."
-            echo "  Use --keep-legacy to preserve them (not recommended)."
+            echo "  Agent OS v4+ uses native Claude Code hooks, single-source JSON tasks,"
+            echo "  and simplified commands with mandatory validation."
             echo ""
             exit 0
             ;;
@@ -420,240 +388,101 @@ if [ "$CLAUDE_CODE" = true ]; then
         OVERWRITE_CLAUDE="true"
     fi
 
-    # ============================================================
-    # V3 ARCHITECTURE INSTALLATION
-    # ============================================================
-    if [ "$USE_V3" = true ]; then
-        echo "  📦 Using v3 architecture (native hooks, single-source JSON)"
+    echo "  📦 Using v4 architecture (native hooks, single-source JSON)"
 
-        # Clean up legacy v2.x files during upgrade (unless --keep-legacy is set)
-        if [ "$UPGRADE" = true ] && [ "$KEEP_LEGACY" = false ]; then
-            cleanup_legacy_v2_files
+    # Clean up legacy v2.x files during upgrade
+    if [ "$UPGRADE" = true ]; then
+        cleanup_legacy_v2_files
+    fi
+
+    echo ""
+
+    create_tracked_dir "./.claude"
+    create_tracked_dir "./.claude/commands"
+    create_tracked_dir "./.claude/agents"
+    create_tracked_dir "./.claude/hooks"
+    create_tracked_dir "./.claude/scripts"
+    create_tracked_dir "./.claude/rules"
+
+    if [ "$IS_FROM_BASE" = true ]; then
+        # Install commands
+        echo "  📂 Commands:"
+        for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug; do
+            if [ -f "$BASE_AGENT_OS/v3/commands/${cmd}.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
+            fi
+        done
+        if [ -f "$BASE_AGENT_OS/v3/commands/execute-tasks.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/commands/execute-tasks.md" "./.claude/commands/execute-tasks.md" "$OVERWRITE_CLAUDE" "commands/execute-tasks.md"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" "./.claude/commands/pr-review-cycle.md" "$OVERWRITE_CLAUDE" "commands/pr-review-cycle.md"
         fi
 
+        # Install agents (phase subagents + utility agents)
         echo ""
-
-        create_tracked_dir "./.claude"
-        create_tracked_dir "./.claude/commands"
-        create_tracked_dir "./.claude/agents"
-        create_tracked_dir "./.claude/hooks"
-        create_tracked_dir "./.claude/scripts"
-        create_tracked_dir "./.claude/rules"
-
-        if [ "$IS_FROM_BASE" = true ]; then
-            # Install v3 commands (simplified)
-            echo "  📂 Commands (v3 - simplified):"
-            for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug; do
-                if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
-                fi
-            done
-            # v3 execute-tasks and pr-review-cycle are v3-specific
-            if [ -f "$BASE_AGENT_OS/v3/commands/execute-tasks.md" ]; then
-                copy_file "$BASE_AGENT_OS/v3/commands/execute-tasks.md" "./.claude/commands/execute-tasks.md" "$OVERWRITE_CLAUDE" "commands/execute-tasks.md (v3)"
+        echo "  📂 Agents:"
+        for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager; do
+            if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             fi
-            if [ -f "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" ]; then
-                copy_file "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" "./.claude/commands/pr-review-cycle.md" "$OVERWRITE_CLAUDE" "commands/pr-review-cycle.md (v3)"
-            fi
+        done
 
-            # Install v3 agents (native subagents for phases)
-            echo ""
-            echo "  📂 Agents (v3 - phase subagents):"
-            for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator; do
-                if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
-                fi
-            done
-            # Also install utility agents from claude-code/agents/ (still useful in v3)
-            for agent in git-workflow; do
-                if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
-                fi
-            done
-
-            # Install v3 hooks (mandatory validation)
-            echo ""
-            echo "  📂 Hooks (v3 - mandatory validation):"
-            for hook in session-start session-end post-file-change pre-commit-gate; do
-                if [ -f "$BASE_AGENT_OS/v3/hooks/${hook}.sh" ]; then
-                    copy_file "$BASE_AGENT_OS/v3/hooks/${hook}.sh" "./.claude/hooks/${hook}.sh" "$OVERWRITE_CLAUDE" "hooks/${hook}.sh"
-                    chmod +x "./.claude/hooks/${hook}.sh"
-                fi
-            done
-
-            # Install v3 scripts
-            echo ""
-            echo "  📂 Scripts (v3 - operations):"
-            if [ -f "$BASE_AGENT_OS/v3/scripts/task-operations.sh" ]; then
-                copy_file "$BASE_AGENT_OS/v3/scripts/task-operations.sh" "./.claude/scripts/task-operations.sh" "$OVERWRITE_CLAUDE" "scripts/task-operations.sh"
-                chmod +x "./.claude/scripts/task-operations.sh"
+        # Install hooks (mandatory validation)
+        echo ""
+        echo "  📂 Hooks:"
+        for hook in session-start session-end post-file-change pre-commit-gate; do
+            if [ -f "$BASE_AGENT_OS/v3/hooks/${hook}.sh" ]; then
+                copy_file "$BASE_AGENT_OS/v3/hooks/${hook}.sh" "./.claude/hooks/${hook}.sh" "$OVERWRITE_CLAUDE" "hooks/${hook}.sh"
+                chmod +x "./.claude/hooks/${hook}.sh"
             fi
-            if [ -f "$BASE_AGENT_OS/v3/scripts/pr-review-operations.sh" ]; then
-                copy_file "$BASE_AGENT_OS/v3/scripts/pr-review-operations.sh" "./.claude/scripts/pr-review-operations.sh" "$OVERWRITE_CLAUDE" "scripts/pr-review-operations.sh"
-                chmod +x "./.claude/scripts/pr-review-operations.sh"
-            fi
-            if [ -f "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" ]; then
-                copy_file "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" "./.claude/scripts/json-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/json-to-markdown.js"
-            fi
+        done
 
-            # Install v3 memory/rules
-            echo ""
-            echo "  📂 Memory (v3 - native memory hierarchy):"
-            if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
-                copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
-            fi
-            for rule in tdd-workflow git-conventions execute-tasks; do
-                if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
-                fi
-            done
-
-            # Install v3 settings.json
-            echo ""
-            echo "  📂 Settings (v3 - hooks configuration):"
-            if [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-                copy_file "$BASE_AGENT_OS/v3/settings.json" "./.claude/settings.json" "$OVERWRITE_CLAUDE" "settings.json"
-            fi
-
-            # Install v3 schema
-            echo ""
-            echo "  📂 Schemas:"
-            create_tracked_dir "./.agent-os/schemas"
-            if [ -f "$BASE_AGENT_OS/v3/schemas/tasks-v3.json" ]; then
-                copy_file "$BASE_AGENT_OS/v3/schemas/tasks-v3.json" "./.agent-os/schemas/tasks-v3.json" "$OVERWRITE_CLAUDE" "schemas/tasks-v3.json"
-            fi
-
-        else
-            # GitHub installation for v3
-            install_v3_from_github "$OVERWRITE_CLAUDE"
+        # Install scripts
+        echo ""
+        echo "  📂 Scripts:"
+        if [ -f "$BASE_AGENT_OS/v3/scripts/task-operations.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/task-operations.sh" "./.claude/scripts/task-operations.sh" "$OVERWRITE_CLAUDE" "scripts/task-operations.sh"
+            chmod +x "./.claude/scripts/task-operations.sh"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/pr-review-operations.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/pr-review-operations.sh" "./.claude/scripts/pr-review-operations.sh" "$OVERWRITE_CLAUDE" "scripts/pr-review-operations.sh"
+            chmod +x "./.claude/scripts/pr-review-operations.sh"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" "./.claude/scripts/json-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/json-to-markdown.js"
         fi
 
-    # ============================================================
-    # V2 ARCHITECTURE INSTALLATION (Legacy)
-    # ============================================================
+        # Install memory/rules
+        echo ""
+        echo "  📂 Memory:"
+        if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
+        fi
+        for rule in tdd-workflow git-conventions execute-tasks; do
+            if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
+            fi
+        done
+
+        # Install settings.json
+        echo ""
+        echo "  📂 Settings:"
+        if [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
+            copy_file "$BASE_AGENT_OS/v3/settings.json" "./.claude/settings.json" "$OVERWRITE_CLAUDE" "settings.json"
+        fi
+
+        # Install schema
+        echo ""
+        echo "  📂 Schemas:"
+        create_tracked_dir "./.agent-os/schemas"
+        if [ -f "$BASE_AGENT_OS/v3/schemas/tasks-v3.json" ]; then
+            copy_file "$BASE_AGENT_OS/v3/schemas/tasks-v3.json" "./.agent-os/schemas/tasks-v3.json" "$OVERWRITE_CLAUDE" "schemas/tasks-v3.json"
+        fi
+
     else
-        echo "  📦 Using v2 architecture (legacy - embedded instructions)"
-        echo ""
-
-        create_tracked_dir "./.claude"
-        create_tracked_dir "./.claude/commands"
-        create_tracked_dir "./.claude/agents"
-        create_tracked_dir "./.claude/skills"
-
-        if [ "$IS_FROM_BASE" = true ]; then
-            # Copy from base installation
-            echo "  📂 Commands:"
-            for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug pr-review-cycle; do
-                if [ -f "$BASE_AGENT_OS/commands/${cmd}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/commands/${cmd}.md" "./.claude/commands/${cmd}.md" "$OVERWRITE_CLAUDE" "commands/${cmd}.md"
-                else
-                    echo "  ⚠️  Warning: ${cmd}.md not found in base installation"
-                fi
-            done
-
-            echo ""
-            echo "  📂 Agents:"
-            for agent in git-workflow project-manager future-classifier; do
-                if [ -f "$BASE_AGENT_OS/claude-code/agents/${agent}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/claude-code/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
-                else
-                    echo "  ⚠️  Warning: ${agent}.md not found in base installation"
-                fi
-            done
-
-            # Note: v2.x phase files (execute-phase*.md) and task-orchestrator removed in v3.0.2
-            # v3 uses native subagents in v3/agents/ instead
-
-            echo ""
-            echo "  📂 Shared Modules:"
-            create_tracked_dir "./.agent-os/shared"
-            for shared in error-recovery state-patterns progress-log task-json context-summary parallel-execution; do
-                if [ -f "$BASE_AGENT_OS/shared/${shared}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/shared/${shared}.md" "./.agent-os/shared/${shared}.md" "$OVERWRITE_CLAUDE" "shared/${shared}.md"
-                else
-                    echo "  ⚠️  Warning: ${shared}.md not found in base installation"
-                fi
-            done
-
-            echo ""
-            echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer expand-backlog; do
-                if [ -f "$BASE_AGENT_OS/claude-code/skills/${skill}.md" ]; then
-                    copy_file "$BASE_AGENT_OS/claude-code/skills/${skill}.md" "./.claude/skills/${skill}.md" "$OVERWRITE_CLAUDE" "skills/${skill}.md"
-                else
-                    echo "  ⚠️  Warning: ${skill}.md not found in base installation"
-                fi
-            done
-
-            # Install optional Tier 2 skills if --full-skills flag is set
-            if [ "$FULL_SKILLS" = true ]; then
-                echo ""
-                echo "  📂 Skills (Tier 2 - Optional):"
-                create_tracked_dir "./.claude/skills/optional"
-                for skill in code-review verification skill-creator mcp-builder standards-to-skill; do
-                    if [ -f "$BASE_AGENT_OS/claude-code/skills/optional/${skill}.md" ]; then
-                        copy_file "$BASE_AGENT_OS/claude-code/skills/optional/${skill}.md" "./.claude/skills/optional/${skill}.md" "$OVERWRITE_CLAUDE" "skills/optional/${skill}.md"
-                    else
-                        echo "  ⚠️  Warning: ${skill}.md not found in base installation"
-                    fi
-                done
-            fi
-        else
-            # Download from GitHub when using --no-base
-            echo "  Downloading Claude Code files from GitHub..."
-            echo ""
-            echo "  📂 Commands:"
-            for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug pr-review-cycle; do
-                download_file "${BASE_URL}/commands/${cmd}.md" \
-                    "./.claude/commands/${cmd}.md" \
-                    "$OVERWRITE_CLAUDE" \
-                    "commands/${cmd}.md"
-            done
-
-            echo ""
-            echo "  📂 Agents:"
-            for agent in git-workflow project-manager future-classifier; do
-                download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
-                    "./.claude/agents/${agent}.md" \
-                    "$OVERWRITE_CLAUDE" \
-                    "agents/${agent}.md"
-            done
-
-            # Note: v2.x phase files (execute-phase*.md) and task-orchestrator removed in v3.0.2
-            # v3 uses native subagents in v3/agents/ instead
-
-            echo ""
-            echo "  📂 Shared Modules:"
-            create_tracked_dir "./.agent-os/shared"
-            for shared in error-recovery state-patterns progress-log task-json context-summary parallel-execution; do
-                download_file "${BASE_URL}/shared/${shared}.md" \
-                    "./.agent-os/shared/${shared}.md" \
-                    "$OVERWRITE_CLAUDE" \
-                    "shared/${shared}.md"
-            done
-
-            echo ""
-            echo "  📂 Skills (Tier 1 - Default):"
-            for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler changelog-writer expand-backlog; do
-                download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
-                    "./.claude/skills/${skill}.md" \
-                    "$OVERWRITE_CLAUDE" \
-                    "skills/${skill}.md"
-            done
-
-            # Install optional Tier 2 skills if --full-skills flag is set
-            if [ "$FULL_SKILLS" = true ]; then
-                echo ""
-                echo "  📂 Skills (Tier 2 - Optional):"
-                create_tracked_dir "./.claude/skills/optional"
-                for skill in code-review verification skill-creator mcp-builder standards-to-skill; do
-                    download_file "${BASE_URL}/claude-code/skills/optional/${skill}.md" \
-                        "./.claude/skills/optional/${skill}.md" \
-                        "$OVERWRITE_CLAUDE" \
-                        "skills/optional/${skill}.md"
-                done
-            fi
-        fi
+        # GitHub installation
+        install_v3_from_github "$OVERWRITE_CLAUDE"
     fi
 fi
 
@@ -726,36 +555,15 @@ echo "📥 Creating version tracking..."
 # Determine features installed
 FEATURES_ARRAY="[]"
 if [ "$CLAUDE_CODE" = true ] && [ "$CURSOR" = true ]; then
-    if [ "$USE_V3" = true ]; then
-        FEATURES_ARRAY='["claude-code", "cursor", "v3", "hooks"]'
-    elif [ "$WITH_HOOKS" = true ]; then
-        FEATURES_ARRAY='["claude-code", "cursor", "hooks"]'
-    else
-        FEATURES_ARRAY='["claude-code", "cursor"]'
-    fi
+    FEATURES_ARRAY='["claude-code", "cursor", "hooks"]'
 elif [ "$CLAUDE_CODE" = true ]; then
-    if [ "$USE_V3" = true ]; then
-        FEATURES_ARRAY='["claude-code", "v3", "hooks"]'
-    elif [ "$WITH_HOOKS" = true ]; then
-        FEATURES_ARRAY='["claude-code", "hooks"]'
-    else
-        FEATURES_ARRAY='["claude-code"]'
-    fi
+    FEATURES_ARRAY='["claude-code", "hooks"]'
 elif [ "$CURSOR" = true ]; then
     FEATURES_ARRAY='["cursor"]'
 fi
 
-# Determine skills tier
-SKILLS_TIER="default"
-if [ "$FULL_SKILLS" = true ]; then
-    SKILLS_TIER="full"
-fi
-
-# Determine architecture
-ARCHITECTURE="v3"
-if [ "$USE_V2" = true ]; then
-    ARCHITECTURE="v2"
-fi
+# Architecture is always v4
+ARCHITECTURE="v4"
 
 # Get installation timestamp
 INSTALL_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -767,7 +575,6 @@ cat > "$INSTALL_DIR/version.json" << EOF
   "release_date": "$AGENT_OS_RELEASE_DATE",
   "installed_at": "$INSTALL_TIMESTAMP",
   "project_type": "$PROJECT_TYPE",
-  "skills_tier": "$SKILLS_TIER",
   "features": $FEATURES_ARRAY,
   "installation_source": "$([ "$IS_FROM_BASE" = true ] && echo "base" || echo "github")",
   "upgrade_info": {
@@ -937,27 +744,14 @@ echo "   .agent-os/state/           - State management and caching"
 echo "   .agent-os/progress/        - Persistent progress log (cross-session memory)"
 
 if [ "$CLAUDE_CODE" = true ]; then
-    if [ "$USE_V3" = true ]; then
-        echo "   .agent-os/schemas/         - JSON schemas (v3)"
-        echo "   .claude/CLAUDE.md          - Core memory (auto-loaded)"
-        echo "   .claude/commands/          - Claude Code commands (simplified)"
-        echo "   .claude/agents/            - Phase subagents (phase1, phase2, phase3)"
-        echo "   .claude/hooks/             - Mandatory validation hooks"
-        echo "   .claude/scripts/           - Task operations utilities"
-        echo "   .claude/rules/             - Path-specific rules (TDD, git)"
-        echo "   .claude/settings.json      - Hooks configuration"
-    else
-        echo "   .agent-os/shared/          - Shared modules (error recovery, state patterns)"
-        echo "   .claude/commands/          - Claude Code commands (with embedded instructions)"
-        echo "   .claude/agents/            - Claude Code specialized subagents"
-        echo "   .claude/skills/            - Claude Code skills (10 default skills)"
-        if [ "$FULL_SKILLS" = true ]; then
-            echo "   .claude/skills/optional/   - Optional Tier 2 skills (5 additional)"
-        fi
-        if [ "$WITH_HOOKS" = true ]; then
-            echo "   .claude/hooks/             - Validation and cleanup hooks"
-        fi
-    fi
+    echo "   .agent-os/schemas/         - JSON schemas"
+    echo "   .claude/CLAUDE.md          - Core memory (auto-loaded)"
+    echo "   .claude/commands/          - Claude Code commands"
+    echo "   .claude/agents/            - Phase subagents and utility agents"
+    echo "   .claude/hooks/             - Mandatory validation hooks"
+    echo "   .claude/scripts/           - Task operations utilities"
+    echo "   .claude/rules/             - Path-specific rules (TDD, git)"
+    echo "   .claude/settings.json      - Hooks configuration"
 fi
 
 if [ "$CURSOR" = true ]; then
@@ -968,14 +762,12 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-if [ "$USE_V3" = true ]; then
-    echo "v3 Architecture Features:"
-    echo "  • Native hooks (mandatory validation - cannot be skipped)"
-    echo "  • Single-source JSON tasks (tasks.md auto-generated)"
-    echo "  • Native subagents for phases (fresh context per task)"
-    echo "  • Memory hierarchy (CLAUDE.md + rules/)"
-    echo ""
-fi
+echo "v4 Architecture Features:"
+echo "  • Native hooks (mandatory validation - cannot be skipped)"
+echo "  • Single-source JSON tasks (tasks.md auto-generated)"
+echo "  • Native subagents for phases (fresh context per task)"
+echo "  • Memory hierarchy (CLAUDE.md + rules/)"
+echo ""
 
 echo "Next steps:"
 echo ""

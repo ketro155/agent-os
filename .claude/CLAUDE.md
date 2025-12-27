@@ -4,37 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. All command instructions are embedded within command files (~250-636 lines each) to ensure 99% reliable execution.
+Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. It uses native Claude Code hooks for mandatory validation and single-source JSON tasks.
 
-**v3.8.2 Task Files Git-Tracked**: Reverted v3.8.0 - task files (`tasks.json`, `tasks.md`) are now tracked in git again for PR review visibility. Progress files remain gitignored.
-
-**v3.8.1 CLAUDE_PROJECT_DIR Fix**: Fixed "No such file or directory" errors when running `/execute-tasks`. The SessionStart hook now persists `CLAUDE_PROJECT_DIR` via `CLAUDE_ENV_FILE` so it's available in all Bash commands, not just hooks.
-
-**v3.8.0 Gitignore Progress Files**: Progress tracking files (`progress.json`, `progress.md`) are gitignored to prevent merge conflicts. Cross-session memory still works locally.
-
-**v3.7.1 PR Review Expansion Fix**: Fixed issue where Phase 3.6.3 (Immediate Task Expansion) was being skipped during `/pr-review-cycle`, leaving WAVE_TASK items orphaned in `future_tasks` instead of being expanded into actual tasks. Added TodoWrite tracking for expansion step, mandatory gate check before commit, and prominent warning box.
-
-**v3.7.0 Wave-Specific Branching**: Each wave now gets its own isolated branch (`feature/spec-wave-1`, `feature/spec-wave-2`, etc.) to prevent merge conflicts. Wave PRs target the base feature branch (not main), and the final PR merges `feature/spec` to main.
-
-**v3.6.0 Immediate Task Expansion**: WAVE_TASK items from PR reviews are now expanded immediately into actual tasks during `/pr-review-cycle`, not deferred to `/execute-tasks`. This prevents orphan `future_tasks` and makes the task list immediately actionable. New `remove-future-task` command added to task-operations.sh.
-
-**v3.5.1 Script Path Fix**: Fixed "No such file or directory" errors for task-operations.sh and pr-review-operations.sh when Claude's working directory differs from project root. All script invocations now use `"${CLAUDE_PROJECT_DIR}/.claude/scripts/..."` pattern.
-
-**v3.5.0 Intelligent Roadmap Integration**: New `roadmap-integrator` subagent determines optimal phase placement for ROADMAP_ITEMs during `/pr-review-cycle`. Analyzes phase themes, dependencies, and effort grouping to place items in the right phase instead of appending to the end.
-
-**v3.4.0 Wave Assignment in PR Review**: Wave/roadmap assignments for future tasks now happen at the end of `/pr-review-cycle` instead of during `/execute-tasks`. Tasks arrive pre-tagged with `priority: "wave_N"`, simplifying the execute-tasks flow.
-
-**v3.0.5 Paths with Spaces Fix**: Fixed hook execution and script failures when project paths contain spaces (common with OneDrive-synced projects like `AI Projects/`). All hooks now use `bash "${CLAUDE_PROJECT_DIR}/..."` pattern for proper quoting.
-
-**v3.0.2 Git Workflow Enforcement + v2.x Removal**: Adds mandatory branch validation gates to v3 native subagents to prevent direct commits to main/master. `phase1-discovery.md` has Step 0 MANDATORY Gate that blocks if on protected branch. `phase2-implementation.md` has defense-in-depth validation. Also adds `/pr-review-cycle` command for automated PR review feedback processing. **BREAKING**: v2.x architecture removed entirely (phase files, task-orchestrator, codebase-indexer).
-
-**v2.1.1 Task JSON Auto-Sync**: Addresses task JSON drift with multi-layered auto-sync. New `task-sync` skill, enhanced `session-startup` (Step 4.5), and mandatory sync gate in Phase 3 (Step 9.7) ensure tasks.json stays synchronized with tasks.md.
-
-**v2.1.0 Task Artifacts**: Tasks now record their outputs (files created, functions exported) in tasks.json. This enables cross-task verification without maintaining a separate codebase index. The codebase-names skill uses live Grep + task artifacts for reliable name validation.
-
-**v2.0.0 Parallel Async Execution**: Leverages Claude Code's async agent capabilities (`run_in_background`, `AgentOutputTool`) for true parallel task execution. Independent tasks now run simultaneously via wave-based orchestration, providing 1.5-3x speedup.
-
-**v1.9.0+ Context Efficiency**: Based on Anthropic's "Effective Harnesses for Long-Running Agents" research, execute-tasks now uses phase-based loading, pre-computed context summaries, and an orchestrator pattern for multi-task sessions. See CHANGELOG.md for details.
+**v4.0.0 Baseline Cleanup**: Major version removing all legacy v2.x architecture. Only v3-based native hooks architecture is now supported. Legacy directories (`commands/`, `claude-code/`, `shared/`) have been removed. All source files now live in `v3/`.
 
 **Critical**: This is the Agent OS **source repository**. Changes here affect all projects that install Agent OS. This is a meta-repository - files here are templates that get copied to target projects during installation.
 
@@ -42,10 +14,9 @@ Agent OS is a development framework that installs into other projects to provide
 
 ```bash
 # Test installation in a separate test project
-./setup/project.sh --claude-code                 # Basic installation (10 default skills)
-./setup/project.sh --claude-code --full-skills   # Full installation (14 skills)
-./setup/project.sh --claude-code --with-hooks    # With validation hooks
-./setup/project.sh --cursor                      # Cursor support
+./setup/project.sh --claude-code        # Standard installation
+./setup/project.sh --cursor             # Cursor support
+./setup/project.sh --claude-code --upgrade  # Upgrade existing installation
 ```
 
 **Workflow**: Make changes → Test in test project → Update SYSTEM-OVERVIEW.md → Update CHANGELOG.md → Commit
@@ -54,110 +25,75 @@ Agent OS is a development framework that installs into other projects to provide
 
 ```
 agent-os/
-├── commands/              # Source command files → copied to .claude/commands/
-├── claude-code/
-│   ├── agents/            # Source subagent files → copied to .claude/agents/
-│   └── skills/            # Source skill files → copied to .claude/skills/
+├── v3/                    # All source files for v4+ architecture
+│   ├── commands/          # Command templates (8 commands) → .claude/commands/
+│   ├── agents/            # Agent templates (10 agents) → .claude/agents/
+│   ├── hooks/             # Native hooks (4 hooks) → .claude/hooks/
+│   ├── scripts/           # Utility scripts → .claude/scripts/
+│   ├── memory/            # CLAUDE.md + rules → .claude/
+│   ├── schemas/           # JSON schemas → .agent-os/schemas/
+│   └── settings.json      # Hooks configuration → .claude/settings.json
+├── standards/             # Development standards → .agent-os/standards/
+│   ├── global/            # Cross-cutting standards
+│   ├── frontend/          # UI patterns
+│   ├── backend/           # Server patterns
+│   └── testing/           # Test patterns
 ├── setup/                 # Installation scripts
 │   ├── project.sh         # Main installer
-│   ├── base.sh
-│   └── functions.sh
-├── standards/             # Categorized development standards → copied to .agent-os/standards/
-│   ├── global/            # Cross-cutting: coding-style, conventions, error-handling, validation, tech-stack
-│   ├── frontend/          # UI patterns: react-patterns, styling
-│   ├── backend/           # Server patterns: api-design, database
-│   └── testing/           # Test patterns: test-patterns
+│   ├── base.sh            # Base installation
+│   └── functions.sh       # Shared functions
 ├── config.yml             # Configuration template
 └── SYSTEM-OVERVIEW.md     # Comprehensive system documentation
 ```
 
-## Commands & Subagents
+## Commands & Agents
 
-**Commands** (source: `commands/*.md`):
+**Commands** (source: `v3/commands/*.md`):
 - `plan-product` / `analyze-product` - Product initialization
 - `shape-spec` → `create-spec` → `create-tasks` → `execute-tasks` - Feature development pipeline
-- `pr-review-cycle` - Automated PR review feedback processing (v3.0.2+)
-- `index-codebase` - Code reference management (legacy - replaced by task artifacts)
+- `pr-review-cycle` - Automated PR review feedback processing
 - `debug` - Context-aware debugging with git integration
 
-**Subagents** (source: `claude-code/agents/*.md`):
+**Agents** (source: `v3/agents/*.md`):
 
-| Subagent | Purpose |
-|----------|---------|
+| Agent | Purpose |
+|-------|---------|
+| phase1-discovery | Task discovery and execution mode selection |
+| phase2-implementation | TDD implementation loop |
+| phase3-delivery | Completion and delivery |
+| pr-review-discovery | PR comment analysis |
+| pr-review-implementation | PR feedback implementation |
+| future-classifier | Task classification |
+| comment-classifier | Comment categorization |
+| roadmap-integrator | Roadmap item placement |
 | git-workflow | Branch management, commits, PRs |
-| codebase-indexer | Code reference updates (deprecated v2.1 - use task artifacts) |
 | project-manager | Task/roadmap updates |
-| task-orchestrator | Multi-task coordination with workers (v1.9.0+) |
 
-**Phase Files** (source: `commands/phases/*.md`) - Loaded on-demand by execute-tasks (v1.9.0+):
+**Hooks** (source: `v3/hooks/*.sh`) - Mandatory validation:
 
-| Phase | Purpose |
-|-------|---------|
-| execute-phase0 | Session startup protocol |
-| execute-phase1 | Task discovery and mode selection |
-| execute-phase2 | TDD implementation loop |
-| execute-phase3 | Completion and delivery |
-
-**Skills** (source: `claude-code/skills/*.md`) - Model-invoked, auto-triggered:
-
-| Skill | Purpose |
-|-------|---------|
-| build-check | Auto-invoke before commits to verify build and classify errors |
-| test-check | Auto-invoke after code changes to run and analyze tests |
-| codebase-names | Auto-invoke when writing code to validate names via live Grep + task artifacts (v2.1) |
-| systematic-debugging | Auto-invoke when debugging to enforce 4-phase root cause analysis |
-| tdd | Auto-invoke before implementing features to enforce RED-GREEN-REFACTOR |
-| brainstorming | Invoke during spec creation for Socratic design refinement |
-| writing-plans | Invoke during task breakdown for detailed micro-task planning |
-| session-startup | Load progress context, verify environment, validate task JSON sync at execute-tasks start |
-| implementation-verifier | End-to-end verification before delivery (after all tasks complete) |
-| task-sync | Auto-invoke to synchronize tasks.json with tasks.md when drift detected (v2.1.1) |
-| pr-review-handler | Systematic PR review comment processing for /pr-review-cycle (v3.0.2+) |
-
-**Optional Skills** (source: `claude-code/skills/optional/*.md`) - Installed with `--full-skills`:
-
-| Skill | Purpose |
-|-------|---------|
-| code-review | Pre-review checklists and feedback integration |
-| verification | Evidence-based completion verification |
-| skill-creator | Guide for creating custom Agent OS skills |
-| mcp-builder | Guide for creating MCP servers |
-| standards-to-skill | Template for converting standards to skills |
-
-**Native Claude Code Features Used:**
-- **Explore agent**: Specification discovery, document retrieval (replaces spec-cache-manager, context-fetcher)
-- **Write tool**: File creation (replaces file-creator)
-- **Environment context**: Date/time utilities (replaces date-checker)
+| Hook | Purpose |
+|------|---------|
+| session-start | Initialize session, set CLAUDE_PROJECT_DIR |
+| session-end | Clean up session |
+| post-file-change | Auto-regenerate tasks.md from tasks.json |
+| pre-commit-gate | Validate before git commits |
 
 ## Making Changes
 
 ### Modifying Commands
-1. Edit `commands/[command-name].md` (all instructions embedded)
+1. Edit `v3/commands/[command-name].md`
 2. Test: Install in test project and run the command
 3. Update `SYSTEM-OVERVIEW.md` if adding new features
 
-### Adding New Subagents
-1. Create `claude-code/agents/[agent-name].md`
-2. Add to installation list in `setup/project.sh`
+### Adding New Agents
+1. Create `v3/agents/[agent-name].md`
+2. Add to installation list in `setup/project.sh` (line ~425)
 3. Document in `SYSTEM-OVERVIEW.md`
 
-### Adding New Skills
-1. Create `claude-code/skills/[skill-name].md` with YAML frontmatter (name, description, allowed-tools)
-2. Add to installation list in `setup/project.sh`
-3. Document in `SYSTEM-OVERVIEW.md`
-4. Skills are model-invoked (Claude decides when to use them based on description)
-
-### Command Structure Pattern
-All commands follow this structure:
-1. Quick Navigation
-2. Description & Parameters
-3. Dependencies
-4. Task Tracking (TodoWrite examples)
-5. For Claude Code (meta instructions)
-6. Core Instructions (embedded)
-7. State Management
-8. Error Handling
-9. Subagent Integration
+### Adding New Hooks
+1. Create `v3/hooks/[hook-name].sh`
+2. Add hook configuration to `v3/settings.json`
+3. Add to installation list in `setup/project.sh`
 
 ## State Management
 
@@ -168,10 +104,6 @@ All commands follow this structure:
 - Stores spec cache, context cache, metadata
 
 **Recovery**: Auto-backups in `.agent-os/state/recovery/` (keeps last 5 versions)
-
-## Content Mapping
-
-For features referencing external content (images, data files), create `content-mapping.md` in specs. See `docs/content-mapping-pattern.md` for full documentation.
 
 ## References
 

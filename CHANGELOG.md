@@ -5,6 +5,44 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2025-12-27
+
+### Breaking Changes
+
+- **Removed Legacy v2.x Architecture**: The v2 architecture has been completely removed
+  - Removed `commands/` directory (legacy command templates)
+  - Removed `shared/` directory (legacy shared modules)
+  - Removed `claude-code/` directory (legacy agents and skills)
+  - Removed `--v2`, `--legacy`, `--keep-legacy`, `--full-skills` flags from installer
+  - All source files now consolidated in `v3/` directory
+
+### Changed
+
+- **Unified Architecture**: Only the native hooks architecture (formerly v3) is now supported
+  - All commands sourced from `v3/commands/`
+  - All agents sourced from `v3/agents/`
+  - Hooks, scripts, and memory templates from `v3/`
+
+### Added
+
+- **Migrated Agents to v3/**: `git-workflow.md` and `project-manager.md` moved from `claude-code/agents/` to `v3/agents/`
+- **Additional Commands in v3/**: `plan-product.md`, `create-spec.md`, `create-tasks.md`, `analyze-product.md` added to `v3/commands/`
+
+### Migration
+
+For projects using v2 architecture (`--v2` flag), you must upgrade to v4 architecture:
+
+1. Run: `./setup/project.sh --claude-code --upgrade`
+2. The upgrade will automatically clean up legacy v2 files
+3. Skills are no longer used - functionality moved to hooks and rules
+
+For projects already on v3, simply upgrade:
+```bash
+./setup/project.sh --claude-code --upgrade
+```
+
+---
+
 ## [3.8.2] - 2025-12-26
 
 ### Changed

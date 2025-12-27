@@ -8,8 +8,8 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="3.8.2"
-AGENT_OS_RELEASE_DATE="2025-12-25"
+AGENT_OS_VERSION="4.0.0"
+AGENT_OS_RELEASE_DATE="2025-12-27"
 
 # Initialize flags
 OVERWRITE_COMMANDS=false
@@ -83,17 +83,12 @@ echo ""
 # Create base directories
 echo "📁 Creating base directories..."
 mkdir -p "$INSTALL_DIR/setup"
-mkdir -p "$INSTALL_DIR/commands"
 mkdir -p "$INSTALL_DIR/standards"
 mkdir -p "$INSTALL_DIR/standards/global"
 mkdir -p "$INSTALL_DIR/standards/frontend"
 mkdir -p "$INSTALL_DIR/standards/backend"
 mkdir -p "$INSTALL_DIR/standards/testing"
 mkdir -p "$INSTALL_DIR/standards/code-style"
-mkdir -p "$INSTALL_DIR/shared"
-mkdir -p "$INSTALL_DIR/claude-code/agents"
-mkdir -p "$INSTALL_DIR/claude-code/skills"
-mkdir -p "$INSTALL_DIR/claude-code/skills/optional"
 mkdir -p "$INSTALL_DIR/v3/agents"
 mkdir -p "$INSTALL_DIR/v3/commands"
 mkdir -p "$INSTALL_DIR/v3/hooks"
@@ -115,15 +110,6 @@ curl -sSL "${BASE_URL}/setup/project.sh" -o "$INSTALL_DIR/setup/project.sh"
 chmod +x "$INSTALL_DIR/setup/project.sh"
 echo "  ✓ setup/project.sh"
 
-# Download commands (v2/v3 shared commands)
-echo ""
-echo "📥 Downloading commands..."
-for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product index-codebase debug pr-review-cycle; do
-    download_file "${BASE_URL}/commands/${cmd}.md" \
-        "$INSTALL_DIR/commands/${cmd}.md" \
-        "$OVERWRITE_COMMANDS" \
-        "commands/${cmd}.md"
-done
 
 # Download standards - organized by category
 echo ""
@@ -179,50 +165,12 @@ for file in best-practices code-style tech-stack codebase-reference; do
         "standards/${file}.md"
 done
 
-# Download shared modules (v2 compatibility)
-echo ""
-echo "📥 Downloading shared modules..."
-for shared in error-recovery state-patterns progress-log task-json context-summary parallel-execution; do
-    download_file "${BASE_URL}/shared/${shared}.md" \
-        "$INSTALL_DIR/shared/${shared}.md" \
-        "$OVERWRITE_STANDARDS" \
-        "shared/${shared}.md"
-done
-
-# Download Claude Code agents (v2 - only those that still exist)
-echo ""
-echo "📥 Downloading Claude Code agents..."
-for agent in git-workflow project-manager; do
-    download_file "${BASE_URL}/claude-code/agents/${agent}.md" \
-        "$INSTALL_DIR/claude-code/agents/${agent}.md" \
-        "$OVERWRITE_COMMANDS" \
-        "claude-code/agents/${agent}.md"
-done
-
-# Download Claude Code skills (v2)
-echo ""
-echo "📥 Downloading Claude Code skills (Tier 1)..."
-for skill in build-check test-check codebase-names systematic-debugging tdd brainstorming writing-plans session-startup implementation-verifier task-sync pr-review-handler; do
-    download_file "${BASE_URL}/claude-code/skills/${skill}.md" \
-        "$INSTALL_DIR/claude-code/skills/${skill}.md" \
-        "$OVERWRITE_COMMANDS" \
-        "claude-code/skills/${skill}.md"
-done
-
-echo ""
-echo "📥 Downloading Claude Code skills (Tier 2 - Optional)..."
-for skill in code-review verification skill-creator mcp-builder standards-to-skill; do
-    download_file "${BASE_URL}/claude-code/skills/optional/${skill}.md" \
-        "$INSTALL_DIR/claude-code/skills/optional/${skill}.md" \
-        "$OVERWRITE_COMMANDS" \
-        "claude-code/skills/optional/${skill}.md"
-done
 
 # Download v3 architecture files
 echo ""
 echo "📥 Downloading v3 architecture files..."
-echo "  📂 v3 Commands:"
-for cmd in execute-tasks shape-spec debug; do
+echo "  📂 Commands:"
+for cmd in plan-product shape-spec create-spec create-tasks execute-tasks analyze-product debug pr-review-cycle; do
     download_file "${BASE_URL}/v3/commands/${cmd}.md" \
         "$INSTALL_DIR/v3/commands/${cmd}.md" \
         "$OVERWRITE_COMMANDS" \
@@ -230,8 +178,8 @@ for cmd in execute-tasks shape-spec debug; do
 done
 
 echo ""
-echo "  📂 v3 Agents:"
-for agent in phase1-discovery phase2-implementation phase3-delivery; do
+echo "  📂 Agents:"
+for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager; do
     download_file "${BASE_URL}/v3/agents/${agent}.md" \
         "$INSTALL_DIR/v3/agents/${agent}.md" \
         "$OVERWRITE_COMMANDS" \
@@ -322,21 +270,15 @@ echo ""
 echo "   cd <project-directory>"
 echo "   $PROJECT_SCRIPT --claude-code"
 echo ""
-echo "For v3 architecture (recommended):"
-echo "   $PROJECT_SCRIPT --claude-code --v3"
-echo ""
-echo "For v2 architecture (legacy):"
-echo "   $PROJECT_SCRIPT --claude-code --v2"
-echo ""
 echo "--------------------------------"
 echo ""
 echo "📍 Base installation structure:"
-echo "   $INSTALL_DIR/commands/              - Command templates (9 commands)"
-echo "   $INSTALL_DIR/standards/             - Development standards (organized by category)"
-echo "   $INSTALL_DIR/shared/                - Shared modules (v2 compatibility)"
-echo "   $INSTALL_DIR/claude-code/agents/    - Claude Code agents (2 agents)"
-echo "   $INSTALL_DIR/claude-code/skills/    - Claude Code skills (11 default + 5 optional)"
-echo "   $INSTALL_DIR/v3/                    - v3 architecture files"
+echo "   $INSTALL_DIR/v3/commands/           - Command templates (8 commands)"
+echo "   $INSTALL_DIR/v3/agents/             - Agent templates (10 agents)"
+echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (4 hooks)"
+echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts"
+echo "   $INSTALL_DIR/v3/memory/             - Memory templates"
+echo "   $INSTALL_DIR/standards/             - Development standards"
 echo "   $INSTALL_DIR/config.yml             - Configuration"
 echo "   $INSTALL_DIR/setup/project.sh       - Project installation script"
 
