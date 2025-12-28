@@ -1,0 +1,389 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agent-os.dev/schemas/wave-context-v1.json",
+  "title": "Wave Orchestration Context Schema v1.0",
+  "description": "Defines explicit context contracts for wave-based parallel execution to prevent hallucination",
+
+  "definitions": {
+    "ArtifactSet": {
+      "type": "object",
+      "description": "A verified set of artifacts from a single wave",
+      "properties": {
+        "exports_added": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Named exports created (e.g., 'validateToken', 'hashPassword')"
+        },
+        "files_created": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Absolute or relative file paths created"
+        },
+        "functions_created": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Function/method names created (for grep verification)"
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{7,40}$"
+          },
+          "description": "Git commit hashes from this wave"
+        }
+      },
+      "required": ["exports_added", "files_created", "functions_created", "commits"],
+      "additionalProperties": false
+    },
+
+    "PredecessorArtifacts": {
+      "type": "object",
+      "description": "Verified artifacts from all predecessor waves",
+      "properties": {
+        "verified": {
+          "type": "boolean",
+          "const": true,
+          "description": "MUST be true - indicates artifacts have been grep-verified"
+        }
+      },
+      "patternProperties": {
+        "^wave_[0-9]+$": { "$ref": "#/definitions/ArtifactSet" }
+      },
+      "required": ["verified"],
+      "additionalProperties": false
+    },
+
+    "TaskContext": {
+      "type": "object",
+      "description": "Context for a single task within a wave",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "description": "Task ID"
+        },
+        "description": {
+          "type": "string",
+          "description": "Task description"
+        },
+        "subtasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Subtask IDs"
+        },
+        "context_summary": {
+          "type": "object",
+          "properties": {
+            "relevant_specs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Spec file paths with optional anchors"
+            },
+            "relevant_files": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Source file paths relevant to this task"
+            }
+          }
+        }
+      },
+      "required": ["id", "description"]
+    },
+
+    "VerificationResult": {
+      "type": "object",
+      "description": "Result of verifying a single artifact",
+      "properties": {
+        "artifact_type": {
+          "enum": ["export", "file", "function"],
+          "description": "Type of artifact being verified"
+        },
+        "claimed_name": {
+          "type": "string",
+          "description": "The name/path claimed by the task agent"
+        },
+        "exists": {
+          "type": "boolean",
+          "description": "Whether verification passed"
+        },
+        "location": {
+          "type": "string",
+          "description": "Where the artifact was found (if exists)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why verification failed (if !exists)"
+        }
+      },
+      "required": ["artifact_type", "claimed_name", "exists"]
+    },
+
+    "UnverifiedClaim": {
+      "type": "object",
+      "description": "An artifact claim that failed verification",
+      "properties": {
+        "task_id": { "type": "string" },
+        "claim_type": { "enum": ["export", "file", "function"] },
+        "claimed_value": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["task_id", "claim_type", "claimed_value", "reason"]
+    }
+  },
+
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/definitions/WaveExecutionContext" },
+    { "$ref": "#/definitions/WaveResult" }
+  ],
+
+  "definitions": {
+    "ArtifactSet": {
+      "type": "object",
+      "description": "A verified set of artifacts from a single wave",
+      "properties": {
+        "exports_added": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Named exports created (e.g., 'validateToken', 'hashPassword')"
+        },
+        "files_created": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Absolute or relative file paths created"
+        },
+        "functions_created": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Function/method names created (for grep verification)"
+        },
+        "commits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{7,40}$"
+          },
+          "description": "Git commit hashes from this wave"
+        }
+      },
+      "required": ["exports_added", "files_created", "functions_created", "commits"],
+      "additionalProperties": false
+    },
+
+    "PredecessorArtifacts": {
+      "type": "object",
+      "description": "Verified artifacts from all predecessor waves",
+      "properties": {
+        "verified": {
+          "type": "boolean",
+          "const": true,
+          "description": "MUST be true - indicates artifacts have been grep-verified"
+        }
+      },
+      "patternProperties": {
+        "^wave_[0-9]+$": { "$ref": "#/definitions/ArtifactSet" }
+      },
+      "required": ["verified"],
+      "additionalProperties": false
+    },
+
+    "WaveExecutionContext": {
+      "type": "object",
+      "title": "Wave Execution Context (Input)",
+      "description": "Input to wave-orchestrator agent",
+      "properties": {
+        "wave_number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which wave this is (1-indexed)"
+        },
+        "spec_name": {
+          "type": "string",
+          "description": "Specification identifier"
+        },
+        "spec_folder": {
+          "type": "string",
+          "description": "Path to spec directory"
+        },
+        "tasks": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/TaskContext" },
+          "minItems": 1,
+          "description": "Tasks to execute in this wave"
+        },
+        "predecessor_artifacts": {
+          "$ref": "#/definitions/PredecessorArtifacts",
+          "description": "Verified artifacts from previous waves"
+        },
+        "execution_mode": {
+          "enum": ["parallel", "sequential"],
+          "default": "parallel",
+          "description": "How to execute tasks within this wave"
+        },
+        "git_branch": {
+          "type": "string",
+          "pattern": "^feature/.*-wave-[0-9]+$",
+          "description": "Expected git branch for this wave"
+        }
+      },
+      "required": ["wave_number", "spec_name", "spec_folder", "tasks", "predecessor_artifacts", "git_branch"]
+    },
+
+    "WaveResult": {
+      "type": "object",
+      "title": "Wave Result (Output)",
+      "description": "Output from wave-orchestrator agent",
+      "properties": {
+        "status": {
+          "enum": ["complete", "partial", "blocked", "error"],
+          "description": "Overall wave execution status"
+        },
+        "wave_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tasks_completed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Task IDs that passed"
+        },
+        "tasks_failed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Task IDs that failed"
+        },
+        "tasks_blocked": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Task IDs that are blocked"
+        },
+        "verified_artifacts": {
+          "$ref": "#/definitions/ArtifactSet",
+          "description": "Grep-verified artifacts from THIS wave only"
+        },
+        "cumulative_artifacts": {
+          "type": "object",
+          "properties": {
+            "all_exports": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "all_files": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "all_commits": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "description": "All artifacts from wave 1 to current wave (for convenience)"
+        },
+        "context_for_next_wave": {
+          "type": "object",
+          "properties": {
+            "verified": { "type": "boolean", "const": true },
+            "predecessor_artifacts": { "$ref": "#/definitions/PredecessorArtifacts" }
+          },
+          "description": "Ready-to-use context for the next wave orchestrator"
+        },
+        "unverified_claims": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/UnverifiedClaim" },
+          "description": "Artifacts claimed but failed verification"
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blockers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "duration_minutes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": ["status", "wave_number", "tasks_completed", "verified_artifacts", "context_for_next_wave"]
+    },
+
+    "UnverifiedClaim": {
+      "type": "object",
+      "description": "An artifact claim that failed verification",
+      "properties": {
+        "task_id": { "type": "string" },
+        "claim_type": { "enum": ["export", "file", "function"] },
+        "claimed_value": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["task_id", "claim_type", "claimed_value", "reason"]
+    },
+
+    "TaskContext": {
+      "type": "object",
+      "description": "Context for a single task within a wave",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "description": "Task ID"
+        },
+        "description": {
+          "type": "string",
+          "description": "Task description"
+        },
+        "subtasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Subtask IDs"
+        },
+        "context_summary": {
+          "type": "object",
+          "properties": {
+            "relevant_specs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Spec file paths with optional anchors"
+            },
+            "relevant_files": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Source file paths relevant to this task"
+            }
+          }
+        }
+      },
+      "required": ["id", "description"]
+    },
+
+    "VerificationResult": {
+      "type": "object",
+      "description": "Result of verifying a single artifact",
+      "properties": {
+        "artifact_type": {
+          "enum": ["export", "file", "function"],
+          "description": "Type of artifact being verified"
+        },
+        "claimed_name": {
+          "type": "string",
+          "description": "The name/path claimed by the task agent"
+        },
+        "exists": {
+          "type": "boolean",
+          "description": "Whether verification passed"
+        },
+        "location": {
+          "type": "string",
+          "description": "Where the artifact was found (if exists)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why verification failed (if !exists)"
+        }
+      },
+      "required": ["artifact_type", "claimed_name", "exists"]
+    }
+  }
+}

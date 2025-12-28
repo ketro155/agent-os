@@ -117,16 +117,59 @@ TodoWrite([
 git add -A && git commit -m "feat(scope): subtask description"
 ```
 
-### Name Verification (MANDATORY)
+### Predecessor Artifact Verification (MANDATORY - v4.1)
 
-Before writing code that uses names from predecessor tasks:
+> ⛔ **BLOCKING GATE** - All predecessor imports MUST be verified before use
+
+When your task depends on artifacts from predecessor waves, verify they exist **before writing any code that imports them**:
 
 ```bash
-# Verify exports exist
-grep -r "export.*validateToken" src/
+# 1. For each export you plan to import:
+for export_name in predecessor_artifacts.exports_added:
+  FOUND=$(grep -r "export.*${export_name}" src/ | head -1)
 
-# If not found, check predecessor artifacts in context
-# If still not found: STOP and report missing dependency
+  IF [ -z "$FOUND" ]:
+    ⛔ HALT: "Predecessor export '${export_name}' not found in codebase"
+
+    RETURN: {
+      "status": "blocked",
+      "blocker": "Missing predecessor export: ${export_name}",
+      "expected_from": "predecessor_artifacts",
+      "searched_pattern": "export.*${export_name}"
+    }
+
+# 2. For each file you plan to import from:
+for file_path in predecessor_artifacts.files_created:
+  IF [ ! -f "$file_path" ]:
+    ⛔ HALT: "Predecessor file '${file_path}' not found"
+
+    RETURN: {
+      "status": "blocked",
+      "blocker": "Missing predecessor file: ${file_path}"
+    }
+```
+
+**Why This Check Exists (v4.1):**
+- Wave orchestrators pass **verified** predecessor artifacts
+- But verification happens at wave start - files could be deleted/renamed during execution
+- This defense-in-depth check catches issues at import time
+- Prevents hallucinated imports that would cause TypeScript/runtime errors
+
+**DO NOT:**
+- Trust predecessor_artifacts without verification
+- Import a function by name without grep-confirming it exists
+- Assume file paths are correct without checking
+
+**Verification Pattern for Imports:**
+```typescript
+// BEFORE writing this import:
+// import { validateToken } from '../token';
+
+// VERIFY:
+// grep -r "export.*validateToken" src/
+// → src/auth/token.ts:export function validateToken(...)
+
+// ONLY THEN write the import
 ```
 
 ## Output Format

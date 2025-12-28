@@ -1,6 +1,6 @@
-# Execute Tasks (v3.0)
+# Execute Tasks (v4.1)
 
-Execute tasks from a specification using native Claude Code features.
+Execute tasks from a specification using native Claude Code features with wave-orchestrated parallel execution.
 
 ## Parameters
 - `spec_name` (required): Specification folder name
@@ -21,14 +21,14 @@ Execute tasks from a specification using native Claude Code features.
 
 ## How It Works
 
-v3.0 uses native Claude Code features instead of embedded instructions:
+v4.1 adds wave orchestration for better context management and hallucination prevention:
 
-| v2.x | v3.0 |
+| v3.0 | v4.1 |
 |------|------|
-| Embedded instructions (475 lines) | Native subagents + memory |
-| task-sync skill | PostToolUse hooks |
-| Manual phase loading | Automatic subagent invocation |
-| Dual-format sync | JSON primary, MD auto-generated |
+| Direct Phase 2 spawning | Wave Orchestrator per wave |
+| Context accumulates in main agent | Context isolated per wave |
+| Artifact claims trusted | Artifact claims grep-verified |
+| Can exhaust context on large specs | Scales to any spec size |
 
 ## Execution Flow
 
@@ -41,12 +41,30 @@ Phase 1 Agent → Task discovery, mode selection, branch validation
         ↓
 [User confirms execution mode]
         ↓
-Phase 2 Agent(s) → TDD implementation
+Wave Orchestrator(s) → Isolated execution per wave
         │
-        ├── Single Task: One agent
-        └── Parallel Waves: Multiple agents per wave, waves in sequence
+        ├── Single Task: Direct Phase 2 agent
+        │
+        └── Parallel Waves:
+            ┌─────────────────────────────────────────────┐
+            │  Wave 1 Orchestrator                        │
+            │  ├── Verify predecessor artifacts (none)    │
+            │  ├── Spawn Phase 2 agents (parallel)        │
+            │  ├── Collect & verify artifacts             │
+            │  └── Return: verified_context_for_wave_2    │
+            └─────────────────────────────────────────────┘
+                            ↓ (verified context)
+            ┌─────────────────────────────────────────────┐
+            │  Wave 2 Orchestrator                        │
+            │  ├── Verify predecessor artifacts (wave 1)  │
+            │  ├── Spawn Phase 2 agents (parallel)        │
+            │  ├── Collect & verify artifacts             │
+            │  └── Return: verified_context_for_wave_3    │
+            └─────────────────────────────────────────────┘
+                            ↓
+                    [Continue for all waves]
         ↓
-[Completion Gate] → Verify all agents collected, all tasks updated
+[Completion Gate] → Verify all waves completed
         ↓
 Phase 3 Agent → Final tests, PR, documentation  ⚠️ MANDATORY
         ↓
@@ -54,6 +72,20 @@ SessionEnd hook → Log progress, checkpoint
 ```
 
 > **CRITICAL**: Phase 3 MUST always run. It creates the PR. Never skip.
+
+## Why Wave Orchestration?
+
+**Problem**: In v3.0, the main agent accumulates all Phase 2 results, exhausting context on large specs.
+
+**Solution**: Each wave runs in an isolated orchestrator that:
+1. Receives only verified predecessor artifacts
+2. Spawns and collects Phase 2 agents internally
+3. Returns only a verified summary to the main agent
+
+**Hallucination Prevention**: Before passing context to the next wave, artifacts are grep-verified:
+- Claimed exports must exist: `grep -r "export.*functionName"`
+- Claimed files must exist: `ls path/to/file`
+- Unverified claims are flagged and excluded
 
 ## For Claude Code
 
@@ -126,6 +158,7 @@ AskUserQuestion({
 
 **Single Task Mode:**
 ```javascript
+// For single task, use Phase 2 directly (no orchestration overhead)
 Task({
   subagent_type: "phase2-implementation",
   prompt: `Execute task: ${task}
@@ -134,35 +167,85 @@ Task({
 })
 ```
 
-**Parallel Wave Mode:**
+**Parallel Wave Mode (v4.1 - Wave Orchestration):**
 ```javascript
-// IMPORTANT: Process ALL waves in order
-for (wave of parallel_config.waves) {
+// Initialize empty predecessor context for wave 1
+let predecessorArtifacts = { verified: true };
+let cumulativeArtifacts = { all_exports: [], all_files: [], all_commits: [] };
 
-  // Spawn parallel workers for this wave
-  const waveAgents = [];
-  for (task of wave.tasks) {
-    const agentId = Task({
-      subagent_type: "phase2-implementation",
-      run_in_background: true,
-      prompt: `Execute task: ${task}
-               Context: ${context_from_phase1}
-               Return structured result with artifacts.`
-    });
-    waveAgents.push(agentId);
+// Process each wave through its own orchestrator
+for (const wave of parallel_config.waves) {
+
+  // Build wave execution context (follows wave-context-v1 schema)
+  const waveContext = {
+    wave_number: wave.wave_id,
+    spec_name: spec_name,
+    spec_folder: `.agent-os/specs/${spec_name}/`,
+    tasks: wave.tasks.map(taskId => getTaskDetails(taskId)),
+    predecessor_artifacts: predecessorArtifacts,
+    execution_mode: "parallel",
+    git_branch: `feature/${spec_name}-wave-${wave.wave_id}`
+  };
+
+  // Spawn wave orchestrator (isolates context)
+  const waveResult = Task({
+    subagent_type: "wave-orchestrator",
+    prompt: `
+      Execute wave ${wave.wave_id} of ${parallel_config.waves.length}
+
+      Wave Execution Context:
+      ${JSON.stringify(waveContext, null, 2)}
+
+      REQUIREMENTS:
+      1. Verify ALL predecessor artifacts exist before starting
+      2. Spawn Phase 2 agents for all tasks in parallel
+      3. Collect and VERIFY all claimed artifacts
+      4. Return verified context for next wave
+
+      Return WaveResult per wave-context-v1 schema.
+    `
+  });
+
+  // CHECK: Did wave complete successfully?
+  if (waveResult.status === "blocked" || waveResult.status === "error") {
+    console.log(`⚠️ Wave ${wave.wave_id} ${waveResult.status}: ${waveResult.blockers}`);
+    // Continue to Phase 3 with partial completion
+    break;
   }
 
-  // Collect ALL results from this wave before next wave
-  for (agentId of waveAgents) {
-    const result = TaskOutput({ task_id: agentId, block: true });
-    // Process result, update task status (Step 5)
-  }
+  // UPDATE: Predecessor context for next wave
+  predecessorArtifacts = waveResult.context_for_next_wave.predecessor_artifacts;
+  cumulativeArtifacts = waveResult.cumulative_artifacts;
 
-  // Update task status for completed tasks in this wave
-  // (see Step 5 below)
+  // Log wave completion (main agent only sees summary)
+  console.log(`✅ Wave ${wave.wave_id}: ${waveResult.tasks_completed.length} tasks, ${waveResult.verified_artifacts.files_created.length} files`);
+
+  // Flag any unverified claims
+  if (waveResult.unverified_claims?.length > 0) {
+    console.log(`⚠️ ${waveResult.unverified_claims.length} unverified artifact claims - excluded from context chain`);
+  }
 }
 
 // After ALL waves complete → MUST proceed to Step 6
+```
+
+### Step 4.5: Context Chain Integrity Check
+
+> ⛔ **MANDATORY** - Verify context chain before Phase 3
+
+```javascript
+// Verify the final cumulative artifacts are consistent
+const integrityCheck = {
+  total_waves_completed: completedWaves.length,
+  total_tasks_passed: cumulativeArtifacts.all_commits.length > 0,
+  artifact_chain_verified: predecessorArtifacts.verified === true,
+  unverified_claims_total: allUnverifiedClaims.length
+};
+
+if (integrityCheck.unverified_claims_total > 0) {
+  console.log(`⚠️ Warning: ${integrityCheck.unverified_claims_total} artifact claims could not be verified`);
+  console.log(`   These were excluded from the context chain to prevent hallucination`);
+}
 ```
 
 ### Step 5: Update Task Status
@@ -293,24 +376,33 @@ Phase 1 returns: { tasks_to_execute: [] }
 → Suggest: Create new spec or review PR
 ```
 
-## Comparison: v2.x vs v3.0
+## Comparison: v2.x vs v3.0 vs v4.1
 
-| Aspect | v2.x | v3.0 |
-|--------|------|------|
-| Command size | 475 lines | ~120 lines |
-| Phase loading | Manual Read tool | Native subagents |
-| Validation | Skills (can be skipped) | Hooks (mandatory) |
-| Task sync | task-sync skill | PostToolUse hook |
-| Task format | MD + JSON (sync issues) | JSON primary |
-| Operations | Inline code | Shell script |
-| Recovery | Custom patterns | Native checkpointing |
+| Aspect | v2.x | v3.0 | v4.1 |
+|--------|------|------|------|
+| Command size | 475 lines | ~120 lines | ~180 lines |
+| Phase loading | Manual Read tool | Native subagents | Native subagents |
+| Validation | Skills (can be skipped) | Hooks (mandatory) | Hooks + artifact verification |
+| Task sync | task-sync skill | PostToolUse hook | PostToolUse hook |
+| Task format | MD + JSON (sync issues) | JSON primary | JSON primary |
+| Operations | Inline code | Shell script | Shell script |
+| Recovery | Custom patterns | Native checkpointing | Native checkpointing |
+| **Parallel execution** | Not supported | Direct Phase 2 spawning | Wave orchestrator pattern |
+| **Context management** | N/A | Accumulates in main agent | Isolated per wave |
+| **Artifact verification** | None | Trusted claims | Grep-verified claims |
+| **Max spec size** | Limited | Limited by context | Unlimited (scales) |
 
 ## Dependencies
 
 **Required:**
 - `.agent-os/specs/[spec]/tasks.json` (v3.0 format)
 - `.claude/agents/phase*.md` (native subagents)
+- `.claude/agents/wave-orchestrator.md` (v4.1 wave orchestration)
 - `.claude/hooks/*` (validation hooks)
 - `.claude/scripts/task-operations.sh` (task management)
+
+**Schemas:**
+- `.agent-os/schemas/tasks-v3.json` (task format)
+- `.agent-os/schemas/wave-context-v1.json` (wave orchestration contracts)
 
 **No MCP server required** - all operations use native Bash tool with shell scripts.

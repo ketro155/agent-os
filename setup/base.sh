@@ -179,7 +179,7 @@ done
 
 echo ""
 echo "  📂 Agents:"
-for agent in phase1-discovery phase2-implementation phase3-delivery pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager; do
+for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager; do
     download_file "${BASE_URL}/v3/agents/${agent}.md" \
         "$INSTALL_DIR/v3/agents/${agent}.md" \
         "$OVERWRITE_COMMANDS" \
