@@ -35,7 +35,8 @@ fi
 # 3. Check for active tasks
 ACTIVE_TASK=""
 TASK_CONTEXT=""
-TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/specs" -name "tasks.json" -type f 2>/dev/null | head -1)
+# Find most recently modified tasks.json (handles multiple specs)
+TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/specs" -name "tasks.json" -type f 2>/dev/null | xargs ls -t 2>/dev/null | head -1)
 
 if [ -n "$TASKS_FILE" ] && [ -f "$TASKS_FILE" ]; then
   # Find in-progress or next pending task
