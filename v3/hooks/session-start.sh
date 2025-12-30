@@ -27,9 +27,10 @@ if [ ! -d "$PROJECT_DIR/.agent-os" ]; then
 fi
 
 # 2. Load recent progress (cross-session memory)
+# Filter out session lifecycle events to get meaningful progress
 RECENT_PROGRESS=""
 if [ -f "$PROGRESS_DIR/progress.json" ]; then
-  RECENT_PROGRESS=$(jq -r '.entries[-3:] | map("\(.type): \(.data.description // .data.notes // "")") | join("; ")' "$PROGRESS_DIR/progress.json" 2>/dev/null || echo "")
+  RECENT_PROGRESS=$(jq -r '[.entries[] | select(.type != "session_started" and .type != "session_ended")][-3:] | map("\(.type): \(.data.description // .data.notes // "")") | join("; ")' "$PROGRESS_DIR/progress.json" 2>/dev/null || echo "")
 fi
 
 # 3. Check for active tasks
