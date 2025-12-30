@@ -973,6 +973,134 @@ EOF
     }'
     ;;
 
+  # Update subtask group status (v4.2 - subtask parallelization)
+  update-group)
+    TASK_ID="$1"
+    GROUP_ID="$2"
+    STATUS="$3"
+    SPEC_NAME="$4"
+
+    if [ -z "$TASK_ID" ] || [ -z "$GROUP_ID" ] || [ -z "$STATUS" ]; then
+      echo '{"error": "Usage: task-operations.sh update-group <task_id> <group_id> <status> [spec_name]"}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # Update group status in subtask_execution
+    jq --arg tid "$TASK_ID" --arg gid "$GROUP_ID" --arg status "$STATUS" --arg ts "$TIMESTAMP" '
+      .tasks |= map(
+        if .id == $tid and .subtask_execution != null then
+          .subtask_execution.groups |= map(
+            if .group_id == ($gid | tonumber) then
+              . + {status: $status, updated_at: $ts}
+            else .
+            end
+          )
+        else .
+        end
+      ) |
+      .updated = $ts
+    ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+
+    echo '{"success": true, "task_id": "'"$TASK_ID"'", "group_id": '"$GROUP_ID"', "status": "'"$STATUS"'"}'
+    ;;
+
+  # Add artifacts to a subtask group (v4.2 - subtask parallelization)
+  group-artifacts)
+    TASK_ID="$1"
+    GROUP_ID="$2"
+    ARTIFACTS_JSON="$3"
+    SPEC_NAME="$4"
+
+    if [ -z "$TASK_ID" ] || [ -z "$GROUP_ID" ] || [ -z "$ARTIFACTS_JSON" ]; then
+      echo '{"error": "Usage: task-operations.sh group-artifacts <task_id> <group_id> <artifacts_json> [spec_name]"}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    # Add artifacts to specific group
+    jq --arg tid "$TASK_ID" --arg gid "$GROUP_ID" --argjson artifacts "$ARTIFACTS_JSON" --arg ts "$TIMESTAMP" '
+      .tasks |= map(
+        if .id == $tid and .subtask_execution != null then
+          .subtask_execution.groups |= map(
+            if .group_id == ($gid | tonumber) then
+              . + {
+                artifacts: $artifacts,
+                completed_at: $ts
+              }
+            else .
+            end
+          )
+        else .
+        end
+      ) |
+      .updated = $ts
+    ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+
+    echo '{"success": true, "task_id": "'"$TASK_ID"'", "group_id": '"$GROUP_ID"'}'
+    ;;
+
+  # Get subtask group status for a task (v4.2 - subtask parallelization)
+  group-status)
+    TASK_ID="$1"
+    SPEC_NAME="$2"
+
+    if [ -z "$TASK_ID" ]; then
+      echo '{"error": "Usage: task-operations.sh group-status <task_id> [spec_name]"}'
+      exit 1
+    fi
+
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    jq --arg tid "$TASK_ID" '
+      .tasks[] |
+      select(.id == $tid) |
+      if .subtask_execution != null then
+        {
+          task_id: .id,
+          mode: .subtask_execution.mode,
+          total_groups: (.subtask_execution.groups | length),
+          groups: [.subtask_execution.groups[] | {
+            group_id,
+            tdd_unit,
+            status: (.status // "pending"),
+            subtasks,
+            files_affected,
+            artifacts: (.artifacts // null)
+          }],
+          group_waves: .subtask_execution.group_waves
+        }
+      else
+        {
+          task_id: .id,
+          mode: "sequential",
+          message: "No subtask parallelization configured"
+        }
+      end
+    ' "$TASKS_FILE"
+    ;;
+
   # Expand all WAVE_TASK items in future_tasks (returns data for skill to process)
   list-wave-tasks)
     SPEC_NAME="$1"
@@ -1040,6 +1168,11 @@ Commands:
   add-expanded-task <json> [spec]       Add expanded parent+subtasks
   remove-future-task <id> [spec]        Remove future task after expansion
   list-wave-tasks [spec]                List WAVE_TASK items for expansion
+
+Subtask Group Commands (v4.2):
+  update-group <tid> <gid> <status>     Update subtask group status
+  group-artifacts <tid> <gid> <json>    Add artifacts to subtask group
+  group-status <task_id> [spec]         Get subtask group status for a task
 
 Graduation destinations: roadmap, next-spec, drop
 

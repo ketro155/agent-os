@@ -448,6 +448,8 @@ Planning Mode provides:
 | **phase1-discovery** | Task discovery, mode selection | execute-tasks |
 | **phase2-implementation** | TDD implementation | execute-tasks |
 | **phase3-delivery** | Completion workflow, PR creation | execute-tasks |
+| **wave-orchestrator** | Parallel wave execution (v4.1) | execute-tasks |
+| **subtask-group-worker** | Parallel subtask group execution (v4.2) | phase2-implementation |
 | **git-workflow** | Branch management, commits, PRs | execute-tasks, debug |
 | **project-manager** | Task/roadmap updates, notifications | execute-tasks, create-spec |
 | **future-classifier** | Classify PR review future items (haiku) | pr-review-cycle |

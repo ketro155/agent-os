@@ -5,6 +5,59 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2025-12-30
+
+### Added
+
+- **Subtask-Level Parallelization**: Automatic parallelization of subtask groups within parent tasks
+  - Tasks with 4+ subtasks and 0.9+ isolation score auto-enable parallel groups
+  - Subtasks grouped by TDD unit (test→implement→verify cycles)
+  - Independent groups execute in parallel while maintaining sequential TDD order within each group
+  - Expected speedup: 1.5-2x for eligible tasks
+
+- **New Agent**: `subtask-group-worker.md` - Lightweight TDD worker for isolated group execution
+  - File scope validation prevents conflicts between parallel workers
+  - Single commit per group (not per subtask)
+  - Returns structured artifacts for cross-group verification
+
+- **Schema Updates**: Added `subtask_execution` to tasks-v3.json
+  - `mode`: "sequential" | "parallel_groups"
+  - `groups`: Array of TDD unit groups with file isolation
+  - `group_waves`: Which groups can run in parallel
+
+- **Task Operations**: New group-level commands
+  - `update-group`: Update subtask group status
+  - `group-artifacts`: Add artifacts to subtask group
+  - `group-status`: Get subtask group status for a task
+
+- **Task Creation**: Step 1.7 in create-tasks.md analyzes subtask parallelization opportunities
+
+### Changed
+
+- **Phase 2 Implementation**: Added Step 0.5-0.6 for parallel group detection and orchestration
+  - Checks for `subtask_execution.mode: "parallel_groups"` before processing
+  - Spawns parallel subtask-group-workers for independent groups
+  - Verifies artifacts between group waves
+
+---
+
+## [4.1.0] - 2025-12-28
+
+### Added
+
+- **Wave Orchestration**: Parallel execution of independent parent tasks
+  - `wave-orchestrator.md` agent for managing wave execution
+  - Predecessor artifact verification with grep-based validation
+  - Context sealing between waves to prevent hallucination
+  - `wave-context-v1.json` schema for wave execution context
+
+- **Execution Strategy**: Tasks organized into waves based on dependency analysis
+  - `execution_strategy.mode`: "sequential" | "parallel_waves" | "fully_parallel"
+  - `execution_strategy.waves`: Array of waves with rationale
+  - Per-task parallelization metadata (blocked_by, blocks, isolation_score)
+
+---
+
 ## [4.0.0] - 2025-12-27
 
 ### Breaking Changes

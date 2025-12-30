@@ -335,6 +335,111 @@ CALCULATE: Total estimated tokens, average per task, parallel summary
 - Pre-filters codebase references to relevant files only
 - Workers receive exactly what they need, nothing more
 
+### Step 1.7: Analyze Subtask Parallelization (NEW v4.2)
+
+After parent-level parallelization, analyze subtasks for intra-task parallelization opportunities.
+
+**Purpose:** Enable parallel execution of independent subtask groups within a parent task.
+
+**Activation Threshold:**
+- Parent task has 4+ subtasks
+- All subtask groups have 0.9+ isolation score
+- No shared file conflicts between groups
+
+**Instructions:**
+```
+ACTION: Analyze subtask dependencies for parallel execution
+FOR each parent task with 4+ subtasks:
+
+  1. GROUP subtasks by TDD unit:
+     PATTERN detection:
+       - NEW GROUP starts at: "Write test", "Create test file", "Add tests for"
+       - GROUP continues with: "Implement", "Add implementation", "Verify", "Commit"
+
+     RESULT: Each group = complete RED→GREEN→VERIFY cycle
+     Example:
+       Group 1: ["1.1 Write test for login", "1.2 Implement login", "1.3 Verify login"]
+       Group 2: ["1.4 Write test for logout", "1.5 Implement logout", "1.6 Verify logout"]
+
+  2. EXTRACT files per group:
+     FOR each group:
+       PARSE subtask descriptions for file paths
+       REFERENCE technical-spec.md for file mappings
+       ADD to group.files_affected
+
+  3. CALCULATE isolation score per group pair:
+     FOR each (groupA, groupB) pair:
+       shared_files = INTERSECTION(groupA.files_affected, groupB.files_affected)
+       IF shared_files.length == 0:
+         isolation = 1.0  # Fully independent
+       ELSE:
+         isolation = 1.0 - (shared_files.length / MAX(groupA.files, groupB.files))
+
+       STORE: isolation_matrix[groupA][groupB] = isolation
+
+  4. BUILD group waves:
+     min_isolation = 0.9  # Conservative threshold
+
+     IF ALL group pairs have isolation >= min_isolation:
+       mode = "parallel_groups"
+       Wave 1 = all groups (can run in parallel)
+     ELSE:
+       # Some groups conflict - build dependency chain
+       FOR each group with conflicts:
+         blocked_by = groups with shared files
+       GENERATE waves based on blocked_by graph
+
+     IF only 1 group OR all groups conflict:
+       mode = "sequential"  # Fall back to current behavior
+
+  5. ADD subtask_execution to parent task:
+     IF mode == "parallel_groups":
+       ADD to tasks.json parent task:
+         "subtask_execution": {
+           "mode": "parallel_groups",
+           "groups": [...],
+           "group_waves": [...],
+           "isolation_threshold": 0.9
+         }
+```
+
+**Output Format (added to parent task in tasks.json):**
+```json
+{
+  "id": "1",
+  "type": "parent",
+  "subtasks": ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6"],
+  "subtask_execution": {
+    "mode": "parallel_groups",
+    "groups": [
+      {
+        "group_id": 1,
+        "subtasks": ["1.1", "1.2", "1.3"],
+        "files_affected": ["src/auth/login.ts", "tests/auth/login.test.ts"],
+        "tdd_unit": "Login endpoint"
+      },
+      {
+        "group_id": 2,
+        "subtasks": ["1.4", "1.5", "1.6"],
+        "files_affected": ["src/auth/logout.ts", "tests/auth/logout.test.ts"],
+        "tdd_unit": "Logout endpoint"
+      }
+    ],
+    "group_waves": [
+      { "wave_id": 1, "groups": [1, 2], "rationale": "No file conflicts, isolation >= 0.9" }
+    ],
+    "isolation_threshold": 0.9
+  }
+}
+```
+
+**Expected Speedup:**
+| Scenario | Sequential | Parallel Groups | Speedup |
+|----------|------------|-----------------|---------|
+| 2 independent groups (3 subtasks each) | 6 subtasks serial | 3 subtasks per worker | ~1.7x |
+| 3 independent groups | 9 subtasks serial | 3 subtasks per worker | ~2.5x |
+| All groups dependent | N subtasks | N subtasks | 1x (no change) |
+
 ### Step 2: Execution Readiness Check (UPDATED v2.0)
 
 Evaluate readiness to begin implementation by presenting task summary with parallel execution strategy.

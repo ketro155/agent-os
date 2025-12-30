@@ -90,6 +90,66 @@
             "items": { "type": "string" },
             "description": "Child task IDs (for parent tasks)"
           },
+          "subtask_execution": {
+            "type": "object",
+            "description": "Subtask parallelization config (auto-enabled for 4+ subtasks with 0.9+ isolation)",
+            "properties": {
+              "mode": {
+                "enum": ["sequential", "parallel_groups"],
+                "default": "sequential",
+                "description": "Subtask execution mode"
+              },
+              "groups": {
+                "type": "array",
+                "description": "TDD unit groups for parallel execution",
+                "items": {
+                  "type": "object",
+                  "required": ["group_id", "subtasks"],
+                  "properties": {
+                    "group_id": { "type": "integer", "minimum": 1 },
+                    "subtasks": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Subtask IDs in this group (executed sequentially within group)"
+                    },
+                    "files_affected": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Files this group will modify"
+                    },
+                    "tdd_unit": {
+                      "type": "string",
+                      "description": "Component/behavior this group tests and implements"
+                    }
+                  }
+                }
+              },
+              "group_waves": {
+                "type": "array",
+                "description": "Which groups can run in parallel",
+                "items": {
+                  "type": "object",
+                  "required": ["wave_id", "groups"],
+                  "properties": {
+                    "wave_id": { "type": "integer", "minimum": 1 },
+                    "groups": {
+                      "type": "array",
+                      "items": { "type": "integer" },
+                      "description": "Group IDs that can run in parallel in this wave"
+                    },
+                    "rationale": { "type": "string" }
+                  }
+                }
+              },
+              "isolation_threshold": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0.9,
+                "description": "Minimum isolation score required for parallel execution"
+              }
+            }
+          },
           "progress_percent": {
             "type": "integer",
             "minimum": 0,

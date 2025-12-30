@@ -80,6 +80,210 @@ ELSE:
 
 ---
 
+### Step 0.5: Check Subtask Execution Mode (v4.2)
+
+Before processing subtasks, check if this task has parallel group execution enabled:
+
+```javascript
+// Check for subtask parallelization configuration
+const subtaskExecution = task.subtask_execution;
+
+if (subtaskExecution?.mode === "parallel_groups") {
+  // Use Parallel Group Protocol (Step 0.6)
+  EXECUTE: Parallel Group Protocol
+} else {
+  // Use Sequential Protocol (existing "For Each Subtask" flow)
+  EXECUTE: Sequential Subtask Protocol
+}
+```
+
+**Decision Logic:**
+```
+IF task.subtask_execution exists AND task.subtask_execution.mode == "parallel_groups":
+  → Execute Step 0.6 (Parallel Group Protocol)
+  → Skip "For Each Subtask" section
+
+ELSE:
+  → Skip Step 0.6
+  → Execute "For Each Subtask" section as normal
+```
+
+---
+
+### Step 0.6: Parallel Group Protocol (v4.2)
+
+> **For tasks with `subtask_execution.mode: "parallel_groups"` only**
+
+Execute subtask groups in parallel waves, with sequential TDD execution within each group.
+
+#### 0.6.1: Initialize Group Tracking
+
+```javascript
+TodoWrite([
+  {
+    content: `Task ${task.id}: Parallel group execution (${task.subtask_execution.groups.length} groups)`,
+    status: "in_progress",
+    activeForm: `Executing ${task.subtask_execution.groups.length} parallel groups`
+  }
+])
+```
+
+#### 0.6.2: Execute Group Waves
+
+```javascript
+// Track artifacts from completed groups
+let predecessorGroupArtifacts = {
+  exports_added: [],
+  files_created: [],
+  functions_created: []
+};
+
+// Process each wave of groups
+for (const wave of task.subtask_execution.group_waves) {
+  console.log(`Executing Wave ${wave.wave_id}: Groups [${wave.groups.join(', ')}]`);
+
+  // Spawn parallel workers for all groups in this wave
+  const groupWorkers = [];
+
+  for (const groupId of wave.groups) {
+    const group = task.subtask_execution.groups.find(g => g.group_id === groupId);
+    const subtaskDetails = group.subtasks.map(subId =>
+      task.subtasks_full.find(s => s.id === subId)
+    );
+
+    // Build context for this group worker
+    const groupContext = {
+      task_id: task.id,
+      task_description: task.description,
+      group: group,
+      subtask_details: subtaskDetails,
+      predecessor_artifacts: predecessorGroupArtifacts,
+      context: {
+        spec_summary: context.spec_summary,
+        relevant_files: group.files_affected,
+        standards: context.standards
+      }
+    };
+
+    // Spawn worker in background
+    const workerId = Task({
+      subagent_type: "subtask-group-worker",
+      run_in_background: true,
+      prompt: `Execute subtask group for task ${task.id}:
+
+GROUP CONTEXT:
+${JSON.stringify(groupContext, null, 2)}
+
+Execute all subtasks in this group sequentially using TDD.
+Commit once after all subtasks complete.
+Return structured artifacts.`
+    });
+
+    groupWorkers.push({ groupId, workerId, group });
+  }
+
+  // Collect results from all workers (blocking)
+  const groupResults = [];
+  for (const worker of groupWorkers) {
+    const result = TaskOutput({
+      task_id: worker.workerId,
+      block: true,
+      timeout: 300000  // 5 minutes per group
+    });
+
+    groupResults.push({
+      groupId: worker.groupId,
+      group: worker.group,
+      result: result
+    });
+  }
+
+  // Verify and merge artifacts from this wave
+  for (const { groupId, group, result } of groupResults) {
+    if (result.status === "pass") {
+      // Verify artifacts exist via grep
+      for (const exportName of result.exports_added || []) {
+        const found = await Bash(`grep -r "export.*${exportName}" src/ | head -1`);
+        if (found.stdout.trim()) {
+          predecessorGroupArtifacts.exports_added.push(exportName);
+        } else {
+          console.warn(`Unverified export claim: ${exportName} from group ${groupId}`);
+        }
+      }
+
+      // Verify files exist
+      for (const file of result.files_created || []) {
+        if (await fileExists(file)) {
+          predecessorGroupArtifacts.files_created.push(file);
+        }
+      }
+
+      // Merge functions
+      predecessorGroupArtifacts.functions_created.push(...(result.functions_created || []));
+
+      // Update subtask statuses in tasks.json
+      for (const subtaskId of result.subtasks_completed || []) {
+        await Bash(`bash .claude/scripts/task-operations.sh update "${subtaskId}" "pass"`);
+      }
+    } else if (result.status === "blocked" || result.status === "fail") {
+      // Log blocker but continue with other groups in wave
+      console.error(`Group ${groupId} ${result.status}: ${result.blocker || 'Unknown error'}`);
+
+      // Mark failed subtasks
+      for (const subtaskId of result.subtasks_failed || []) {
+        await Bash(`bash .claude/scripts/task-operations.sh update "${subtaskId}" "blocked"`);
+      }
+    }
+  }
+
+  // Check if all groups in wave passed before proceeding to next wave
+  const allPassed = groupResults.every(r => r.result.status === "pass");
+  if (!allPassed) {
+    const failedGroups = groupResults.filter(r => r.result.status !== "pass");
+    console.warn(`Wave ${wave.wave_id} had ${failedGroups.length} failed/blocked groups`);
+    // Continue to next wave anyway - partial success is acceptable
+  }
+}
+```
+
+#### 0.6.3: Aggregate Task Results
+
+After all group waves complete:
+
+```javascript
+// Collect all group results
+const allGroupResults = /* collected from waves above */;
+
+// Build aggregated task result
+const taskResult = {
+  status: allGroupResults.every(r => r.status === "pass") ? "pass" : "partial",
+  task_id: task.id,
+  groups_completed: allGroupResults.filter(r => r.status === "pass").length,
+  groups_total: task.subtask_execution.groups.length,
+  files_created: predecessorGroupArtifacts.files_created,
+  exports_added: predecessorGroupArtifacts.exports_added,
+  functions_created: predecessorGroupArtifacts.functions_created,
+  commits: allGroupResults.map(r => r.commit).filter(Boolean),
+  notes: `Parallel execution: ${taskResult.groups_completed}/${taskResult.groups_total} groups completed`
+};
+
+// Update parent task status
+if (taskResult.status === "pass") {
+  await Bash(`bash .claude/scripts/task-operations.sh update "${task.id}" "pass"`);
+} else {
+  await Bash(`bash .claude/scripts/task-operations.sh update "${task.id}" "in_progress"`);
+}
+
+// Return aggregated result
+return taskResult;
+```
+
+#### 0.6.4: Skip Sequential Flow
+
+After completing parallel group execution, **SKIP** the "For Each Subtask" section below and proceed directly to the Output Format section.
+
+---
+
 ### For Each Subtask:
 
 #### 1. Update Progress
