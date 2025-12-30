@@ -5,6 +5,15 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.1] - 2025-12-30
+
+### Fixed
+
+- **Session Start Hook**: Now selects the most recently modified `tasks.json` when multiple specs exist (previously used arbitrary `find` order)
+- **Progress Summary**: Filters out `session_started`/`session_ended` entries from recent progress to show meaningful work context
+
+---
+
 ## [4.2.0] - 2025-12-30
 
 ### Added
