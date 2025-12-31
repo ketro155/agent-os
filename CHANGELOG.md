@@ -5,6 +5,46 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.0] - 2025-12-31
+
+### Added
+
+- **Hook-Based Future Task Auto-Promotion**: Deterministic handling of future_tasks
+  - `post-file-change.sh` now auto-processes future_tasks when tasks.json is modified
+  - ROADMAP_ITEM → automatically graduates to `roadmap.md`
+  - WAVE_TASK → automatically promotes to next wave with `needs_subtask_expansion: true`
+  - Eliminates orphaned future_tasks that previously required LLM intervention
+
+- **Pre-Commit Validation for Future Tasks**: Enhanced `pre-commit-gate.sh`
+  - Warns if orphaned future_tasks remain (indicates hook didn't fire)
+  - Warns if tasks pending subtask expansion exist
+  - Provides actionable guidance: `task-operations.sh graduate-all`
+
+- **On-Demand Subtask Expansion**: New Step 1.7 in `phase1-discovery.md`
+  - Generates subtasks when task is selected for execution (not during PR review)
+  - Uses task context (description, file_context) for better subtask quality
+  - TDD-structured subtasks with complexity-based count (3-5 subtasks)
+
+### Changed
+
+- **Simplified PR Review Implementation**: Step 7.5 in `pr-review-implementation.md`
+  - Removed complex LLM-dependent subtask expansion during PR review
+  - Now verification-only: confirms future_tasks were auto-promoted by hook
+  - Subtask generation deferred to phase1-discovery with better context
+
+### Fixed
+
+- **Inconsistent Future Task Processing**: Root cause analysis and fix
+  - Previous: LLM might skip Step 7.5 due to context limits or early exit
+  - Now: Shell hook handles promotion deterministically (no LLM dependency)
+  - Separation of concerns: capture (PR review) vs expand (execute-tasks)
+
+### Technical Details
+
+- **New task field**: `needs_subtask_expansion: true` marks tasks awaiting subtask generation
+- **Hook flow**: tasks.json modified → post-file-change.sh → auto-promote → tasks.md regenerated
+- **Fallback**: Step 1.8 in phase1-discovery handles legacy items if hook didn't process them
+
 ## [4.4.1] - 2025-12-31
 
 ### Changed

@@ -53,7 +53,7 @@ if [ -f "$PROJECT_DIR/package.json" ]; then
   fi
 fi
 
-# 5. Tasks Sync Check (v3.0)
+# 5. Tasks Sync Check (v3.0, enhanced v4.5)
 TASKS_FILE=$(find "$PROJECT_DIR/.agent-os/specs" -name "tasks.json" -type f 2>/dev/null | head -1)
 if [ -n "$TASKS_FILE" ] && [ -f "$TASKS_FILE" ]; then
   echo "  Validating tasks.json..." >&2
@@ -68,6 +68,34 @@ if [ -n "$TASKS_FILE" ] && [ -f "$TASKS_FILE" ]; then
   MISSING_ARTIFACTS=$(jq '[.tasks[] | select(.status == "pass" and .type == "parent" and (.artifacts == null or .artifacts == {}))] | length' "$TASKS_FILE" 2>/dev/null || echo "0")
   if [ "$MISSING_ARTIFACTS" -gt 0 ]; then
     WARNINGS+=("$MISSING_ARTIFACTS completed task(s) missing artifacts")
+  fi
+
+  # v4.5: Check for orphaned future_tasks (should be auto-graduated by post-file-change hook)
+  FUTURE_TASKS=$(jq '(.future_tasks // []) | length' "$TASKS_FILE" 2>/dev/null || echo "0")
+  if [ "$FUTURE_TASKS" -gt 0 ]; then
+    # Get details for warning message
+    ROADMAP_COUNT=$(jq '[.future_tasks // [] | .[] | select(.future_type == "ROADMAP_ITEM")] | length' "$TASKS_FILE" 2>/dev/null || echo "0")
+    WAVE_COUNT=$(jq '[.future_tasks // [] | .[] | select(.future_type == "WAVE_TASK" or .future_type == null)] | length' "$TASKS_FILE" 2>/dev/null || echo "0")
+
+    DETAIL=""
+    if [ "$ROADMAP_COUNT" -gt 0 ]; then
+      DETAIL="$ROADMAP_COUNT ROADMAP"
+    fi
+    if [ "$WAVE_COUNT" -gt 0 ]; then
+      if [ -n "$DETAIL" ]; then
+        DETAIL="$DETAIL, $WAVE_COUNT WAVE_TASK"
+      else
+        DETAIL="$WAVE_COUNT WAVE_TASK"
+      fi
+    fi
+
+    WARNINGS+=("$FUTURE_TASKS orphaned future_task(s) found ($DETAIL) - run task-operations.sh graduate-all to process")
+  fi
+
+  # v4.5: Check for tasks pending subtask expansion
+  PENDING_EXPANSION=$(jq '[.tasks[] | select(.needs_subtask_expansion == true)] | length' "$TASKS_FILE" 2>/dev/null || echo "0")
+  if [ "$PENDING_EXPANSION" -gt 0 ]; then
+    WARNINGS+=("$PENDING_EXPANSION task(s) pending subtask expansion - will be expanded in phase1-discovery")
   fi
 fi
 

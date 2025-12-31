@@ -8,8 +8,8 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="4.0.0"
-AGENT_OS_RELEASE_DATE="2025-12-27"
+AGENT_OS_VERSION="4.5.0"
+AGENT_OS_RELEASE_DATE="2025-12-31"
 
 # Initialize flags
 OVERWRITE_COMMANDS=false

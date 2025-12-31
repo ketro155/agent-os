@@ -173,99 +173,135 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-future [spe
 - Tasks arrive pre-tagged with `priority: "wave_N"`
 - No promotion logic needed - just verification and legacy migration
 
-### 1.7. Auto-Expand WAVE_TASK Items (v3.3.0, Fallback v3.6.0)
+### 1.7. Expand Tasks Pending Subtasks (v4.5)
 
-> **Fallback Expansion**: This step handles WAVE_TASK items that weren't expanded during `/pr-review-cycle`. As of v3.6.0, most items are expanded immediately during PR review, so this step primarily handles:
-> - Legacy items from before v3.6.0
-> - Items imported from external sources (backlog import, manual addition)
-> - Edge cases where pr-review-cycle expansion failed
+> **On-Demand Expansion**: As of v4.5, the post-file-change hook auto-promotes future_tasks to simple parent tasks with `needs_subtask_expansion: true`. This step generates subtasks when the task is selected for execution.
+
+**Why Deferred Expansion (v4.5 Change):**
+- Hook-based promotion is deterministic (no LLM skipping)
+- Subtask generation benefits from full execution context
+- Simpler PR review cycle (capture without expansion)
+- No orphaned future_tasks
 
 ```bash
-# Check for WAVE_TASK items needing expansion
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-wave-tasks [spec-name]
+# Check for tasks needing subtask expansion
+NEEDS_EXPANSION=$(jq '[.tasks[] | select(.needs_subtask_expansion == true)] | length' \
+  ".agent-os/specs/[spec-name]/tasks.json" 2>/dev/null || echo "0")
 ```
 
-**Auto-Expansion Logic:**
+**On-Demand Expansion Logic:**
 ```
-1. GET WAVE_TASK items:
-   RESULT = list-wave-tasks command output
+1. FIND tasks with needs_subtask_expansion == true:
 
-   IF RESULT.count == 0:
-     SKIP: No WAVE_TASK items to expand
+   IF count == 0:
+     SKIP: No tasks need expansion
      CONTINUE: to step 2
 
-2. FOR EACH wave_task in RESULT.wave_tasks:
+2. FOR EACH task with needs_subtask_expansion:
 
-   # Use expand-backlog skill patterns to generate subtasks
-   INVOKE: expand-backlog skill with:
-     - description: wave_task.description
-     - file_context: wave_task.file_context
-     - rationale: wave_task.rationale
-     - target_wave: RESULT.target_wave
+   # Generate subtasks based on task context
+   ANALYZE task:
+     - description: What needs to be done
+     - file_context: Where the work happens
+     - source: PR feedback or backlog origin
 
-   # Skill generates parent + subtasks structure following:
-   # - TDD structure (test-first)
-   # - 2-5 minute micro-tasks
-   # - Exact file paths
+   # Determine subtask structure based on complexity
+   COMPLEXITY = analyze_description(task.description):
+     - "fix", "add", "update" single item → 3 subtasks
+     - "implement", "create" feature → 4 subtasks
+     - "refactor", "integrate", multiple files → 5 subtasks
 
-   # Create expanded task JSON
-   EXPANDED = {
-     "future_id": wave_task.id,
-     "parent_task": {
-       "id": "[target_wave]",
-       "type": "parent",
-       "description": wave_task.description,
+   # Generate TDD-structured subtasks
+   SUBTASKS = [
+     {
+       "id": "{task.id}.1",
+       "type": "subtask",
+       "parent": "{task.id}",
+       "description": "Write failing tests for {functionality} (TDD RED)",
        "status": "pending",
-       "wave": target_wave,
-       "expanded_from": wave_task.id,
-       "subtasks": ["[wave].1", "[wave].2", ...],
-       "file_context": wave_task.file_context
+       "tdd_phase": "red"
      },
-     "subtasks": [
-       {
-         "id": "[wave].1",
-         "type": "subtask",
-         "parent": "[wave]",
-         "description": "Write tests for [functionality] (TDD RED)",
-         "status": "pending",
-         "tdd_phase": "red"
-       },
-       ...
-     ]
-   }
+     {
+       "id": "{task.id}.2",
+       "type": "subtask",
+       "parent": "{task.id}",
+       "description": "Implement {core_functionality} to pass tests (TDD GREEN)",
+       "status": "pending",
+       "tdd_phase": "green"
+     },
+     # ... additional subtasks based on complexity ...
+     {
+       "id": "{task.id}.{N}",
+       "type": "subtask",
+       "parent": "{task.id}",
+       "description": "Verify all tests pass and commit",
+       "status": "pending",
+       "tdd_phase": "verify"
+     }
+   ]
 
-   # Add to tasks.json
-   bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" add-expanded-task '$EXPANDED' [spec-name]
+   # Update task in tasks.json
+   jq --arg tid "{task.id}" --argjson subs "$SUBTASKS" '
+     .tasks |= map(
+       if .id == $tid then
+         del(.needs_subtask_expansion) |
+         .subtasks = [$subs[].id] |
+         .type = "parent"
+       else . end
+     ) |
+     .tasks += $subs
+   ' tasks.json > tmp && mv tmp tasks.json
 
 3. TRACK expansions:
-   expanded_tasks = [list of expanded task details]
+   expanded_tasks = [{ task_id, subtask_count, description }]
 
 4. INCLUDE in output:
-   "auto_expanded": {
+   "on_demand_expanded": {
      "count": N,
-     "target_wave": wave_number,
      "tasks": [
-       { "from": "F1", "to_parent": "8", "subtasks": 4 }
+       { "task_id": "8", "subtasks": 4, "description": "Add retry logic" }
      ]
    }
 ```
-
-**Why Auto-Expand:**
-- WAVE_TASK items contain enough context (description, file_context, rationale) for task generation
-- Eliminates manual intervention in the flow
-- Uses writing-plans patterns for consistent task quality
-- Creates proper TDD structure automatically
 
 **Expansion Heuristics:**
 ```
-SUBTASK COUNT based on complexity:
-- Simple (add function, fix bug): 3 subtasks
-- Medium (add feature to existing file): 4 subtasks
-- Complex (new integration, multiple files): 5 subtasks
+SUBTASK COUNT based on complexity keywords:
+- Simple (fix, add, update, remove): 3 subtasks
+- Medium (implement, create, extend): 4 subtasks
+- Complex (refactor, integrate, redesign): 5 subtasks
 
-ALWAYS include:
+TDD STRUCTURE (always):
 - First subtask: Write failing tests (RED)
-- Last subtask: Verify and commit
+- Middle subtasks: Implementation steps (GREEN)
+- Last subtask: Verify and commit (REFACTOR/VERIFY)
+
+FILE CONTEXT usage:
+- If file_context provided: Reference specific file in subtask descriptions
+- If no file_context: Use Explore agent to identify target files
+```
+
+---
+
+### 1.8. Legacy WAVE_TASK Fallback (deprecated v4.5)
+
+> **Deprecated**: This step handles legacy WAVE_TASK items in `future_tasks` that weren't auto-promoted by the v4.5 post-file-change hook. Only runs if orphaned items exist.
+
+```bash
+# Check for legacy WAVE_TASK items (should be empty in v4.5+)
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-wave-tasks [spec-name]
+```
+
+```
+IF RESULT.count > 0:
+  WARN: "Found {count} legacy WAVE_TASK items in future_tasks"
+  WARN: "Auto-promoting to wave {RESULT.target_wave}..."
+
+  # Trigger manual graduate-all to process them
+  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" graduate-all [spec-name]
+
+  # Items will be promoted and flagged with needs_subtask_expansion
+  # Re-run step 1.7 to expand them
 ```
 
 ---
@@ -359,12 +395,11 @@ Return this JSON:
       { "id": "F3", "wave": 6, "title": "Add idempotency keys for commits" }
     ]
   },
-  "auto_expanded": {
-    "count": 3,
-    "target_wave": 8,
+  "on_demand_expanded": {
+    "count": 2,
     "tasks": [
-      { "from": "F1", "to_parent": "8", "subtasks": 4, "description": "Add retry logic for API calls" },
-      { "from": "F6", "to_parent": "9", "subtasks": 3, "description": "Implement cache invalidation" }
+      { "task_id": "8", "subtasks": 4, "description": "Add retry logic for API calls" },
+      { "task_id": "9", "subtasks": 3, "description": "Implement cache invalidation" }
     ]
   },
   "git_branch": {

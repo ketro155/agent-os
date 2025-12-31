@@ -430,88 +430,58 @@ IF only low-priority changes (STYLE, DOCS):
 
 ---
 
-### 7.5. Expand WAVE_TASK Items into Actual Tasks (v3.7.1)
+### 7.5. Future Tasks Auto-Promotion (v4.5 - Simplified)
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  ⚠️  MANDATORY - DO NOT SKIP THIS STEP                                        ║
+║  ✅ AUTO-HANDLED BY HOOK - NO MANUAL EXPANSION REQUIRED                       ║
 ║                                                                              ║
-║  ALL WAVE_TASK items in future_tasks MUST be expanded into actual tasks.    ║
-║  This ensures future_tasks → main tasks array + waves section               ║
+║  As of v4.5, the post-file-change hook automatically:                        ║
+║    • ROADMAP_ITEM → roadmap.md                                               ║
+║    • WAVE_TASK → tasks.json (simple task, expanded in phase1-discovery)      ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
-> **CRITICAL**: After capturing WAVE_TASK items, expand them immediately into actual tasks. This prevents orphan future_tasks.
+> **v4.5 Change**: Future task expansion is now hook-driven and deterministic. This step only verifies the capture was successful.
 
+**Why This Changed (v4.5):**
+- Previous approach required LLM to generate subtasks during PR review
+- If skipped or interrupted, items remained orphaned in `future_tasks`
+- Hook-based promotion is deterministic (shell script, not LLM)
+- Subtask expansion deferred to phase1-discovery with better context
+
+**Verification Only:**
 ```bash
 # Get spec folder
 SPEC_FOLDER=$(ls -d .agent-os/specs/*/ 2>/dev/null | head -1)
 SPEC_NAME=$(basename "$SPEC_FOLDER")
 
-# Check for WAVE_TASK items needing expansion
-WAVE_TASKS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" list-wave-tasks "$SPEC_NAME")
-WAVE_COUNT=$(echo "$WAVE_TASKS" | jq '.count // 0')
+# Verify future_tasks were processed (should be empty after hook runs)
+REMAINING=$(jq '(.future_tasks // []) | length' "$SPEC_FOLDER/tasks.json" 2>/dev/null || echo "0")
+
+IF REMAINING > 0:
+  # Hook may not have triggered yet - items will be processed on next file change
+  WARN: "$REMAINING future_task(s) pending auto-promotion"
+  NOTE: "Items will be auto-promoted when tasks.json is next modified"
+ELSE:
+  INFO: "All future tasks successfully processed"
 ```
 
-```
-IF WAVE_COUNT > 0:
-  FOR EACH wave_task in WAVE_TASKS.wave_tasks:
+**What Gets Auto-Promoted:**
+| Type | Destination | Subtask Expansion |
+|------|-------------|-------------------|
+| ROADMAP_ITEM | roadmap.md | N/A (documented only) |
+| WAVE_TASK | tasks.json wave N | Deferred to phase1-discovery |
 
-    # 1. Determine next available task ID
-    NEXT_ID = max(existing_task_ids) + 1
-
-    # 2. Generate subtasks based on task type
-    DETERMINE complexity from wave_task.description:
-      - REFACTOR → 3 subtasks (characterization tests, refactor, verify)
-      - DOCS → 2 subtasks (add docs, verify)
-      - TEST → 2 subtasks (write tests, verify coverage)
-      - OTHER → 2-3 subtasks based on scope
-
-    # 3. Create expanded task structure
-    EXPANDED_JSON = {
-      "future_id": wave_task.id,
-      "parent_task": {
-        "id": "${NEXT_ID}",
-        "type": "parent",
-        "description": wave_task.description,
-        "status": "pending",
-        "wave": wave_task.target_wave,
-        "source": "PR #[PR_NUMBER] review",
-        "expanded_from": wave_task.id,
-        "file_context": wave_task.file_context
-      },
-      "subtasks": [
-        {
-          "id": "${NEXT_ID}.1",
-          "type": "subtask",
-          "parent": "${NEXT_ID}",
-          "description": "[First subtask - typically write tests]",
-          "status": "pending",
-          "tdd_phase": "red"
-        },
-        // Additional subtasks...
-      ]
-    }
-
-    # 4. Add expanded task and remove from future_tasks
-    bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" add-expanded-task "${EXPANDED_JSON}" "$SPEC_NAME"
-
-    # Track expansion
-    EXPANDED_TASKS.push({ from: wave_task.id, to: NEXT_ID })
-
-  OUTPUT: "Expanded ${WAVE_COUNT} WAVE_TASK items into wave ${TARGET_WAVE} tasks"
-```
-
-**Update Output to Include Expansion:**
+**Output Format:**
 ```json
 {
-  "future_expanded": {
-    "count": 3,
-    "tasks": [
-      { "from": "F1", "to": "13", "subtasks": 3 },
-      { "from": "F2", "to": "14", "subtasks": 2 }
-    ],
-    "wave": 4
+  "future_captured": {
+    "total": 3,
+    "roadmap_items": 1,
+    "wave_tasks": 2,
+    "auto_promoted": true,
+    "note": "Subtasks will be generated in phase1-discovery"
   }
 }
 ```
