@@ -43,11 +43,11 @@ You receive:
 
 ## Execution Protocol
 
-### 0. Git Branch Validation and Wave Branch Setup (v3.7.0)
+### 0. Git Branch Validation and Wave Branch Setup (v4.3.0)
 
 > ⛔ **BLOCKING GATE** - MUST validate branch before task discovery proceeds
 
-**Wave-Specific Branching (v3.7.0):**
+**Wave-Specific Branching:**
 Each wave gets its own isolated branch to prevent merge conflicts when running parallel waves:
 
 ```
@@ -58,120 +58,64 @@ main
         └── feature/[spec-name]-wave-3 (Wave 3 work, created AFTER Wave 2 merges)
 ```
 
-**Step 0.1: Check Current Branch**
+**Branch Setup (MANDATORY - use script)**
+
+> ⚠️ **ALWAYS use the branch-setup.sh script** - never manually create branches
 
 ```bash
-# Check current branch
-git branch --show-current
+# Setup/validate branch structure for the spec
+BRANCH_RESULT=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" setup "[spec-name]")
+
+# Check result
+if echo "$BRANCH_RESULT" | jq -e '.status == "success"' > /dev/null; then
+  echo "✅ Branch setup complete"
+  echo "$BRANCH_RESULT" | jq '.branches, .pr_target'
+else
+  echo "❌ Branch setup failed"
+  echo "$BRANCH_RESULT" | jq '.error'
+  exit 1
+fi
 ```
 
-**Step 0.2: Determine Target Wave**
-
-```bash
-# Get current wave from tasks.json
-CURRENT_WAVE=$(jq -r '.execution_strategy.waves | map(select(.tasks | map(. as $t | $tasks[] | select(.id == $t and .status == "pending")) | length > 0)) | .[0].wave_id // 1' tasks.json)
+**Script Output:**
+```json
+{
+  "status": "success",
+  "branches": {
+    "base": "feature/auth-system",
+    "wave": "feature/auth-system-wave-3",
+    "current": "feature/auth-system-wave-3"
+  },
+  "pr_target": "feature/auth-system",
+  "wave_number": 3,
+  "total_waves": 5,
+  "is_final_wave": false,
+  "actions_taken": ["created_base_branch", "created_wave_branch"]
+}
 ```
 
-**Step 0.3: Branch Validation and Creation**
+**What the Script Does:**
+1. Normalizes spec name (removes date prefixes like `2025-01-29-`)
+2. Creates base branch from main if missing
+3. Creates wave branch from BASE branch (not main!)
+4. Pushes branches to remote
+5. Returns structured info including PR target
 
-```
-COMMAND: git branch --show-current
-STORE: current_branch
-
-# Determine expected branches
-base_branch = "feature/[spec-name]"
-wave_branch = "feature/[spec-name]-wave-[CURRENT_WAVE]"
-
-IF current_branch == "main" OR current_branch == "master":
-  # Need to set up wave branching structure
-
-  STEP 1: Check if base feature branch exists
-  ```bash
-  git branch --list "feature/[spec-name]"
-  ```
-
-  IF base_branch does not exist:
-    # Create base feature branch from main
-    ```bash
-    git checkout -b feature/[spec-name]
-    git push -u origin feature/[spec-name]
-    ```
-
-  STEP 2: Check if wave branch exists
-  ```bash
-  git branch --list "feature/[spec-name]-wave-[CURRENT_WAVE]"
-  ```
-
-  IF wave_branch does not exist:
-    # Ensure we're on the updated base branch first
-    ```bash
-    git checkout feature/[spec-name]
-    git pull origin feature/[spec-name] --ff-only 2>/dev/null || true
-    git checkout -b feature/[spec-name]-wave-[CURRENT_WAVE]
-    ```
-  ELSE:
-    # Switch to existing wave branch
-    ```bash
-    git checkout feature/[spec-name]-wave-[CURRENT_WAVE]
-    git pull origin feature/[spec-name]-wave-[CURRENT_WAVE] --ff-only 2>/dev/null || true
-    ```
-
-  CONTINUE to task loading
-
-ELSE IF current_branch MATCHES "feature/[spec-name]-wave-[N]":
-  # Already on a wave branch - validate it's the right wave
-  current_wave_num = extract wave number from branch name
-
-  IF current_wave_num != CURRENT_WAVE:
-    WARN: "On wave branch [current_wave_num] but tasks indicate wave [CURRENT_WAVE]"
-    ASK: "Switch to correct wave branch?"
-    IF yes:
-      # Switch to correct wave branch (create if needed)
-      git checkout feature/[spec-name]
-      git pull origin feature/[spec-name] --ff-only 2>/dev/null || true
-      git checkout -b feature/[spec-name]-wave-[CURRENT_WAVE] 2>/dev/null || git checkout feature/[spec-name]-wave-[CURRENT_WAVE]
-  ELSE:
-    ✅ On correct wave branch: [current_branch]
-
-  CONTINUE to task loading
-
-ELSE IF current_branch == base_branch (feature/[spec-name]):
-  # On base feature branch - need to create/switch to wave branch
-  ```bash
-  git pull origin feature/[spec-name] --ff-only 2>/dev/null || true
-  git checkout -b feature/[spec-name]-wave-[CURRENT_WAVE] 2>/dev/null || git checkout feature/[spec-name]-wave-[CURRENT_WAVE]
-  ```
-
-  CONTINUE to task loading
-
-ELSE:
-  # On some other branch entirely
-  WARN: "Currently on [current_branch], expected wave branch for [spec-name]"
-  ASK: "Create/switch to wave branch feature/[spec-name]-wave-[CURRENT_WAVE]?"
-  IF yes:
-    # Stash any changes, switch branches
-    git stash
-    git checkout feature/[spec-name] 2>/dev/null || (git checkout main && git checkout -b feature/[spec-name])
-    git pull origin feature/[spec-name] --ff-only 2>/dev/null || true
-    git checkout -b feature/[spec-name]-wave-[CURRENT_WAVE] 2>/dev/null || git checkout feature/[spec-name]-wave-[CURRENT_WAVE]
-    git stash pop 2>/dev/null || true
-```
-
-**Step 0.4: Include Branch Info in Output**
+**Include Branch Info in Output:**
 
 ```json
 {
   "git_branch": {
-    "current": "[wave_branch]",
-    "base_branch": "feature/[spec-name]",
-    "wave_branch": "feature/[spec-name]-wave-[CURRENT_WAVE]",
-    "wave_number": [CURRENT_WAVE],
-    "pr_target": "feature/[spec-name]"  // Wave PRs target the base feature branch
+    "current": "[from script: branches.current]",
+    "base_branch": "[from script: branches.base]",
+    "wave_branch": "[from script: branches.wave]",
+    "wave_number": "[from script: wave_number]",
+    "pr_target": "[from script: pr_target]"
   }
 }
 ```
 
-**Why Wave-Specific Branching (v3.7.0):**
+**Why Wave-Specific Branching:**
 - Prevents merge conflicts when Wave 1 PR merges while Wave 2/3 are in progress
 - Each wave works in isolation on its own branch
 - Wave PRs merge to the shared feature branch (not main)

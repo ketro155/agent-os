@@ -452,6 +452,10 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/json-to-markdown.js" "./.claude/scripts/json-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/json-to-markdown.js"
         fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/branch-setup.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/branch-setup.sh" "./.claude/scripts/branch-setup.sh" "$OVERWRITE_CLAUDE" "scripts/branch-setup.sh"
+            chmod +x "./.claude/scripts/branch-setup.sh"
+        fi
 
         # Install memory/rules
         echo ""

@@ -172,38 +172,52 @@ Wave: [WAVE_NUMBER] of [TOTAL_WAVES]
 "
 ```
 
-### 7. Push and Create PR (Wave-Aware v3.7.0)
+### 7. Push and Create PR (Wave-Aware v4.3.0)
 
-**Determine PR Target Based on Wave:**
+**Determine PR Target Using Script (MANDATORY):**
 
-```
-# Get branch info from Phase 1 output
-current_branch = git branch --show-current
-wave_number = extract from branch name (e.g., "feature/spec-wave-3" → 3)
-base_branch = "feature/[spec-name]"  # Without wave suffix
-total_waves = from tasks.json execution_strategy.waves.length
-
-# Determine PR target
-IF current_branch contains "-wave-":
-  # This is a wave branch - PR targets the base feature branch
-  pr_target = base_branch
-  pr_type = "wave"
-  is_final_wave = (wave_number == total_waves AND all tasks complete)
-ELSE:
-  # This is the base feature branch - PR targets main
-  pr_target = "main"
-  pr_type = "final"
-```
-
-**Create Wave PR (wave_number < total_waves OR has remaining tasks):**
+> ⚠️ **ALWAYS use the branch-setup.sh script** - never guess the PR target
 
 ```bash
-# Push wave branch
-git push -u origin feature/[SPEC_NAME]-wave-[WAVE_NUMBER]
+# Get PR target from script
+PR_INFO=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" pr-target)
 
-# Create PR targeting the base feature branch
+# Extract values
+PR_TARGET=$(echo "$PR_INFO" | jq -r '.pr_target')
+IS_WAVE_PR=$(echo "$PR_INFO" | jq -r '.is_wave_pr')
+BRANCH_TYPE=$(echo "$PR_INFO" | jq -r '.branch_type')
+CURRENT_BRANCH=$(echo "$PR_INFO" | jq -r '.current_branch')
+
+echo "PR will target: $PR_TARGET (is_wave_pr: $IS_WAVE_PR)"
+```
+
+**Script Output:**
+```json
+{
+  "status": "success",
+  "current_branch": "feature/auth-system-wave-3",
+  "branch_type": "wave",
+  "wave_number": 3,
+  "pr_target": "feature/auth-system",
+  "is_wave_pr": true,
+  "note": "Wave PRs merge to base feature branch, not main"
+}
+```
+
+**PR Target Rules (enforced by script):**
+- Wave branches (`feature/spec-wave-N`) → Base branch (`feature/spec`)
+- Base branches (`feature/spec`) → `main`
+- Other branches → `main` (default)
+
+**Create Wave PR (when IS_WAVE_PR == true):**
+
+```bash
+# Push current branch
+git push -u origin "$CURRENT_BRANCH"
+
+# Create PR using the script-provided target
 gh pr create \
-  --base feature/[SPEC_NAME] \
+  --base "$PR_TARGET" \
   --title "[SPEC_NAME] Wave [WAVE_NUMBER]: [WAVE_DESCRIPTION]" \
   --body "$(cat << 'EOF'
 ## Wave [WAVE_NUMBER] of [TOTAL_WAVES]

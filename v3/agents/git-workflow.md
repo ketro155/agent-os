@@ -17,7 +17,7 @@ You are a specialized git workflow agent for Agent OS projects. Your role is to 
 
 ## Agent OS Git Conventions
 
-### Branch Naming (v3.7.0 Wave-Aware)
+### Branch Naming (v4.3.0 Wave-Aware)
 
 Agent OS uses a three-tier branch structure for wave-based execution:
 
@@ -42,29 +42,33 @@ main (protected)
 | `2025-01-29-auth-system` | `feature/auth-system` | `feature/auth-system-wave-1` | `feature/auth-system-wave-2` |
 | `password-reset` | `feature/password-reset` | `feature/password-reset-wave-1` | `feature/password-reset-wave-2` |
 
-### Wave Branching Logic
+### Branch Setup Script (v4.3.0)
 
-When setting up branches for a spec:
+> ⚠️ **ALWAYS use the branch-setup.sh script** for branch operations
 
-```
-1. IF no branches exist:
-   - Create base branch: feature/[spec-name] from main
-   - Create wave branch: feature/[spec-name]-wave-1 from base
+The `branch-setup.sh` script is the source of truth for branch operations:
 
-2. IF base branch exists but no wave branch:
-   - Pull latest base branch
-   - Create wave branch: feature/[spec-name]-wave-N from base
+```bash
+# Setup/validate branches for a spec (auto-creates base + wave if needed)
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" setup [spec-name] [wave]
 
-3. IF wave branch exists:
-   - Switch to wave branch
-   - Pull latest changes
+# Get PR target for current branch
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" pr-target
 
-4. WHEN wave completes:
-   - PR from wave branch → base branch (NOT main)
-   - After merge, create next wave branch from updated base
+# Validate current branch matches expected wave
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" validate [spec-name] [wave]
+
+# Get current branch info
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" info
 ```
 
-### PR Targets
+**What the script does:**
+1. Normalizes spec name (removes date prefixes)
+2. Creates base branch from main if missing
+3. Creates wave branch from BASE branch (not main!)
+4. Returns structured JSON with branch info and PR target
+
+### PR Targets (Enforced by Script)
 
 | Scenario | Source Branch | Target Branch |
 |----------|---------------|---------------|
@@ -75,6 +79,7 @@ When setting up branches for a spec:
 - Each wave is isolated on its own branch
 - Tracking files (tasks.json, progress.json) don't conflict
 - Next wave always starts from the updated base branch
+- Script ensures wave branches are ALWAYS created from base, not main
 
 ### Commit Messages
 - Clear, descriptive messages

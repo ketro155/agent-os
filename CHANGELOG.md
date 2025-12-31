@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Each batch agent starts with fresh context, returns only artifact summaries
   - Expected context reduction: ~90% for large tasks
 
+- **Branch Setup Script** (`branch-setup.sh`): Deterministic wave branching
+  - New shell script replaces pseudo-code branching logic in phase1-discovery
+  - Ensures wave branches are ALWAYS created from base branch, not main
+  - Automatically recreates base branch if it was deleted after previous waves merged
+  - Returns structured JSON with branch info and correct PR target
+  - Commands: `setup`, `pr-target`, `validate`, `info`
+  - Fixes issue where wave branches could be incorrectly created from main
+
 ### Changed
 
 - **Phase 2 Implementation**: Added Step 0.7 for batched subtask execution
@@ -28,6 +36,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `parallel_groups` mode → Step 0.6 (unchanged)
   - `subtasks > 4` → Step 0.7 (NEW: Batched Subtask Protocol)
   - `subtasks ≤ 4` → Sequential "For Each Subtask" (unchanged)
+
+- **Phase 1 Discovery**: Now uses `branch-setup.sh` script for branch validation
+  - Replaces 80+ lines of pseudo-code with single script call
+  - Branch setup is now deterministic and cannot be skipped
+  - Version bumped to v4.3.0
+
+- **Phase 3 Delivery**: Now uses `branch-setup.sh pr-target` for PR targeting
+  - Wave PRs always target base branch (enforced by script)
+  - Base PRs always target main (enforced by script)
+  - Version bumped to v4.3.0
+
+- **Git Workflow Agent**: Updated to reference `branch-setup.sh` as source of truth
+  - Removed redundant pseudo-code branching logic
+  - Added script usage examples
+  - Version bumped to v4.3.0
 
 ### Technical Details
 
