@@ -5,6 +5,39 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2025-12-31
+
+### Added
+
+- **Batched Subtask Protocol**: Automatic context management for tasks with many subtasks
+  - Tasks with 5+ subtasks automatically use batched execution
+  - Subtasks are split into batches of 3, each executed by a separate sub-agent
+  - Prevents context overflow that occurred with 6-8+ subtasks in a single agent
+  - Each batch agent starts with fresh context, returns only artifact summaries
+  - Expected context reduction: ~90% for large tasks
+
+### Changed
+
+- **Phase 2 Implementation**: Added Step 0.7 for batched subtask execution
+  - Decision logic in Step 0.5 now includes batching path
+  - Batches execute sequentially to preserve subtask dependencies
+  - Artifact verification uses grep exit codes (minimal context overhead)
+  - Incremental status updates after each batch (better crash recovery)
+
+- **Execution Mode Selection** (Step 0.5):
+  - `parallel_groups` mode → Step 0.6 (unchanged)
+  - `subtasks > 4` → Step 0.7 (NEW: Batched Subtask Protocol)
+  - `subtasks ≤ 4` → Sequential "For Each Subtask" (unchanged)
+
+### Technical Details
+
+- `BATCH_THRESHOLD = 4` - Batch if more than 4 subtasks
+- `SUBTASKS_PER_BATCH = 3` - Process 3 subtasks per batch agent
+- Batch agents reuse `phase2-implementation` (no new agent type needed)
+- Partial completion supported - if batch 2 fails, batch 1's work is preserved
+
+---
+
 ## [4.2.1] - 2025-12-30
 
 ### Fixed

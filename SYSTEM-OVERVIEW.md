@@ -292,6 +292,15 @@ Target Project/
 
 #### Phase 2: Task Execution Loop (per task)
 0. **Branch Validation (Defense-in-Depth v3.0.2)** - Re-verify not on protected branch
+0.5. **Execution Mode Selection (v4.3)** - Determine optimal execution strategy:
+   - `parallel_groups` mode → Parallel Group Protocol (Step 0.6)
+   - `subtasks > 4` → Batched Subtask Protocol (Step 0.7) - prevents context overflow
+   - `subtasks ≤ 4` → Sequential TDD execution
+0.7. **Batched Subtask Protocol (v4.3)** - For tasks with 5+ subtasks:
+   - Split subtasks into batches of 3
+   - Each batch executed by separate sub-agent (fresh context)
+   - Artifact verification between batches (grep exit codes)
+   - Prevents context overflow from accumulated TDD output
 1. **Use Cached Specs** - Instant spec access
 2. **Task Understanding** - Map requirements to specs
 3. **Batched Context** - Single request for all context

@@ -80,33 +80,55 @@ ELSE:
 
 ---
 
-### Step 0.5: Check Subtask Execution Mode (v4.2)
+### Step 0.5: Check Subtask Execution Mode (v4.3)
 
-Before processing subtasks, check if this task has parallel group execution enabled:
+Before processing subtasks, determine the optimal execution strategy:
 
 ```javascript
-// Check for subtask parallelization configuration
+// Configuration
+const BATCH_THRESHOLD = 4;  // Batch if more than 4 subtasks
+const SUBTASKS_PER_BATCH = 3;  // Process 3 subtasks per batch agent
+
+// Check for explicit parallelization configuration
 const subtaskExecution = task.subtask_execution;
+const subtaskCount = task.subtasks?.length || 0;
 
 if (subtaskExecution?.mode === "parallel_groups") {
   // Use Parallel Group Protocol (Step 0.6)
   EXECUTE: Parallel Group Protocol
+} else if (subtaskCount > BATCH_THRESHOLD) {
+  // Use Batched Execution Protocol (Step 0.7) - prevents context overflow
+  EXECUTE: Batched Subtask Protocol
 } else {
   // Use Sequential Protocol (existing "For Each Subtask" flow)
+  // Safe for small number of subtasks
   EXECUTE: Sequential Subtask Protocol
 }
 ```
 
 **Decision Logic:**
 ```
-IF task.subtask_execution exists AND task.subtask_execution.mode == "parallel_groups":
+IF task.subtask_execution.mode == "parallel_groups":
   → Execute Step 0.6 (Parallel Group Protocol)
-  → Skip "For Each Subtask" section
+  → Skip Steps 0.7 and "For Each Subtask"
 
-ELSE:
-  → Skip Step 0.6
-  → Execute "For Each Subtask" section as normal
+ELSE IF task.subtasks.length > 4:
+  → Execute Step 0.7 (Batched Subtask Protocol)
+  → Skip Step 0.6 and "For Each Subtask"
+  → Spawns sub-agents for batches of 3 subtasks
+
+ELSE (4 or fewer subtasks):
+  → Skip Steps 0.6 and 0.7
+  → Execute "For Each Subtask" section directly
+  → Safe to run in single agent context
 ```
+
+**Why Batching Exists (v4.3):**
+- Tasks with 5+ subtasks accumulate ~40-60KB of context (test output, implementations, commits)
+- This causes context overflow in the Phase 2 agent
+- Batching splits work across multiple agents, each with fresh context
+- Each batch agent handles 3 subtasks, returns minimal artifact summary
+- Parent agent only holds artifact names, not full TDD output
 
 ---
 
@@ -281,6 +303,243 @@ return taskResult;
 #### 0.6.4: Skip Sequential Flow
 
 After completing parallel group execution, **SKIP** the "For Each Subtask" section below and proceed directly to the Output Format section.
+
+---
+
+### Step 0.7: Batched Subtask Protocol (v4.3)
+
+> **For tasks with more than 4 subtasks that don't have parallel_groups configured**
+
+This protocol prevents context overflow by splitting subtasks into batches, each executed by a separate sub-agent.
+
+#### 0.7.1: Calculate Batches
+
+```javascript
+const SUBTASKS_PER_BATCH = 3;
+
+// Get subtask details
+const subtaskDetails = task.subtasks.map(subtaskId => {
+  // If we have full subtask objects, use them
+  // Otherwise, create minimal structure from IDs
+  return task.subtasks_full?.find(s => s.id === subtaskId) || {
+    id: subtaskId,
+    description: `Subtask ${subtaskId}`
+  };
+});
+
+// Split into batches of 3
+const batches = [];
+for (let i = 0; i < subtaskDetails.length; i += SUBTASKS_PER_BATCH) {
+  batches.push({
+    batch_number: Math.floor(i / SUBTASKS_PER_BATCH) + 1,
+    subtasks: subtaskDetails.slice(i, i + SUBTASKS_PER_BATCH)
+  });
+}
+
+console.log(`Task ${task.id}: Splitting ${subtaskDetails.length} subtasks into ${batches.length} batches`);
+```
+
+**Example for Task with 8 subtasks:**
+```
+Batch 1: [4.1, 4.2, 4.3]
+Batch 2: [4.4, 4.5, 4.6]
+Batch 3: [4.7, 4.8]
+```
+
+#### 0.7.2: Initialize Batch Tracking
+
+```javascript
+TodoWrite([
+  {
+    content: `Task ${task.id}: Batched execution (${batches.length} batches of ${SUBTASKS_PER_BATCH})`,
+    status: "in_progress",
+    activeForm: `Executing ${batches.length} batches`
+  }
+]);
+
+// Track artifacts across all batches
+let aggregatedArtifacts = {
+  exports_added: [],
+  files_created: [],
+  files_modified: [],
+  functions_created: [],
+  commits: [],
+  subtasks_completed: []
+};
+
+// Track batch statuses for reporting
+const batchStatuses = [];
+```
+
+#### 0.7.3: Execute Batches Sequentially
+
+> **IMPORTANT**: Batches execute SEQUENTIALLY (not in parallel) because later subtasks may depend on earlier ones within the same task.
+
+```javascript
+for (const batch of batches) {
+  console.log(`Executing Batch ${batch.batch_number}/${batches.length}: Subtasks [${batch.subtasks.map(s => s.id).join(', ')}]`);
+
+  // Build context for batch worker
+  const batchContext = {
+    task_id: task.id,
+    task_description: task.description,
+    batch_number: batch.batch_number,
+    total_batches: batches.length,
+    subtasks: batch.subtasks,
+    predecessor_artifacts: {
+      // Artifacts from predecessor tasks (from context)
+      ...context.predecessor_artifacts,
+      // PLUS artifacts from previous batches in this task
+      exports_added: [
+        ...(context.predecessor_artifacts?.exports_added || []),
+        ...aggregatedArtifacts.exports_added
+      ],
+      files_created: [
+        ...(context.predecessor_artifacts?.files_created || []),
+        ...aggregatedArtifacts.files_created
+      ]
+    },
+    spec_summary: context.spec_summary,
+    relevant_files: context.relevant_files,
+    standards: context.standards
+  };
+
+  // Spawn batch worker agent
+  const batchResult = Task({
+    subagent_type: "phase2-implementation",  // Reuses this same agent type
+    prompt: `
+Execute batch ${batch.batch_number} of ${batches.length} for task ${task.id}.
+
+## Batch Context
+- Task: ${task.description}
+- Subtasks in this batch: ${batch.subtasks.map(s => `${s.id}: ${s.description}`).join('\n  - ')}
+
+## Predecessor Artifacts (verified, safe to import)
+${JSON.stringify(batchContext.predecessor_artifacts, null, 2)}
+
+## Instructions
+1. Execute each subtask using TDD: RED → GREEN → REFACTOR
+2. Commit after each subtask
+3. Return structured result with artifacts
+
+## Spec Context
+${context.spec_summary || 'See spec files'}
+
+Return JSON result with: status, subtasks_completed, exports_added, files_created, commits
+    `
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // Process batch result immediately (don't accumulate full objects)
+  // ═══════════════════════════════════════════════════════════════
+
+  if (batchResult.status === "pass" || batchResult.status === "partial") {
+    // Verify and merge artifacts using exit codes only (minimal context)
+    for (const exportName of batchResult.exports_added || []) {
+      const check = Bash(`grep -rq "export.*${exportName}" . && echo "found" || echo "missing"`);
+      if (check.stdout?.trim() === "found") {
+        aggregatedArtifacts.exports_added.push(exportName);
+      } else {
+        console.warn(`⚠️ Unverified export: ${exportName} from batch ${batch.batch_number}`);
+      }
+    }
+
+    for (const file of batchResult.files_created || []) {
+      const check = Bash(`[ -f "${file}" ] && echo "found" || echo "missing"`);
+      if (check.stdout?.trim() === "found") {
+        aggregatedArtifacts.files_created.push(file);
+      }
+    }
+
+    // Merge other artifacts (simple arrays of strings)
+    aggregatedArtifacts.files_modified.push(...(batchResult.files_modified || []));
+    aggregatedArtifacts.functions_created.push(...(batchResult.functions_created || []));
+    aggregatedArtifacts.commits.push(...(batchResult.commits || []));
+    aggregatedArtifacts.subtasks_completed.push(...(batchResult.subtasks_completed || []));
+
+    // Update subtask statuses immediately
+    for (const subtaskId of batchResult.subtasks_completed || []) {
+      Bash(`bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "${subtaskId}" "pass"`);
+    }
+
+    batchStatuses.push({
+      batch_number: batch.batch_number,
+      status: batchResult.status,
+      subtasks_completed: batchResult.subtasks_completed?.length || 0
+    });
+
+    console.log(`✅ Batch ${batch.batch_number}: ${batchResult.subtasks_completed?.length || 0} subtasks completed`);
+
+  } else {
+    // Batch failed or blocked
+    console.error(`❌ Batch ${batch.batch_number} ${batchResult.status}: ${batchResult.blocker || 'Unknown error'}`);
+
+    batchStatuses.push({
+      batch_number: batch.batch_number,
+      status: batchResult.status,
+      blocker: batchResult.blocker,
+      subtasks_affected: batch.subtasks.map(s => s.id)
+    });
+
+    // Mark affected subtasks as blocked
+    for (const subtask of batch.subtasks) {
+      Bash(`bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "${subtask.id}" "blocked"`);
+    }
+
+    // Decision: Continue with remaining batches or halt?
+    // Default: Continue to attempt remaining batches (partial progress is better than none)
+    console.log(`Continuing with remaining batches despite batch ${batch.batch_number} failure...`);
+  }
+
+  // batchResult goes out of scope here - context stays bounded
+}
+```
+
+#### 0.7.4: Aggregate Task Results
+
+```javascript
+// Calculate overall status
+const passedBatches = batchStatuses.filter(b => b.status === "pass").length;
+const totalBatches = batches.length;
+const allPassed = passedBatches === totalBatches;
+
+const taskResult = {
+  status: allPassed ? "pass" : (passedBatches > 0 ? "partial" : "blocked"),
+  task_id: task.id,
+  execution_mode: "batched",
+  batches_completed: passedBatches,
+  batches_total: totalBatches,
+  subtasks_completed: aggregatedArtifacts.subtasks_completed,
+  files_created: aggregatedArtifacts.files_created,
+  files_modified: aggregatedArtifacts.files_modified,
+  exports_added: aggregatedArtifacts.exports_added,
+  functions_created: aggregatedArtifacts.functions_created,
+  commits: aggregatedArtifacts.commits,
+  notes: `Batched execution: ${passedBatches}/${totalBatches} batches, ${aggregatedArtifacts.subtasks_completed.length} subtasks completed`
+};
+
+// Update parent task status
+if (taskResult.status === "pass") {
+  Bash(`bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "${task.id}" "pass"`);
+} else if (taskResult.status === "partial") {
+  Bash(`bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "${task.id}" "in_progress"`);
+} else {
+  Bash(`bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "${task.id}" "blocked"`);
+}
+
+// Log summary
+console.log(`Task ${task.id} complete: ${taskResult.status}`);
+console.log(`  Batches: ${passedBatches}/${totalBatches}`);
+console.log(`  Subtasks: ${aggregatedArtifacts.subtasks_completed.length}/${subtaskDetails.length}`);
+console.log(`  Files created: ${aggregatedArtifacts.files_created.length}`);
+console.log(`  Exports added: ${aggregatedArtifacts.exports_added.length}`);
+
+return taskResult;
+```
+
+#### 0.7.5: Skip Sequential Flow
+
+After completing batched execution, **SKIP** the "For Each Subtask" section below and proceed directly to the Output Format section.
 
 ---
 
