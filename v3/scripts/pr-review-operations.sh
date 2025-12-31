@@ -313,9 +313,97 @@ case "$COMMAND" in
       }'
     ;;
 
+  # Check if Claude Code bot has reviewed the PR
+  # Usage: pr-review-operations.sh bot-reviewed [pr_number]
+  # Returns: {"reviewed": true/false, "review_decision": "APPROVED"|"CHANGES_REQUESTED"|null}
+  bot-reviewed)
+    PR_NUMBER=$(get_pr_number "$1")
+    REPO_INFO=$(get_repo_info)
+
+    if [ -z "$PR_NUMBER" ] || [ -z "$REPO_INFO" ]; then
+      echo '{"error": "Could not determine PR number or repo info"}'
+      exit 1
+    fi
+
+    # Get all reviews and filter for bot reviews
+    # Claude Code bot username patterns: "claude-code[bot]", "claude[bot]", or contains "claude"
+    BOT_REVIEWS=$(gh api "repos/$REPO_INFO/pulls/$PR_NUMBER/reviews" \
+      --jq '[.[] | select(.user.login | test("claude|Claude"; "i"))]' 2>/dev/null || echo "[]")
+
+    BOT_REVIEW_COUNT=$(echo "$BOT_REVIEWS" | jq 'length')
+
+    if [ "$BOT_REVIEW_COUNT" = "0" ] || [ -z "$BOT_REVIEW_COUNT" ]; then
+      # No formal review - check conversation comments (bots often use these)
+      BOT_COMMENTS=$(gh api "repos/$REPO_INFO/issues/$PR_NUMBER/comments" \
+        --jq '[.[] | select(.user.login | test("claude|Claude"; "i"))]' 2>/dev/null || echo "[]")
+
+      BOT_COMMENT_COUNT=$(echo "$BOT_COMMENTS" | jq 'length')
+
+      if [ "$BOT_COMMENT_COUNT" = "0" ] || [ -z "$BOT_COMMENT_COUNT" ]; then
+        echo '{
+          "reviewed": false,
+          "review_decision": null,
+          "bot_user": null,
+          "message": "No Claude Code bot review or comments found"
+        }'
+        exit 0
+      fi
+
+      # Bot has commented but not formally reviewed
+      LATEST_COMMENT=$(echo "$BOT_COMMENTS" | jq 'sort_by(.created_at) | last')
+      BOT_USER=$(echo "$LATEST_COMMENT" | jq -r '.user.login')
+      COMMENT_TIME=$(echo "$LATEST_COMMENT" | jq -r '.created_at')
+
+      echo '{
+        "reviewed": true,
+        "review_type": "comment",
+        "review_decision": null,
+        "bot_user": "'"$BOT_USER"'",
+        "comment_time": "'"$COMMENT_TIME"'",
+        "message": "Bot has commented on PR (no formal review submission)"
+      }'
+      exit 0
+    fi
+
+    # Bot has formal review - get the latest one
+    LATEST_REVIEW=$(echo "$BOT_REVIEWS" | jq 'sort_by(.submitted_at) | last')
+    REVIEW_STATE=$(echo "$LATEST_REVIEW" | jq -r '.state')
+    BOT_USER=$(echo "$LATEST_REVIEW" | jq -r '.user.login')
+    SUBMITTED_AT=$(echo "$LATEST_REVIEW" | jq -r '.submitted_at')
+
+    # Map GitHub review state to our decision format
+    case "$REVIEW_STATE" in
+      APPROVED)
+        DECISION="APPROVED"
+        ;;
+      CHANGES_REQUESTED)
+        DECISION="CHANGES_REQUESTED"
+        ;;
+      COMMENTED)
+        DECISION="PENDING"
+        ;;
+      DISMISSED)
+        DECISION="DISMISSED"
+        ;;
+      *)
+        DECISION="PENDING"
+        ;;
+    esac
+
+    echo '{
+      "reviewed": true,
+      "review_type": "formal",
+      "review_decision": "'"$DECISION"'",
+      "review_state": "'"$REVIEW_STATE"'",
+      "bot_user": "'"$BOT_USER"'",
+      "submitted_at": "'"$SUBMITTED_AT"'",
+      "review_count": '"$BOT_REVIEW_COUNT"'
+    }'
+    ;;
+
   help|*)
     cat << 'EOF'
-Agent OS v3.0 PR Review Operations
+Agent OS v4.4.0 PR Review Operations
 
 Usage: pr-review-operations.sh <command> [args]
 
@@ -329,6 +417,7 @@ Commands:
   reply-conversation <id> <body>         Reply to conversation comment
   scope [pr_number]                      Analyze PR scope (modules, file types)
   summary <pr> <addressed> <replies>     Generate review cycle summary
+  bot-reviewed [pr_number]               Check if Claude Code bot has reviewed
 
 Examples:
   pr-review-operations.sh status
@@ -336,6 +425,7 @@ Examples:
   pr-review-operations.sh scope 123
   pr-review-operations.sh categorize '[{"body":"fix the bug"}]'
   pr-review-operations.sh reply-inline 123 456789 "Fixed in this commit"
+  pr-review-operations.sh bot-reviewed 123
 EOF
     ;;
 esac

@@ -413,6 +413,82 @@ Target Project/
 
 ---
 
+### 8. `/execute-spec` - Automated Spec Execution Cycle (v4.4.0)
+**Purpose**: Automate the complete spec execution workflow across all waves
+
+**Overview**:
+The `/execute-spec` command automates the manual workflow of:
+1. Running `/execute-tasks` for each wave
+2. Waiting for Claude Code bot review
+3. Running `/pr-review-cycle` to address feedback
+4. Merging the PR
+5. Cleaning up the wave branch
+6. Advancing to the next wave
+
+**State Machine**:
+```
+INIT → EXECUTE → AWAITING_REVIEW → REVIEW_PROCESSING → READY_TO_MERGE
+                       ↑                                      │
+                       └──────────────────────────────────────┘
+                                  (next wave)
+                                       │
+                                       ▼
+                                  COMPLETED
+```
+
+**Usage**:
+```bash
+# Start executing a spec (background polling - runs continuously)
+/execute-spec frontend-ui
+
+# Start with manual polling (check status yourself)
+/execute-spec frontend-ui --manual
+
+# Check current status
+/execute-spec frontend-ui --status
+
+# Retry after fixing failed tasks
+/execute-spec frontend-ui --retry
+
+# Reset stuck state
+/execute-spec frontend-ui --recover
+```
+
+**Flags**:
+| Flag | Description |
+|------|-------------|
+| `--manual` | Disable background polling; requires manual invocations to check status |
+| `--status` | Show current execution state without taking action |
+| `--retry` | Restart entire wave after fixing failed tasks |
+| `--recover` | Reset stuck state and start fresh |
+
+**Merge Strategy**:
+| PR Type | Target Branch | Behavior |
+|---------|---------------|----------|
+| Wave PR | `feature/[spec]` | Auto-merge (reversible) |
+| Final PR | `main` | User confirmation required |
+
+**State Persistence**:
+- State file: `.agent-os/state/execute-spec-[spec_name].json`
+- Persists across sessions
+- Tracks wave history, PR info, review status
+
+**Components**:
+| Component | Purpose |
+|-----------|---------|
+| `execute-spec.md` | Command entry point |
+| `execute-spec-orchestrator.md` | State machine agent |
+| `execute-spec-operations.sh` | State management script |
+| `execute-spec-v1.json` | State schema |
+
+**Safety Guarantees**:
+- Wave PRs never merge to main (only to feature branch)
+- Final PR always requires user confirmation
+- Bot review is always required (no skip option)
+- Task failures halt the cycle completely
+
+---
+
 ## 🔄 System Interactions
 
 ### Command-to-Subagent Communication
@@ -459,6 +535,7 @@ Planning Mode provides:
 | **phase3-delivery** | Completion workflow, PR creation | execute-tasks |
 | **wave-orchestrator** | Parallel wave execution (v4.1) | execute-tasks |
 | **subtask-group-worker** | Parallel subtask group execution (v4.2) | phase2-implementation |
+| **execute-spec-orchestrator** | State machine for automated spec execution (v4.4) | execute-spec |
 | **git-workflow** | Branch management, commits, PRs | execute-tasks, debug |
 | **project-manager** | Task/roadmap updates, notifications | execute-tasks, create-spec |
 | **future-classifier** | Classify PR review future items (haiku) | pr-review-cycle |

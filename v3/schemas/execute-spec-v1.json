@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agent-os.dev/schemas/execute-spec-v1.json",
+  "title": "Agent OS Execute Spec State Schema v1.0",
+  "description": "State machine schema for /execute-spec command - tracks automated spec execution cycle",
+  "type": "object",
+  "required": ["version", "spec_name", "current_wave", "total_waves", "phase"],
+  "properties": {
+    "version": {
+      "const": "1.0",
+      "description": "Schema version"
+    },
+    "spec_name": {
+      "type": "string",
+      "description": "Name of the spec being executed (folder name)"
+    },
+    "spec_path": {
+      "type": "string",
+      "description": "Full path to spec directory"
+    },
+    "current_wave": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Current wave number being executed"
+    },
+    "total_waves": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total number of waves in the spec"
+    },
+    "phase": {
+      "enum": ["INIT", "EXECUTE", "AWAITING_REVIEW", "REVIEW_PROCESSING", "READY_TO_MERGE", "COMPLETED", "FAILED"],
+      "description": "Current phase in the execution state machine"
+    },
+    "pr_number": {
+      "type": ["integer", "null"],
+      "description": "Current PR number (if PR exists)"
+    },
+    "pr_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "URL of the current PR"
+    },
+    "wave_branch": {
+      "type": ["string", "null"],
+      "description": "Current wave branch name (e.g., feature/spec-name-wave-2)"
+    },
+    "base_branch": {
+      "type": ["string", "null"],
+      "description": "Base feature branch name (e.g., feature/spec-name)"
+    },
+    "is_final_wave": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if current wave is the last wave (PR will target main)"
+    },
+    "review_status": {
+      "type": "object",
+      "description": "Status of the PR review process",
+      "properties": {
+        "bot_reviewed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the Claude Code bot has submitted a review"
+        },
+        "last_check": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Last time review status was checked"
+        },
+        "poll_count": {
+          "type": "integer",
+          "default": 0,
+          "description": "Number of times we've polled for review"
+        },
+        "review_decision": {
+          "enum": ["APPROVED", "CHANGES_REQUESTED", "PENDING", "DISMISSED", null],
+          "description": "GitHub review decision"
+        },
+        "blocking_count": {
+          "type": "integer",
+          "default": 0,
+          "description": "Number of blocking issues found in review"
+        },
+        "future_items_count": {
+          "type": "integer",
+          "default": 0,
+          "description": "Number of future items captured from review"
+        },
+        "future_items_captured": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether future items have been processed"
+        }
+      }
+    },
+    "execution_status": {
+      "type": "object",
+      "description": "Status of task execution",
+      "properties": {
+        "tasks_total": {
+          "type": "integer",
+          "default": 0,
+          "description": "Total tasks in current wave"
+        },
+        "tasks_completed": {
+          "type": "integer",
+          "default": 0,
+          "description": "Tasks completed in current wave"
+        },
+        "tasks_failed": {
+          "type": "integer",
+          "default": 0,
+          "description": "Tasks that failed in current wave"
+        },
+        "last_error": {
+          "type": ["string", "null"],
+          "description": "Last error message if execution failed"
+        }
+      }
+    },
+    "history": {
+      "type": "array",
+      "description": "History of completed waves",
+      "items": {
+        "type": "object",
+        "required": ["wave", "status"],
+        "properties": {
+          "wave": {
+            "type": "integer",
+            "description": "Wave number"
+          },
+          "pr_number": {
+            "type": ["integer", "null"],
+            "description": "PR number for this wave"
+          },
+          "pr_url": {
+            "type": ["string", "null"],
+            "description": "PR URL for this wave"
+          },
+          "status": {
+            "enum": ["merged", "failed", "skipped"],
+            "description": "Final status of the wave"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When wave execution started"
+          },
+          "merged_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When PR was merged"
+          },
+          "branch_cleaned": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether wave branch was deleted after merge"
+          },
+          "review_cycles": {
+            "type": "integer",
+            "default": 1,
+            "description": "Number of review cycles before approval"
+          },
+          "blocking_issues_fixed": {
+            "type": "integer",
+            "default": 0,
+            "description": "Number of blocking issues fixed during review"
+          },
+          "future_items_captured": {
+            "type": "integer",
+            "default": 0,
+            "description": "Number of future items captured from this wave's review"
+          }
+        }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "description": "Command flags and options",
+      "properties": {
+        "manual_mode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether --manual flag was used (disables background polling; default is false = polling enabled)"
+        },
+        "poll_interval_ms": {
+          "type": "integer",
+          "default": 120000,
+          "description": "Polling interval in milliseconds (default 2 minutes)"
+        },
+        "max_poll_duration_ms": {
+          "type": "integer",
+          "default": 1800000,
+          "description": "Maximum polling duration in milliseconds (default 30 minutes)"
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this execution state was created"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp"
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "Claude Code session ID for tracking"
+    }
+  }
+}

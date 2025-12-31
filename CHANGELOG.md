@@ -5,6 +5,75 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2025-12-31
+
+### Added
+
+- **`/execute-spec` Command**: Fully automated spec execution cycle
+  - Executes all waves of a spec automatically: execute → review → merge → next wave
+  - State machine with persistent state across sessions
+  - Phases: INIT → EXECUTE → AWAITING_REVIEW → REVIEW_PROCESSING → READY_TO_MERGE → COMPLETED
+  - Background polling is the default behavior - polls for bot review every 2 minutes (max 30 min)
+  - Manual mode (`--manual`) disables background polling for user-controlled status checks
+  - Flags: `--manual`, `--status`, `--retry`, `--recover`
+
+- **Execute Spec Orchestrator Agent** (`execute-spec-orchestrator.md`)
+  - State machine agent that determines next action based on current phase
+  - Delegates to existing agents (execute-tasks, pr-review-cycle)
+  - Handles phase transitions and error recovery
+
+- **Execute Spec Operations Script** (`execute-spec-operations.sh`)
+  - State management for spec execution cycle
+  - Commands: `init`, `status`, `transition`, `set-pr`, `update-review`, `advance-wave`, `mark-cleaned`, `fail`, `reset`, `check-poll-timeout`, `list`, `delete`
+  - Atomic state updates with temp file pattern
+
+- **Execute Spec State Schema** (`execute-spec-v1.json`)
+  - JSON Schema for execution state persistence
+  - Tracks: spec info, current wave, phase, PR info, review status, history
+
+- **Branch Cleanup Command**: Added `cleanup` command to `branch-setup.sh`
+  - Deletes wave branches after merge (local and remote)
+  - Safety checks prevent deleting main/master or current branch
+  - Used by execute-spec to clean up after successful merges
+
+- **Bot Review Detection**: Added `bot-reviewed` command to `pr-review-operations.sh`
+  - Detects when Claude Code bot has reviewed a PR
+  - Checks both formal reviews and conversation comments
+  - Returns review decision (APPROVED, CHANGES_REQUESTED, PENDING)
+
+- **Wave Info Command**: Added `wave-info` command to `task-operations.sh`
+  - Returns comprehensive wave progress information
+  - Shows: current wave, total waves, per-wave completion status
+  - Used by execute-spec to determine execution state
+
+### Changed
+
+- **Merge Strategy**: Two-tier merge strategy for safety
+  - Wave PRs (wave branch → feature branch): Auto-merge without confirmation
+  - Final PR (feature branch → main): Always requires user confirmation
+  - Rationale: Wave merges are reversible, main merges are production
+
+- **Error Handling**: Complete stop on task failure
+  - If any task fails, the execute-spec cycle halts completely
+  - User must fix the issue and run `--retry` to restart the wave
+  - Prevents partial or broken code from getting into PRs
+
+- **Version Bumps**: Updated to v4.4.0
+  - `v3/settings.json`: Version comment and env variable
+  - `setup/project.sh`: Fallback version
+  - `branch-setup.sh`: Help text version
+  - `pr-review-operations.sh`: Help text version
+  - `task-operations.sh`: Help text version
+
+### Technical Details
+
+- State file location: `.agent-os/state/execute-spec-[spec_name].json`
+- Polling interval: 2 minutes (120000ms)
+- Max polling duration: 30 minutes (1800000ms)
+- Bot detection pattern: Matches usernames containing "claude" (case-insensitive)
+
+---
+
 ## [4.3.0] - 2025-12-31
 
 ### Added

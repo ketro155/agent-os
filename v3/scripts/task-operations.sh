@@ -1144,9 +1144,80 @@ EOF
     }'
     ;;
 
+  # Get wave information for a spec
+  # Usage: task-operations.sh wave-info [spec_name]
+  wave-info)
+    SPEC_NAME="$1"
+    TASKS_FILE=$(find_tasks_json "$SPEC_NAME")
+
+    if [ ! -f "$TASKS_FILE" ]; then
+      echo '{"error": "tasks.json not found"}'
+      exit 1
+    fi
+
+    # Get execution strategy and wave details
+    jq '
+      # Get total waves
+      (.execution_strategy.waves // []) as $waves |
+      ($waves | length) as $total_waves |
+
+      # Find current wave (first with pending tasks)
+      .tasks as $tasks |
+      ($waves | map(select(
+        .tasks as $wave_tasks |
+        ($tasks | map(select(.id as $id | $wave_tasks | index($id))) | map(select(.status == "pending" or .status == "in_progress")) | length) > 0
+      )) | .[0].wave_id // ($total_waves + 1)) as $current_wave |
+
+      # Calculate per-wave progress
+      ($waves | map({
+        wave_id,
+        task_ids: .tasks,
+        rationale: (.rationale // null),
+        tasks_total: (.tasks | length),
+        tasks_completed: (
+          .tasks as $wave_tasks |
+          $tasks | map(select(.id as $id | $wave_tasks | index($id) and .status == "pass")) | length
+        ),
+        tasks_pending: (
+          .tasks as $wave_tasks |
+          $tasks | map(select(.id as $id | $wave_tasks | index($id) and .status == "pending")) | length
+        ),
+        tasks_in_progress: (
+          .tasks as $wave_tasks |
+          $tasks | map(select(.id as $id | $wave_tasks | index($id) and .status == "in_progress")) | length
+        ),
+        status: (
+          .tasks as $wave_tasks |
+          ($tasks | map(select(.id as $id | $wave_tasks | index($id))) | map(select(.status == "pass")) | length) as $completed |
+          ($wave_tasks | length) as $total |
+          if $completed == $total then "completed"
+          elif ($tasks | map(select(.id as $id | $wave_tasks | index($id) and .status == "in_progress")) | length) > 0 then "in_progress"
+          else "pending"
+          end
+        )
+      })) as $wave_details |
+
+      # Return comprehensive wave info
+      {
+        spec: .spec,
+        total_waves: $total_waves,
+        current_wave: $current_wave,
+        is_final_wave: ($current_wave == $total_waves),
+        all_complete: ($current_wave > $total_waves),
+        execution_mode: (.execution_strategy.mode // "sequential"),
+        waves: $wave_details,
+        summary: {
+          waves_completed: ($wave_details | map(select(.status == "completed")) | length),
+          waves_in_progress: ($wave_details | map(select(.status == "in_progress")) | length),
+          waves_pending: ($wave_details | map(select(.status == "pending")) | length)
+        }
+      }
+    ' "$TASKS_FILE"
+    ;;
+
   help|*)
     cat << 'EOF'
-Agent OS v3.0 Task Operations
+Agent OS v4.4.0 Task Operations
 
 Usage: task-operations.sh <command> [args]
 
@@ -1168,6 +1239,7 @@ Commands:
   add-expanded-task <json> [spec]       Add expanded parent+subtasks
   remove-future-task <id> [spec]        Remove future task after expansion
   list-wave-tasks [spec]                List WAVE_TASK items for expansion
+  wave-info [spec_name]                 Get comprehensive wave progress info
 
 Subtask Group Commands (v4.2):
   update-group <tid> <gid> <status>     Update subtask group status
@@ -1196,6 +1268,7 @@ Examples:
   task-operations.sh collect-artifacts HEAD~3
   task-operations.sh validate-names '["login", "validateToken"]'
   task-operations.sh log-progress task_completed "Implemented login"
+  task-operations.sh wave-info frontend-ui
 EOF
     ;;
 esac

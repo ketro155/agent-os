@@ -378,15 +378,85 @@ EOF
 EOF
     ;;
 
+  # Cleanup a merged wave branch (local and remote)
+  # Usage: branch-setup.sh cleanup <branch_name>
+  cleanup)
+    BRANCH_NAME="$1"
+
+    if [ -z "$BRANCH_NAME" ]; then
+      echo '{"error": "Usage: branch-setup.sh cleanup <branch_name>"}'
+      exit 1
+    fi
+
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+
+    # Don't delete the branch we're on
+    if [ "$CURRENT_BRANCH" = "$BRANCH_NAME" ]; then
+      echo '{"error": "Cannot delete current branch. Switch to another branch first."}'
+      exit 1
+    fi
+
+    # Safety: Don't delete main/master or base feature branches
+    if [[ "$BRANCH_NAME" =~ ^(main|master)$ ]]; then
+      echo '{"error": "Cannot delete main/master branch"}'
+      exit 1
+    fi
+
+    # Warn if trying to delete a base feature branch (not a wave branch)
+    if [[ "$BRANCH_NAME" =~ ^feature/[^-]+-[^-]+$ ]] && [[ ! "$BRANCH_NAME" =~ -wave-[0-9]+$ ]]; then
+      echo '{"warning": "This appears to be a base feature branch, not a wave branch. Proceeding anyway..."}'
+    fi
+
+    DELETED_LOCAL=false
+    DELETED_REMOTE=false
+    ERRORS=()
+
+    # Delete local branch
+    if branch_exists "$BRANCH_NAME" "local"; then
+      if git branch -d "$BRANCH_NAME" 2>/dev/null; then
+        DELETED_LOCAL=true
+      else
+        # Try force delete if branch not fully merged (already merged to base)
+        if git branch -D "$BRANCH_NAME" 2>/dev/null; then
+          DELETED_LOCAL=true
+        else
+          ERRORS+=("failed_to_delete_local")
+        fi
+      fi
+    fi
+
+    # Delete remote branch
+    if branch_exists "$BRANCH_NAME" "remote"; then
+      if git push origin --delete "$BRANCH_NAME" 2>/dev/null; then
+        DELETED_REMOTE=true
+      else
+        ERRORS+=("failed_to_delete_remote")
+      fi
+    fi
+
+    ERRORS_JSON=$(printf '%s\n' "${ERRORS[@]}" | jq -R . | jq -s . 2>/dev/null || echo '[]')
+
+    cat <<EOF
+{
+  "status": "success",
+  "branch": "$BRANCH_NAME",
+  "deleted_local": $DELETED_LOCAL,
+  "deleted_remote": $DELETED_REMOTE,
+  "errors": $ERRORS_JSON
+}
+EOF
+    ;;
+
   help|*)
     cat <<EOF
-Agent OS Branch Setup Script v4.3.0
+Agent OS Branch Setup Script v4.4.0
 
 Commands:
   setup <spec_name> [wave]  Setup branch structure for a wave (creates base + wave branch)
   pr-target [spec_name]     Get the correct PR target for current branch
   validate <spec> <wave>    Validate current branch matches expected wave
   info                      Show current branch info
+  cleanup <branch_name>     Delete a merged wave branch (local and remote)
 
 Examples:
   # Setup branches for wave 3 of auth-feature
@@ -397,6 +467,9 @@ Examples:
 
   # Validate we're on the right branch
   branch-setup.sh validate auth-feature 3
+
+  # Delete a merged wave branch
+  branch-setup.sh cleanup feature/auth-feature-wave-1
 
 Wave Branching Strategy:
   main

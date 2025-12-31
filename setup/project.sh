@@ -11,9 +11,9 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.3.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.4.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="4.3.0"
+    AGENT_OS_VERSION="4.4.0"
 fi
 AGENT_OS_RELEASE_DATE="2025-12-30"
 
@@ -418,11 +418,14 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/commands/pr-review-cycle.md" "./.claude/commands/pr-review-cycle.md" "$OVERWRITE_CLAUDE" "commands/pr-review-cycle.md"
         fi
+        if [ -f "$BASE_AGENT_OS/v3/commands/execute-spec.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/commands/execute-spec.md" "./.claude/commands/execute-spec.md" "$OVERWRITE_CLAUDE" "commands/execute-spec.md"
+        fi
 
         # Install agents (phase subagents + utility agents)
         echo ""
         echo "  📂 Agents:"
-        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager; do
+        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator; do
             if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             fi
@@ -456,6 +459,10 @@ if [ "$CLAUDE_CODE" = true ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/branch-setup.sh" "./.claude/scripts/branch-setup.sh" "$OVERWRITE_CLAUDE" "scripts/branch-setup.sh"
             chmod +x "./.claude/scripts/branch-setup.sh"
         fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/execute-spec-operations.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/execute-spec-operations.sh" "./.claude/scripts/execute-spec-operations.sh" "$OVERWRITE_CLAUDE" "scripts/execute-spec-operations.sh"
+            chmod +x "./.claude/scripts/execute-spec-operations.sh"
+        fi
 
         # Install memory/rules
         echo ""
@@ -482,6 +489,9 @@ if [ "$CLAUDE_CODE" = true ]; then
         create_tracked_dir "./.agent-os/schemas"
         if [ -f "$BASE_AGENT_OS/v3/schemas/tasks-v3.json" ]; then
             copy_file "$BASE_AGENT_OS/v3/schemas/tasks-v3.json" "./.agent-os/schemas/tasks-v3.json" "$OVERWRITE_CLAUDE" "schemas/tasks-v3.json"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/schemas/execute-spec-v1.json" ]; then
+            copy_file "$BASE_AGENT_OS/v3/schemas/execute-spec-v1.json" "./.agent-os/schemas/execute-spec-v1.json" "$OVERWRITE_CLAUDE" "schemas/execute-spec-v1.json"
         fi
 
     else
