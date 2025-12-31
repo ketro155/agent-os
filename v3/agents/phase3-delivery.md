@@ -157,7 +157,131 @@ ELSE:
 
 ---
 
-### 6. Create Git Commit (Final)
+### 6. Create Recap Document
+
+Write to `.agent-os/recaps/YYYY-MM-DD-SPEC_NAME.md`:
+
+```markdown
+# Recap: SPEC_NAME
+
+**Completed**: YYYY-MM-DD
+**Duration**: X minutes across Y sessions
+**PR**: #TBD (will be updated after PR creation)
+
+## What Was Built
+[Summary of functionality]
+
+## Key Decisions
+[Important implementation choices]
+
+## Files Created
+[List]
+
+## Exports Added
+[List]
+
+## Test Coverage
+[Summary]
+
+## Notes for Future
+[Any important context]
+```
+
+### 7. Update Changelog
+
+Update project CHANGELOG.md with an entry for this spec using Keep a Changelog format.
+
+**Step 7.1: Auto-Detect Change Type**
+
+Analyze spec content and git diff to determine change type:
+
+```
+READ: [SPEC_FOLDER]/spec.md and spec-lite.md
+
+Keyword Detection (case-insensitive):
+- "fix", "bug", "error", "issue", "crash" → bugfix (weight: 0.4)
+- "add", "new", "implement", "create", "feature" → feature (weight: 0.4)
+- "breaking", "remove", "deprecate", "incompatible" → breaking (weight: 0.5)
+- "refactor", "clean", "improve", "optimize" → refactor (weight: 0.3)
+
+Git Diff Analysis:
+```bash
+git diff --name-status main...HEAD 2>/dev/null
+```
+- Mostly new files (A) → feature (weight: 0.3)
+- Mostly modifications (M) → bugfix/refactor (weight: 0.2)
+- Any deletions in src/ → breaking (weight: 0.4)
+
+Confidence = highest combined weight for any type
+
+IF confidence >= 0.7: Proceed with detected type
+IF confidence < 0.7: Ask user to confirm
+```
+
+**Step 7.2: Map Type to Section**
+
+| Type | Section | Semver |
+|------|---------|--------|
+| feature | Added | MINOR |
+| bugfix | Fixed | PATCH |
+| breaking | Changed (BREAKING:) | MAJOR |
+| refactor | Changed | PATCH |
+
+**Step 7.3: Create Entry**
+
+Format: `- [SUMMARY] from \`[SPEC_NAME]\` (PR #TBD)`
+
+> Note: PR number will be placeholder until PR is created. Update recap after PR creation.
+
+**Step 7.4: Update CHANGELOG.md**
+
+```
+IF CHANGELOG.md does not exist:
+  CREATE from template:
+  ---
+  # Changelog
+
+  All notable changes to this project will be documented in this file.
+
+  The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+  and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+  ## [Unreleased]
+
+  ### Added
+
+  ### Changed
+
+  ### Fixed
+  ---
+
+FIND: ## [Unreleased] section
+FIND or CREATE: ### [SECTION] subsection
+INSERT: Entry as last item in subsection
+```
+
+**Step 7.5: Calculate Semver Suggestion**
+
+```bash
+# Find current version
+CURRENT=$(grep -oE '## \[([0-9]+\.[0-9]+\.[0-9]+)\]' CHANGELOG.md | head -1)
+# Default: 0.0.0 if not found
+
+# Suggest based on type:
+# breaking → MAJOR bump
+# feature → MINOR bump
+# bugfix/refactor → PATCH bump
+```
+
+**Error Handling:**
+```
+IF changelog update fails:
+  WARN: "Changelog update skipped: [ERROR]"
+  NOTE: Failure is non-blocking
+  CONTINUE: to output
+```
+
+### 8. Create Git Commit (Final)
 
 ```bash
 git add -A
@@ -172,7 +296,7 @@ Wave: [WAVE_NUMBER] of [TOTAL_WAVES]
 "
 ```
 
-### 7. Push and Create PR (Wave-Aware v4.3.0)
+### 9. Push and Create PR (Wave-Aware v4.3.0)
 
 **Determine PR Target Using Script (MANDATORY):**
 
@@ -315,134 +439,27 @@ EOF
 }
 ```
 
-### 8. Update Progress Log
+### 10. Update Progress Log
 
 ```bash
 # Append completion entry to progress.json
 ```
 
-### 9. Create Recap Document
+### 11. Update PR with Final References
 
-Write to `.agent-os/recaps/YYYY-MM-DD-SPEC_NAME.md`:
-
-```markdown
-# Recap: SPEC_NAME
-
-**Completed**: YYYY-MM-DD
-**Duration**: X minutes across Y sessions
-**PR**: #123
-
-## What Was Built
-[Summary of functionality]
-
-## Key Decisions
-[Important implementation choices]
-
-## Files Created
-[List]
-
-## Exports Added
-[List]
-
-## Test Coverage
-[Summary]
-
-## Notes for Future
-[Any important context]
-```
-
-### 9.5 Update Changelog
-
-Update project CHANGELOG.md with an entry for this spec using Keep a Changelog format.
-
-**Step 9.5.1: Auto-Detect Change Type**
-
-Analyze spec content and git diff to determine change type:
-
-```
-READ: [SPEC_FOLDER]/spec.md and spec-lite.md
-
-Keyword Detection (case-insensitive):
-- "fix", "bug", "error", "issue", "crash" → bugfix (weight: 0.4)
-- "add", "new", "implement", "create", "feature" → feature (weight: 0.4)
-- "breaking", "remove", "deprecate", "incompatible" → breaking (weight: 0.5)
-- "refactor", "clean", "improve", "optimize" → refactor (weight: 0.3)
-
-Git Diff Analysis:
-```bash
-git diff --name-status main...HEAD 2>/dev/null
-```
-- Mostly new files (A) → feature (weight: 0.3)
-- Mostly modifications (M) → bugfix/refactor (weight: 0.2)
-- Any deletions in src/ → breaking (weight: 0.4)
-
-Confidence = highest combined weight for any type
-
-IF confidence >= 0.7: Proceed with detected type
-IF confidence < 0.7: Ask user to confirm
-```
-
-**Step 9.5.2: Map Type to Section**
-
-| Type | Section | Semver |
-|------|---------|--------|
-| feature | Added | MINOR |
-| bugfix | Fixed | PATCH |
-| breaking | Changed (BREAKING:) | MAJOR |
-| refactor | Changed | PATCH |
-
-**Step 9.5.3: Create Entry**
-
-Format: `- [SUMMARY] from \`[SPEC_NAME]\` (PR #[NUMBER])`
-
-Example: `- User authentication with JWT tokens from \`auth-feature\` (PR #123)`
-
-**Step 9.5.4: Update CHANGELOG.md**
-
-```
-IF CHANGELOG.md does not exist:
-  CREATE from template:
-  ---
-  # Changelog
-
-  All notable changes to this project will be documented in this file.
-
-  The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-  and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-  ## [Unreleased]
-
-  ### Added
-
-  ### Changed
-
-  ### Fixed
-  ---
-
-FIND: ## [Unreleased] section
-FIND or CREATE: ### [SECTION] subsection
-INSERT: Entry as last item in subsection
-```
-
-**Step 9.5.5: Calculate Semver Suggestion**
+After PR is created, update the recap and changelog with actual PR number:
 
 ```bash
-# Find current version
-CURRENT=$(grep -oE '## \[([0-9]+\.[0-9]+\.[0-9]+)\]' CHANGELOG.md | head -1)
-# Default: 0.0.0 if not found
+# Update recap file with PR number
+sed -i '' "s/#TBD/#${PR_NUMBER}/" ".agent-os/recaps/YYYY-MM-DD-SPEC_NAME.md"
 
-# Suggest based on type:
-# breaking → MAJOR bump
-# feature → MINOR bump
-# bugfix/refactor → PATCH bump
-```
+# Update changelog entry with PR number
+sed -i '' "s/(PR #TBD)/(PR #${PR_NUMBER})/" CHANGELOG.md
 
-**Error Handling:**
-```
-IF changelog update fails:
-  WARN: "Changelog update skipped: [ERROR]"
-  NOTE: Failure is non-blocking
-  CONTINUE: to output
+# Amend commit to include updated files
+git add -A
+git commit --amend --no-edit
+git push --force-with-lease
 ```
 
 ## Output Format

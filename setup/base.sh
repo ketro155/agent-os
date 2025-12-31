@@ -179,7 +179,7 @@ done
 
 echo ""
 echo "  📂 Agents:"
-for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager; do
+for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator; do
     download_file "${BASE_URL}/v3/agents/${agent}.md" \
         "$INSTALL_DIR/v3/agents/${agent}.md" \
         "$OVERWRITE_COMMANDS" \
@@ -274,7 +274,7 @@ echo "--------------------------------"
 echo ""
 echo "📍 Base installation structure:"
 echo "   $INSTALL_DIR/v3/commands/           - Command templates (8 commands)"
-echo "   $INSTALL_DIR/v3/agents/             - Agent templates (10 agents)"
+echo "   $INSTALL_DIR/v3/agents/             - Agent templates (13 agents)"
 echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (4 hooks)"
 echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts"
 echo "   $INSTALL_DIR/v3/memory/             - Memory templates"

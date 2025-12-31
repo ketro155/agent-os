@@ -27,7 +27,7 @@ Agent OS is a development framework that installs into other projects to provide
 agent-os/
 ├── v3/                    # All source files for v4+ architecture
 │   ├── commands/          # Command templates (8 commands) → .claude/commands/
-│   ├── agents/            # Agent templates (10 agents) → .claude/agents/
+│   ├── agents/            # Agent templates (13 agents) → .claude/agents/
 │   ├── hooks/             # Native hooks (4 hooks) → .claude/hooks/
 │   ├── scripts/           # Utility scripts → .claude/scripts/
 │   ├── memory/            # CLAUDE.md + rules → .claude/
