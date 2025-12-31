@@ -1,5 +1,5 @@
 #!/bin/bash
-# Agent OS v4.4.0 - Execute Spec Operations Script
+# Agent OS v4.4.1 - Execute Spec Operations Script
 # Manages state machine for /execute-spec command
 # Handles spec execution cycle: execute → review → merge → next wave
 
@@ -628,7 +628,7 @@ EOF
 
   help|*)
     cat << 'EOF'
-Agent OS v4.4.0 Execute Spec Operations
+Agent OS v4.4.1 Execute Spec Operations
 
 Manages the state machine for automated spec execution (/execute-spec command).
 

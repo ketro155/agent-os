@@ -1217,7 +1217,7 @@ EOF
 
   help|*)
     cat << 'EOF'
-Agent OS v4.4.0 Task Operations
+Agent OS v4.4.1 Task Operations
 
 Usage: task-operations.sh <command> [args]
 

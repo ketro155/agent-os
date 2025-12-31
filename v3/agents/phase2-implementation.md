@@ -580,6 +580,17 @@ TodoWrite([
 git add -A && git commit -m "feat(scope): subtask description"
 ```
 
+#### 6. Update Subtask Status
+
+After subtask completes successfully:
+
+```javascript
+// Mark subtask as completed in tasks.json
+Bash(`bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" update "${subtaskId}" "pass"`)
+```
+
+**Why this matters**: Without this call, only the parent task status gets updated when the task completes. Individual subtask statuses remain "pending" even though the work was done. This creates incorrect progress tracking and summary statistics.
+
 ### Predecessor Artifact Verification (MANDATORY - v4.1)
 
 > ⛔ **BLOCKING GATE** - All predecessor imports MUST be verified before use

@@ -38,6 +38,24 @@ This command automates the workflow you would normally do manually:
 5. Clean up the wave branch
 6. Advance to next wave
 
+### Context Isolation Architecture
+
+To prevent context exhaustion across multi-wave specs, the orchestrator uses **executor agents**:
+
+```
+execute-spec-orchestrator (minimal context ~37KB)
+├── Task: Execute /execute-tasks → Returns summary only
+├── Task: Execute /pr-review-cycle → Returns summary only
+└── Bash calls for state management
+```
+
+Each executor agent:
+- Runs in **isolated context** (fresh per invocation)
+- Reads and follows command instructions internally
+- Returns **only a compact JSON summary** (~500 bytes)
+
+This allows execution of 4+ wave specs without context overflow.
+
 ### State Machine
 
 ```

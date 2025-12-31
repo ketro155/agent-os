@@ -5,6 +5,25 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.1] - 2025-12-31
+
+### Changed
+
+- **Executor Agent Architecture for /execute-spec**: Redesigned orchestrator to prevent context exhaustion
+  - Orchestrator now spawns **isolated executor agents** for `/execute-tasks` and `/pr-review-cycle`
+  - Each executor reads command file, executes fully, returns only JSON summary (~500 bytes)
+  - Prevents context accumulation across multi-wave specs (was ~160KB, now ~37KB for 4-wave spec)
+  - Follows same isolation pattern as wave-orchestrator (v4.1) and batch agents (v4.3)
+  - Commands remain in `.claude/commands/` - executor agents read and follow them
+
+### Fixed
+
+- **Subtask Status Updates in Sequential Protocol**: Fixed bug where subtasks remained "pending" even after completion
+  - Added Step 6 (Update Subtask Status) to the Sequential Protocol in `phase2-implementation.md`
+  - Previously only the parent task status was updated to "pass", leaving subtasks stuck as "pending"
+  - Now consistent with Batched Protocol (Step 0.7.3) and Parallel Group Protocol (Step 0.6.2)
+  - Affects tasks with ≤4 subtasks that use the sequential execution path
+
 ## [4.4.0] - 2025-12-31
 
 ### Added

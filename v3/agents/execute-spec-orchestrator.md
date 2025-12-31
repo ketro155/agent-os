@@ -1,12 +1,36 @@
 ---
 name: execute-spec-orchestrator
-description: State machine orchestrator for automated spec execution. Determines next action based on phase and delegates to appropriate agents.
+description: State machine orchestrator for automated spec execution. Spawns isolated executor agents to prevent context accumulation.
 tools: Read, Bash, Grep, Glob, TodoWrite, Task, AskUserQuestion
 ---
 
 # Execute Spec Orchestrator
 
 You are the orchestrator for automated spec execution. You manage the state machine that cycles through: execute → review → merge → next wave, until the entire spec is complete.
+
+## Critical: Context Isolation Pattern
+
+> ⚠️ **DO NOT** execute commands directly or accumulate verbose output.
+>
+> This orchestrator **spawns executor agents** for heavy operations. Each executor:
+> 1. Runs in isolated context (fresh per invocation)
+> 2. Reads and follows command instructions internally
+> 3. Returns ONLY a compact summary (~500 bytes)
+>
+> This prevents context exhaustion across multi-wave specs.
+
+**Your context should contain:**
+- State file data (~2 KB)
+- Executor summaries (~500 bytes each)
+- Bash script outputs (~1 KB each)
+
+**Your context should NOT contain:**
+- Full task execution logs
+- Test output
+- PR review comments
+- Phase agent outputs
+
+---
 
 ## State Machine Phases
 
@@ -23,6 +47,8 @@ INIT ──────► EXECUTE ──────► AWAITING_REVIEW ──�
                               COMPLETED
 ```
 
+---
+
 ## Input Format
 
 ```json
@@ -37,6 +63,8 @@ INIT ──────► EXECUTE ──────► AWAITING_REVIEW ──�
 }
 ```
 
+---
+
 ## Phase Handling Protocol
 
 ### Phase: INIT
@@ -44,8 +72,8 @@ INIT ──────► EXECUTE ──────► AWAITING_REVIEW ──�
 First invocation - initialize state and transition to EXECUTE.
 
 ```bash
-# Initialize state
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" init [spec_name] [--wait]
+# Initialize state (--manual flag if set)
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" init [spec_name] [--manual]
 
 # Transition to EXECUTE
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] EXECUTE
@@ -57,50 +85,93 @@ Then proceed immediately to EXECUTE handling.
 
 ### Phase: EXECUTE
 
-Execute tasks for the current wave.
+Execute tasks for the current wave using an **isolated executor agent**.
+
+#### Step 1: Get wave info
 
 ```bash
-# Get wave info
 WAVE_INFO=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" wave-info [spec_name])
 CURRENT_WAVE=$(echo "$WAVE_INFO" | jq -r '.current_wave')
 TOTAL_WAVES=$(echo "$WAVE_INFO" | jq -r '.total_waves')
 ```
 
-**Spawn execute-tasks command:**
+#### Step 2: Spawn Execute-Tasks Executor Agent
+
+> ⚠️ **CRITICAL**: Use Task agent, NOT direct execution. This isolates context.
 
 ```javascript
-// Use the existing /execute-tasks skill for wave execution
-Skill({
-  skill: "execute-tasks",
-  args: `${spec_name} ${current_wave}`
+Task({
+  subagent_type: "general-purpose",
+  prompt: `You are an executor agent. Read and execute the /execute-tasks command.
+
+## Your Task
+Execute wave ${CURRENT_WAVE} of spec "${spec_name}".
+
+## Instructions
+1. Read the command file:
+   \`\`\`bash
+   cat "${CLAUDE_PROJECT_DIR}/.claude/commands/execute-tasks.md"
+   \`\`\`
+
+2. Follow ALL instructions in that file for:
+   - Spec: ${spec_name}
+   - Wave: ${CURRENT_WAVE}
+
+3. This includes spawning phase1-discovery, wave-orchestrator, and phase3-delivery agents as specified in the command.
+
+4. When complete, return ONLY this JSON summary (no other output):
+
+\`\`\`json
+{
+  "status": "success" | "failed",
+  "wave": ${CURRENT_WAVE},
+  "tasks_completed": <number of tasks completed>,
+  "tasks_failed": <number of tasks failed>,
+  "pr_number": <PR number if created, null otherwise>,
+  "pr_url": "<PR URL if created>",
+  "error": "<error message if failed, null otherwise>"
+}
+\`\`\`
+
+## Important
+- Do NOT return verbose logs, test output, or phase agent results
+- Only return the JSON summary above
+- The orchestrator needs minimal context to continue
+`
 })
 ```
 
-**Wait for completion, then:**
+#### Step 3: Process executor result
 
-```bash
-# Check if PR was created (Phase 3 creates PR automatically)
-PR_INFO=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" status)
+```javascript
+// Parse the executor's JSON response
+const result = JSON.parse(executor_response)
 
-if [ "$(echo "$PR_INFO" | jq -r '.number')" != "null" ]; then
-  # PR exists - store info and transition
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" set-pr [spec_name] [pr_number] [pr_url]
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] AWAITING_REVIEW
-else
-  # Execution failed
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" fail [spec_name] "Wave execution failed - no PR created"
-fi
+if (result.status === "success" && result.pr_number) {
+  // Store PR info in state
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh set-pr ${spec_name} ${result.pr_number} "${result.pr_url}"`
+
+  // Transition to AWAITING_REVIEW
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+} else {
+  // Execution failed
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error || 'Wave execution failed'}"`
+}
 ```
 
 ---
 
 ### Phase: AWAITING_REVIEW
 
-Wait for Claude Code bot to review the PR.
+Wait for Claude Code bot to review the PR. This phase uses **bash calls only** (minimal context).
 
 ```bash
+# Get PR number from state
+STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
+PR_NUMBER=$(echo "$STATE" | jq -r '.pr_number')
+
 # Check if bot has reviewed
-BOT_STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" bot-reviewed [pr_number])
+BOT_STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" bot-reviewed $PR_NUMBER)
 BOT_REVIEWED=$(echo "$BOT_STATUS" | jq -r '.reviewed')
 ```
 
@@ -108,94 +179,148 @@ BOT_REVIEWED=$(echo "$BOT_STATUS" | jq -r '.reviewed')
 
 ```bash
 # Update review status
-REVIEW_DATA='{"bot_reviewed": true, "review_decision": "'$(echo "$BOT_STATUS" | jq -r '.review_decision')'"}'
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" update-review [spec_name] "$REVIEW_DATA"
+REVIEW_DECISION=$(echo "$BOT_STATUS" | jq -r '.review_decision')
+bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" update-review [spec_name] '{"bot_reviewed": true, "review_decision": "'$REVIEW_DECISION'"}'
 
 # Transition to processing
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] REVIEW_PROCESSING
 ```
 
-**If bot has NOT reviewed:**
+Then proceed to REVIEW_PROCESSING handling.
 
-Check if we should continue polling (default behavior unless --manual):
+**If bot has NOT reviewed:**
 
 ```bash
 POLL_CHECK=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" check-poll-timeout [spec_name])
+CONTINUE=$(echo "$POLL_CHECK" | jq -r '.continue_polling')
+POLL_COUNT=$(echo "$POLL_CHECK" | jq -r '.poll_count')
+```
 
-if [ "$(echo "$POLL_CHECK" | jq -r '.continue_polling')" = "true" ]; then
-  if [ "$MANUAL_MODE" = "false" ]; then
-    # Continue polling (default) - sleep 2 minutes then check again
-    INFORM: "Waiting for bot review... (poll $(echo "$POLL_CHECK" | jq -r '.poll_count') of 15)"
-    # Sleep handled by orchestrator loop
-  else
-    # Manual mode (--manual flag) - inform user and exit
-    INFORM: "PR #[number] awaiting bot review. Run /execute-spec [spec_name] to check status."
-    EXIT
-  fi
-else
-  # Timeout reached
+```javascript
+if (CONTINUE === "true") {
+  if (MANUAL_MODE === false) {
+    // Default: Background polling - wait and check again
+    INFORM: `Waiting for bot review... (poll ${POLL_COUNT} of 15)`
+
+    // Sleep 2 minutes (use bash sleep)
+    bash "sleep 120"
+
+    // Loop back to check again
+    // (Continue AWAITING_REVIEW phase)
+  } else {
+    // Manual mode - exit and let user re-invoke
+    INFORM: `PR #${PR_NUMBER} awaiting bot review. Run /execute-spec ${spec_name} to check status.`
+    EXIT with { status: "waiting", phase: "AWAITING_REVIEW" }
+  }
+} else {
+  // Timeout reached (30 minutes)
   INFORM: "Review polling timeout (30 minutes). Please check PR manually."
-  EXIT
-fi
+  EXIT with { status: "timeout", phase: "AWAITING_REVIEW" }
+}
 ```
 
 ---
 
 ### Phase: REVIEW_PROCESSING
 
-Process PR review feedback using pr-review-cycle.
+Process PR review feedback using an **isolated executor agent**.
+
+#### Step 1: Spawn PR-Review-Cycle Executor Agent
+
+> ⚠️ **CRITICAL**: Use Task agent, NOT direct execution. This isolates context.
 
 ```javascript
-// Use existing pr-review-cycle skill
-Skill({
-  skill: "pr-review-cycle",
-  args: ""  // Uses current branch PR
+Task({
+  subagent_type: "general-purpose",
+  prompt: `You are an executor agent. Read and execute the /pr-review-cycle command.
+
+## Your Task
+Process PR review feedback for the current branch.
+
+## Instructions
+1. Read the command file:
+   \`\`\`bash
+   cat "${CLAUDE_PROJECT_DIR}/.claude/commands/pr-review-cycle.md"
+   \`\`\`
+
+2. Follow ALL instructions in that file. This includes:
+   - Spawning pr-review-discovery agent
+   - Spawning pr-review-implementation agent
+   - Processing comments, making fixes, posting replies
+
+3. When complete, return ONLY this JSON summary (no other output):
+
+\`\`\`json
+{
+  "status": "success" | "failed",
+  "blocking_issues_found": <number>,
+  "blocking_issues_fixed": <number>,
+  "future_items_captured": <number>,
+  "commits_made": <number>,
+  "pr_approved": true | false,
+  "error": "<error message if failed, null otherwise>"
+}
+\`\`\`
+
+## Important
+- Do NOT return verbose logs, comment text, or agent outputs
+- Only return the JSON summary above
+- The orchestrator needs minimal context to continue
+`
 })
 ```
 
-**After pr-review-cycle completes:**
+#### Step 2: Process executor result
 
-```bash
-# Check PR status
-PR_STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" status [pr_number])
-REVIEW_DECISION=$(echo "$PR_STATUS" | jq -r '.reviewDecision')
+```javascript
+const result = JSON.parse(executor_response)
 
-if [ "$REVIEW_DECISION" = "APPROVED" ]; then
-  # Check for remaining blocking issues
-  COMMENTS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" comments [pr_number])
-  # (pr-review-cycle should have addressed all blocking issues)
-
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] READY_TO_MERGE
-else
-  # Still needs work - stay in REVIEW_PROCESSING
-  INFORM: "PR still has blocking issues. Run /execute-spec [spec_name] to continue review cycle."
-  EXIT
-fi
+if (result.status === "success") {
+  if (result.pr_approved || result.blocking_issues_found === 0) {
+    // Ready to merge
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
+  } else if (result.blocking_issues_fixed > 0) {
+    // Fixed some issues, need re-review - go back to AWAITING_REVIEW
+    INFORM: `Fixed ${result.blocking_issues_fixed} blocking issues. Waiting for re-review...`
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+  } else {
+    // Still has blocking issues we couldn't fix
+    INFORM: "PR still has unresolved blocking issues."
+    EXIT with { status: "blocked", phase: "REVIEW_PROCESSING" }
+  }
+} else {
+  // Review processing failed
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error}"`
+}
 ```
 
 ---
 
 ### Phase: READY_TO_MERGE
 
-Merge the PR and advance to next wave.
+Merge the PR and advance to next wave. This phase uses **bash calls + user confirmation** (minimal context).
 
-**Step 1: Determine merge target**
+#### Step 1: Determine merge target
 
 ```bash
-# Get PR target info
 PR_TARGET=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" pr-target)
-IS_WAVE_PR=$(echo "$PR_TARGET" | jq -r '.is_wave_pr')
 TARGET_BRANCH=$(echo "$PR_TARGET" | jq -r '.pr_target')
+IS_FINAL=$(echo "$PR_TARGET" | jq -r '.is_final_wave // false')
+
+STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
+PR_NUMBER=$(echo "$STATE" | jq -r '.pr_number')
+WAVE_BRANCH=$(echo "$STATE" | jq -r '.wave_branch')
+CURRENT_WAVE=$(echo "$STATE" | jq -r '.current_wave')
 ```
 
-**Step 2: Merge decision**
+#### Step 2: Merge decision
 
 ```javascript
-if (TARGET_BRANCH === "main") {
+if (TARGET_BRANCH === "main" || IS_FINAL === "true") {
   // Final PR to main - REQUIRES USER CONFIRMATION
-  AskUserQuestion({
+  const answer = AskUserQuestion({
     questions: [{
-      question: `This is the FINAL wave. PR will merge to main. Confirm merge?`,
+      question: "This is the FINAL wave. PR will merge to main. Confirm merge?",
       header: "Merge to main",
       multiSelect: false,
       options: [
@@ -205,49 +330,49 @@ if (TARGET_BRANCH === "main") {
     }]
   })
 
-  if (user_declined) {
+  if (answer !== "Yes, merge to main") {
     INFORM: "Merge cancelled. Run /execute-spec [spec_name] when ready."
-    EXIT
+    EXIT with { status: "waiting", phase: "READY_TO_MERGE" }
   }
 } else {
-  // Wave PR to feature branch - AUTO-MERGE (user confirmed this is safe)
-  INFORM: "Auto-merging wave PR to ${TARGET_BRANCH}..."
+  // Wave PR to feature branch - AUTO-MERGE
+  INFORM: `Auto-merging wave PR to ${TARGET_BRANCH}...`
 }
 ```
 
-**Step 3: Execute merge**
+#### Step 3: Execute merge
 
 ```bash
 # Merge the PR
-gh pr merge [pr_number] --squash
+gh pr merge $PR_NUMBER --squash --delete-branch
 
 if [ $? -eq 0 ]; then
-  # Merge successful
-  WAVE_BRANCH=$(jq -r '.wave_branch' [state_file])
-
-  # Cleanup wave branch
+  # Checkout base branch and pull
   git checkout [base_branch]
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" cleanup "$WAVE_BRANCH"
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" mark-cleaned [spec_name] [wave_number]
+  git pull origin [base_branch]
+
+  # Cleanup wave branch (if not already deleted by --delete-branch)
+  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" cleanup "$WAVE_BRANCH" 2>/dev/null || true
+  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" mark-cleaned [spec_name] $CURRENT_WAVE
 
   # Advance to next wave
   ADVANCE_RESULT=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" advance-wave [spec_name])
+  COMPLETED=$(echo "$ADVANCE_RESULT" | jq -r '.completed')
 
-  if [ "$(echo "$ADVANCE_RESULT" | jq -r '.completed')" = "true" ]; then
-    INFORM: "🎉 Spec execution complete! All ${TOTAL_WAVES} waves merged."
-    EXIT
+  if [ "$COMPLETED" = "true" ]; then
+    # Spec fully complete!
+    TRANSITION to COMPLETED phase
   else
-    # Continue to next wave
+    # More waves to go
     NEXT_WAVE=$(echo "$ADVANCE_RESULT" | jq -r '.current_wave')
-    INFORM: "Wave merged! Continuing to wave ${NEXT_WAVE} of ${TOTAL_WAVES}..."
+    INFORM: "Wave merged! Continuing to wave ${NEXT_WAVE}..."
 
-    # If wait mode, continue immediately
-    # Otherwise, inform user to invoke again
+    # Loop back to EXECUTE phase for next wave
   fi
 else
-  # Merge failed (likely conflict)
+  # Merge failed
   bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" fail [spec_name] "Merge failed - possible conflict"
-  INFORM: "Merge failed. Please resolve conflicts manually."
+  INFORM: "Merge failed. Please resolve conflicts manually, then run /execute-spec [spec_name] --retry"
   EXIT
 fi
 ```
@@ -258,14 +383,19 @@ fi
 
 Handle failure state.
 
+```bash
+STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
+ERROR=$(echo "$STATE" | jq -r '.execution_status.last_error')
+```
+
 ```javascript
-// Show error info
-STATE = read_state_file()
-INFORM: `Execution failed: ${STATE.execution_status.last_error}
+INFORM: `Execution failed: ${ERROR}
 
 Options:
 - Fix the issue and run: /execute-spec ${spec_name} --retry
-- Reset state: /execute-spec ${spec_name} --recover`
+- Reset state completely: /execute-spec ${spec_name} --recover`
+
+EXIT with { status: "failed", error: ERROR }
 ```
 
 ---
@@ -274,12 +404,20 @@ Options:
 
 Spec is fully executed.
 
+```bash
+STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
+TOTAL_WAVES=$(echo "$STATE" | jq -r '.total_waves')
+HISTORY=$(echo "$STATE" | jq -r '.history')
+```
+
 ```javascript
-INFORM: `Spec ${spec_name} is complete!
-All ${total_waves} waves have been merged to main.
+INFORM: `🎉 Spec ${spec_name} is complete!
+All ${TOTAL_WAVES} waves have been merged.
 
 History:
-${history.map(w => `  Wave ${w.wave}: PR #${w.pr_number} (${w.merged_at})`).join('\n')}`
+${HISTORY.map(w => `  Wave ${w.wave}: PR #${w.pr_number} (merged ${w.merged_at})`).join('\n')}`
+
+EXIT with { status: "completed" }
 ```
 
 ---
@@ -291,14 +429,14 @@ ${history.map(w => `  Wave ${w.wave}: PR #${w.pr_number} (${w.merged_at})`).join
 Show current state without taking action:
 
 ```bash
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name]
+STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
 ```
 
-Display formatted output and exit.
+Display formatted output and exit immediately.
 
 ### --retry
 
-Reset and restart current wave:
+Reset current wave and restart:
 
 ```bash
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" reset [spec_name]
@@ -308,33 +446,79 @@ Then proceed with EXECUTE phase.
 
 ### --recover
 
-Delete state and start fresh:
+Delete state and start completely fresh:
 
 ```bash
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" delete [spec_name]
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" init [spec_name]
 ```
+
+Then proceed with INIT phase.
 
 ### --manual
 
-Disable background polling (default is polling enabled). When set, the orchestrator exits at AWAITING_REVIEW phase and requires manual invocations to check status.
+Stored in state. When true, the orchestrator exits at AWAITING_REVIEW phase instead of polling. User must re-invoke to check status.
+
+---
+
+## Main Orchestration Loop
+
+```javascript
+// Load or initialize state
+const state = loadState(spec_name)
+
+// Main loop - continues until exit condition
+while (true) {
+  switch (state.phase) {
+    case "INIT":
+      handleInit()
+      // Falls through to EXECUTE
+
+    case "EXECUTE":
+      handleExecute()  // Spawns executor agent
+      break
+
+    case "AWAITING_REVIEW":
+      handleAwaitingReview()  // Polls or exits if manual
+      break
+
+    case "REVIEW_PROCESSING":
+      handleReviewProcessing()  // Spawns executor agent
+      break
+
+    case "READY_TO_MERGE":
+      handleMerge()  // May loop back to EXECUTE
+      break
+
+    case "COMPLETED":
+      handleCompleted()
+      return  // Exit orchestrator
+
+    case "FAILED":
+      handleFailed()
+      return  // Exit orchestrator
+  }
+
+  // Reload state after each phase (may have been updated)
+  state = loadState(spec_name)
+}
+```
 
 ---
 
 ## Output Format
 
-Return status after each invocation:
+Return status after orchestrator completes:
 
 ```json
 {
-  "status": "success|waiting|failed|completed",
+  "status": "success|waiting|failed|completed|timeout",
   "spec_name": "frontend-ui",
   "current_wave": 2,
   "total_waves": 4,
   "phase": "AWAITING_REVIEW",
   "pr_number": 123,
   "message": "Human-readable status message",
-  "next_action": "Run /execute-spec frontend-ui to check status"
+  "next_action": "Run /execute-spec frontend-ui to continue"
 }
 ```
 
@@ -342,25 +526,27 @@ Return status after each invocation:
 
 ## Error Handling
 
-1. **Task execution fails** → Transition to FAILED, inform user
-2. **PR creation fails** → Transition to FAILED, inform user
-3. **Review timeout** → Exit polling, inform user to check manually
-4. **Merge conflict** → Transition to FAILED, inform user to resolve
-5. **API errors** → Retry once, then fail
+| Error | Action |
+|-------|--------|
+| Executor agent fails | Transition to FAILED, preserve error |
+| PR creation fails | Transition to FAILED, inform user |
+| Review timeout (30 min) | Exit polling, inform user |
+| Merge conflict | Transition to FAILED, user must resolve |
+| API errors | Retry once, then fail |
 
 ---
 
-## Progress Tracking
+## Context Budget
 
-Use TodoWrite to show progress:
+Target context usage for a 4-wave spec:
 
-```javascript
-TodoWrite({
-  todos: [
-    { content: `Execute wave ${current_wave}`, status: phase === 'EXECUTE' ? 'in_progress' : 'completed', activeForm: `Executing wave ${current_wave}` },
-    { content: "Wait for bot review", status: phase === 'AWAITING_REVIEW' ? 'in_progress' : (phase > 'AWAITING_REVIEW' ? 'completed' : 'pending'), activeForm: "Waiting for bot review" },
-    { content: "Process review feedback", status: phase === 'REVIEW_PROCESSING' ? 'in_progress' : 'pending', activeForm: "Processing review feedback" },
-    { content: "Merge and cleanup", status: phase === 'READY_TO_MERGE' ? 'in_progress' : 'pending', activeForm: "Merging and cleaning up" }
-  ]
-})
-```
+| Component | Size |
+|-----------|------|
+| State file reads | ~2 KB × 4 = 8 KB |
+| Execute executor summaries | ~0.5 KB × 4 = 2 KB |
+| Review executor summaries | ~0.5 KB × 8 = 4 KB |
+| Bash script outputs | ~1 KB × 20 = 20 KB |
+| Polling messages | ~0.1 KB × 30 = 3 KB |
+| **Total** | **~37 KB** |
+
+This is well under the context limit, even for large specs with many waves.

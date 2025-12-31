@@ -403,7 +403,7 @@ case "$COMMAND" in
 
   help|*)
     cat << 'EOF'
-Agent OS v4.4.0 PR Review Operations
+Agent OS v4.4.1 PR Review Operations
 
 Usage: pr-review-operations.sh <command> [args]
 

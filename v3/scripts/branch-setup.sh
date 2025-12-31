@@ -449,7 +449,7 @@ EOF
 
   help|*)
     cat <<EOF
-Agent OS Branch Setup Script v4.4.0
+Agent OS Branch Setup Script v4.4.1
 
 Commands:
   setup <spec_name> [wave]  Setup branch structure for a wave (creates base + wave branch)
