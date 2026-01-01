@@ -166,9 +166,13 @@ if (result.status === "success" && result.pr_number) {
 Wait for Claude Code bot to review the PR. This phase uses **bash calls only** (minimal context).
 
 ```bash
-# Get PR number from state
+# Get full state including flags
 STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
 PR_NUMBER=$(echo "$STATE" | jq -r '.pr_number')
+
+# CRITICAL: Load manual_mode from state, defaulting to false if missing
+# This ensures polling works correctly even if flags object is malformed
+MANUAL_MODE=$(echo "$STATE" | jq -r '.flags.manual_mode // false')
 
 # Check if bot has reviewed
 BOT_STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" bot-reviewed $PR_NUMBER)
@@ -198,17 +202,18 @@ POLL_COUNT=$(echo "$POLL_CHECK" | jq -r '.poll_count')
 
 ```javascript
 if (CONTINUE === "true") {
-  if (MANUAL_MODE === false) {
+  // MANUAL_MODE is loaded from state above, defaults to "false" if missing
+  if (MANUAL_MODE === "false" || MANUAL_MODE === false) {
     // Default: Background polling - wait and check again
     INFORM: `Waiting for bot review... (poll ${POLL_COUNT} of 15)`
 
-    // Sleep 2 minutes (use bash sleep)
+    // Sleep 2 minutes then loop back to check again
+    // Note: Use shorter sleep (30s) with more iterations if timeout issues occur
     bash "sleep 120"
 
-    // Loop back to check again
-    // (Continue AWAITING_REVIEW phase)
+    // Loop back to check again - continue AWAITING_REVIEW phase
   } else {
-    // Manual mode - exit and let user re-invoke
+    // Manual mode (MANUAL_MODE === "true") - exit and let user re-invoke
     INFORM: `PR #${PR_NUMBER} awaiting bot review. Run /execute-spec ${spec_name} to check status.`
     EXIT with { status: "waiting", phase: "AWAITING_REVIEW" }
   }

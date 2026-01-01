@@ -1,5 +1,5 @@
 #!/bin/bash
-# Agent OS v4.4.1 - Execute Spec Operations Script
+# Agent OS v4.5.1 - Execute Spec Operations Script
 # Manages state machine for /execute-spec command
 # Handles spec execution cycle: execute → review → merge → next wave
 
@@ -220,7 +220,14 @@ EOF
       exit 0
     fi
 
-    jq '. + {exists: true}' "$STATE_FILE"
+    # Ensure flags object exists with defaults (defensive fix for malformed state files)
+    # This handles state files that were manually modified or created by older versions
+    jq '. + {exists: true} |
+      .flags = (.flags // {}) |
+      .flags.manual_mode = (.flags.manual_mode // false) |
+      .flags.poll_interval_ms = (.flags.poll_interval_ms // 120000) |
+      .flags.max_poll_duration_ms = (.flags.max_poll_duration_ms // 1800000)
+    ' "$STATE_FILE"
     ;;
 
   # Transition to a new phase

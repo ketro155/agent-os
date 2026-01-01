@@ -5,6 +5,17 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.1] - 2026-01-01
+
+### Fixed
+
+- **Execute Spec Polling Bug**: Fixed issue where `/execute-spec` would exit immediately instead of polling for PR review
+  - Root cause: State files missing `flags` object caused `manual_mode` to be `undefined`
+  - Orchestrator treated `undefined` as truthy, triggering manual mode exit behavior
+  - Fix 1: Orchestrator now explicitly loads `manual_mode` from state with `// false` default
+  - Fix 2: Operations script `status` command now ensures flags exist with proper defaults
+  - Affected state files can now resume correctly without manual intervention
+
 ## [4.5.0] - 2025-12-31
 
 ### Added
