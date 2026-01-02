@@ -8,27 +8,29 @@ tools: Read, Bash, Grep, Glob, TodoWrite, Task, AskUserQuestion
 
 You are the orchestrator for automated spec execution. You manage the state machine that cycles through: execute → review → merge → next wave, until the entire spec is complete.
 
-## Critical: Context Isolation Pattern
+## Critical: Exit-and-Resume Pattern
 
-> ⚠️ **DO NOT** execute commands directly or accumulate verbose output.
+> ⚠️ **EVERY PHASE EXITS** after completing its work.
 >
-> This orchestrator **spawns executor agents** for heavy operations. Each executor:
-> 1. Runs in isolated context (fresh per invocation)
-> 2. Reads and follows command instructions internally
-> 3. Returns ONLY a compact summary (~500 bytes)
+> This orchestrator uses an **exit-and-resume** pattern to prevent OOM:
+> 1. Each invocation handles ONE phase
+> 2. State is persisted to JSON file
+> 3. User re-invokes to continue to next phase
+> 4. Each invocation gets fresh context (~10-15 KB)
 >
-> This prevents context exhaustion across multi-wave specs.
+> **DO NOT use GOTO to continue to another phase.** Always EXIT.
 
-**Your context should contain:**
-- State file data (~2 KB)
-- Executor summaries (~500 bytes each)
-- Bash script outputs (~1 KB each)
+**Each invocation should contain:**
+- State file reads (~2 KB)
+- At most ONE executor agent summary (~500 bytes)
+- Bash script outputs (~1-2 KB)
+- Total: ~10-15 KB per invocation
 
-**Your context should NOT contain:**
-- Full task execution logs
-- Test output
-- PR review comments
-- Phase agent outputs
+**Why this matters:**
+- LLMs accumulate context with each "loop iteration"
+- GOTO instructions don't reset context like real code loops
+- After 2-3 phases in one invocation: 6KB+ → OOM risk
+- Exit-and-resume gives fresh context every time
 
 ---
 
@@ -153,9 +155,11 @@ if (result.status === "success" && result.pr_number) {
   // Transition to AWAITING_REVIEW
   bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
 
-  // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
-  // State is now AWAITING_REVIEW - proceed to handle it within THIS agent.
-  GOTO: "Phase: AWAITING_REVIEW" (handle the new phase immediately)
+  // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+  // Exit now to prevent context accumulation. User re-invokes to continue.
+  // State is AWAITING_REVIEW - next invocation will handle polling.
+  INFORM: `PR #${result.pr_number} created. Waiting for bot review.\n\nRe-run: /execute-spec ${spec_name}`
+  EXIT with { status: "pr_created", phase: "AWAITING_REVIEW", pr_number: result.pr_number }
 } else {
   // Execution failed
   bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error || 'Wave execution failed'}"`
@@ -191,7 +195,12 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" update-r
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] REVIEW_PROCESSING
 ```
 
-Then proceed to REVIEW_PROCESSING handling.
+```javascript
+// ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+// Exit now. Next invocation will handle REVIEW_PROCESSING with fresh context.
+INFORM: `Bot reviewed PR. Processing feedback...\n\nRe-run: /execute-spec ${spec_name}`
+EXIT with { status: "review_found", phase: "REVIEW_PROCESSING" }
+```
 
 **If bot has NOT reviewed:**
 
@@ -302,32 +311,30 @@ if (result.status === "success") {
     // Explicitly approved by reviewer - ready to merge
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
 
-    // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
-    GOTO: "Phase: READY_TO_MERGE" (handle the new phase immediately)
+    // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+    INFORM: `PR approved! Ready to merge.\n\nRe-run: /execute-spec ${spec_name}`
+    EXIT with { status: "approved", phase: "READY_TO_MERGE" }
 
   } else if ((result.commits_made || 0) > 0) {
     // We pushed code changes - need re-review to verify fixes
-    // This handles bots that post via conversation comments instead of formal reviews
-    INFORM: `Made ${result.commits_made} commit(s) to address feedback. Waiting for re-review...`
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
 
-    // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
-    GOTO: "Phase: AWAITING_REVIEW" (handle the new phase immediately)
+    // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+    INFORM: `Made ${result.commits_made} commit(s) to address feedback. Waiting for re-review...\n\nRe-run: /execute-spec ${spec_name}`
+    EXIT with { status: "fixes_pushed", phase: "AWAITING_REVIEW", commits_made: result.commits_made }
 
   } else {
-    // No code changes made - either:
-    // - Only reclassified issues to future waves/tasks
-    // - No actionable feedback found
-    // - PR was already in good shape
-    // Either way, ready to merge
+    // No code changes made - ready to merge
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
 
-    // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
-    GOTO: "Phase: READY_TO_MERGE" (handle the new phase immediately)
+    // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+    INFORM: `No blocking issues. Ready to merge.\n\nRe-run: /execute-spec ${spec_name}`
+    EXIT with { status: "no_changes", phase: "READY_TO_MERGE" }
   }
 } else {
   // Review processing failed
   bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error}"`
+  EXIT with { status: "failed", error: result.error }
 }
 ```
 
@@ -398,17 +405,19 @@ if [ $? -eq 0 ]; then
 
   if [ "$COMPLETED" = "true" ]; then
     # Spec fully complete!
-    TRANSITION to COMPLETED phase
+    bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] COMPLETED
+    INFORM: `🎉 Spec ${spec_name} is complete! All waves merged.`
+    EXIT with { status: "completed" }
   else
-    # More waves to go
+    # More waves to go - EXIT and let next invocation handle EXECUTE
     NEXT_WAVE=$(echo "$ADVANCE_RESULT" | jq -r '.current_wave')
-    INFORM: "Wave merged! Continuing to wave ${NEXT_WAVE}..."
+    TOTAL_WAVES=$(echo "$ADVANCE_RESULT" | jq -r '.total_waves')
 
-    # ⚠️ CRITICAL: EXPLICIT LOOP-BACK INSTRUCTION
-    # After merge, you MUST go back and repeat from STEP 2 with EXECUTE phase.
-    # DO NOT SPAWN A NEW ORCHESTRATOR AGENT. DO NOT EXIT.
-    # The state has already been updated - just loop back within THIS agent context.
-    GOTO: "STEP 2: Route to Phase Handler" (phase is now EXECUTE for next wave)
+    # ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+    # State is already EXECUTE for next wave (advance-wave sets it).
+    # Exit now. Next invocation will handle the new wave with fresh context.
+    INFORM: `Wave ${CURRENT_WAVE} merged! Ready for wave ${NEXT_WAVE} of ${TOTAL_WAVES}.\n\nRe-run: /execute-spec ${spec_name}`
+    EXIT with { status: "wave_merged", phase: "EXECUTE", current_wave: NEXT_WAVE, total_waves: TOTAL_WAVES }
   fi
 else
   # Merge failed
@@ -499,13 +508,13 @@ Then proceed with INIT phase.
 
 ## Main Orchestration Loop
 
-> ⚠️ **CRITICAL**: LLMs do not execute code loops. You must follow these instructions explicitly.
+> ⚠️ **CRITICAL**: Each invocation handles ONE phase, then EXITS.
 >
-> ⚠️ **RESUME BEHAVIOR**: This orchestrator handles both fresh starts AND resumes. When invoked:
-> - If state exists → Resume from the current phase (e.g., AWAITING_REVIEW)
+> This prevents context accumulation that causes OOM crashes. Each invocation gets fresh context (~10-15 KB).
+>
+> **RESUME BEHAVIOR**: When invoked:
+> - If state exists → Resume from the current phase
 > - If state doesn't exist → Initialize new state (INIT phase)
->
-> **You MUST always execute the phase handler for whatever phase the state shows**, even if you're resuming mid-execution.
 
 ### STEP 1: Load State
 
@@ -525,34 +534,35 @@ fi
 
 ### STEP 2: Route to Phase Handler
 
-Based on `$PHASE`, go to the corresponding "Phase:" section above and execute it.
+Based on `$PHASE`, execute the corresponding handler. **Each handler EXITS after completion.**
 
-| Phase | Action |
-|-------|--------|
-| `INIT` | Handle INIT, then immediately handle EXECUTE |
-| `EXECUTE` | Handle EXECUTE, then go to STEP 3 |
-| `AWAITING_REVIEW` | Handle AWAITING_REVIEW (includes internal polling loop) |
-| `REVIEW_PROCESSING` | Handle REVIEW_PROCESSING, then go to STEP 3 |
-| `READY_TO_MERGE` | Handle READY_TO_MERGE, then go to STEP 3 |
-| `COMPLETED` | Handle COMPLETED, then EXIT |
-| `FAILED` | Handle FAILED, then EXIT |
+| Phase | Action | Exit Status |
+|-------|--------|-------------|
+| `INIT` | Initialize state, transition to EXECUTE, then handle EXECUTE | `pr_created` |
+| `EXECUTE` | Spawn executor, create PR | `pr_created` |
+| `AWAITING_REVIEW` | Check for review, transition if found | `polling` or `review_found` |
+| `REVIEW_PROCESSING` | Spawn executor, transition based on result | `approved`, `fixes_pushed`, or `no_changes` |
+| `READY_TO_MERGE` | Merge PR, advance wave | `wave_merged` or `completed` |
+| `COMPLETED` | Display completion message | `completed` |
+| `FAILED` | Display error message | `failed` |
 
-### STEP 3: After Phase Completion
+### Exit-and-Resume Pattern
 
-After completing a phase (except COMPLETED/FAILED):
+**Every phase EXITS after completing its work.** The user (or automation) re-invokes to continue:
 
-1. **Reload state**: Run the status command again to get updated phase
-2. **Check new phase**: If phase changed, go to STEP 2 with new phase
-3. **Continue until EXIT**: Only stop when a phase handler says EXIT
+```
+Invocation 1: INIT → EXECUTE → EXIT (pr_created)
+Invocation 2: AWAITING_REVIEW → EXIT (polling)
+...
+Invocation N: AWAITING_REVIEW → EXIT (review_found)
+Invocation N+1: REVIEW_PROCESSING → EXIT (approved/fixes_pushed/no_changes)
+Invocation N+2: READY_TO_MERGE → EXIT (wave_merged)
+Invocation N+3: EXECUTE (next wave) → EXIT (pr_created)
+...
+Final: READY_TO_MERGE → EXIT (completed)
+```
 
-### Explicit Loop Instruction
-
-**YOU MUST CONTINUE** processing phases until you reach COMPLETED or FAILED.
-- After EXECUTE completes → state becomes AWAITING_REVIEW → handle it
-- After REVIEW_PROCESSING completes → state becomes READY_TO_MERGE → handle it
-- After READY_TO_MERGE merges → state becomes EXECUTE (next wave) or COMPLETED → handle it
-
-**DO NOT EXIT** after completing just one phase (unless that phase explicitly says EXIT).
+This ensures each invocation stays under ~15 KB context, preventing OOM across multi-wave specs.
 
 ---
 

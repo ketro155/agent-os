@@ -5,6 +5,27 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.6] - 2026-01-02
+
+### Fixed
+
+- **Complete OOM Fix - Exit After Every Phase**: Extended exit-and-resume pattern to ALL phases, not just polling
+  - Root cause: v4.5.5 only fixed polling, but GOTO instructions after REVIEW_PROCESSING and READY_TO_MERGE still accumulated context
+  - Symptom: OOM during wave 4→5 transition after merge (multiple phases in one invocation)
+  - Fix: **Every phase now EXITS** after completing its work:
+    - EXECUTE: Spawn executor → EXIT (`pr_created`)
+    - AWAITING_REVIEW (no review): Check → EXIT (`polling`)
+    - AWAITING_REVIEW (review found): Transition → EXIT (`review_found`)
+    - REVIEW_PROCESSING: Spawn executor → EXIT (`approved`/`fixes_pushed`/`no_changes`)
+    - READY_TO_MERGE: Merge → EXIT (`wave_merged` or `completed`)
+  - Removed ALL GOTO instructions between phases
+  - Each invocation handles exactly ONE phase with fresh context (~10-15 KB)
+
+### Changed
+
+- **Architectural shift from GOTO to exit-and-resume**: The orchestrator no longer uses GOTO to continue between phases. Each phase exits and requires re-invocation. This fundamental change ensures context never accumulates across phases.
+- Updated documentation to emphasize "DO NOT use GOTO to continue to another phase"
+
 ## [4.5.5] - 2026-01-02
 
 ### Fixed
