@@ -5,6 +5,26 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.5] - 2026-01-02
+
+### Fixed
+
+- **Execute Spec Polling OOM Crash**: Fixed memory exhaustion during PR review polling loop
+  - Root cause: Even with GOTO instructions, each poll iteration adds ~2KB to context (state reads, INFORM messages, bash outputs)
+  - Symptom: After 5+ poll cycles, context grew to 6k+ tokens, then REVIEW_PROCESSING phase caused OOM crash
+  - Fix: Replaced in-process polling loop with **exit-and-resume** pattern
+    - AWAITING_REVIEW phase now checks status once and EXITS immediately
+    - Returns status "polling" with instruction to re-invoke in ~2 minutes
+    - Each invocation gets fresh context (~10-15 KB vs. accumulating)
+    - State file maintains poll_count for timeout tracking (max 15 polls / 30 min)
+  - Removed `--manual` flag (now default behavior)
+  - Key insight: LLMs don't have real loops - GOTO still accumulates transcript
+
+### Changed
+
+- **`/execute-spec` now uses exit-and-resume for polling**: Instead of background polling with GOTO loops, the orchestrator exits after each phase and requires re-invocation. This prevents context accumulation across long-running executions.
+- Removed `--manual` flag from `/execute-spec` (exit-and-resume is now the only mode)
+
 ## [4.5.4] - 2026-01-02
 
 ### Fixed

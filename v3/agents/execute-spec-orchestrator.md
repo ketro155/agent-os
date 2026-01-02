@@ -55,7 +55,6 @@ INIT ──────► EXECUTE ──────► AWAITING_REVIEW ──�
 {
   "spec_name": "frontend-ui",
   "flags": {
-    "manual": false,    // --manual flag disables background polling (default: false = polling enabled)
     "status": false,    // --status flag for status check only
     "retry": false,     // --retry flag to restart wave
     "recover": false    // --recover flag to reset stuck state
@@ -172,13 +171,9 @@ Wait for Claude Code bot to review the PR. This phase uses **bash calls only** (
 > **On Resume**: If you're resuming at this phase (e.g., after session restart), immediately check bot review status below. The PR already exists and we're waiting for the bot to review it.
 
 ```bash
-# Get full state including flags
+# Get state
 STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
 PR_NUMBER=$(echo "$STATE" | jq -r '.pr_number')
-
-# CRITICAL: Load manual_mode from state, defaulting to false if missing
-# This ensures polling works correctly even if flags object is malformed
-MANUAL_MODE=$(echo "$STATE" | jq -r '.flags.manual_mode // false')
 
 # Check if bot has reviewed
 BOT_STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" bot-reviewed $PR_NUMBER)
@@ -208,28 +203,25 @@ POLL_COUNT=$(echo "$POLL_CHECK" | jq -r '.poll_count')
 
 ```javascript
 if (CONTINUE === "true") {
-  // MANUAL_MODE is loaded from state above, defaults to "false" if missing
-  if (MANUAL_MODE === "false" || MANUAL_MODE === false) {
-    // Default: Background polling - wait and check again
-    INFORM: `Waiting for bot review... (poll ${POLL_COUNT} of 15)`
+  // Increment poll count in state
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"poll_count": ${parseInt(POLL_COUNT) + 1}}'`
 
-    // Increment poll count in state
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"poll_count": ${parseInt(POLL_COUNT) + 1}}'`
+  // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
+  // Instead of looping in-process (which accumulates context with each iteration),
+  // we EXIT and require re-invocation. This gives FRESH CONTEXT for each poll cycle.
+  // State file maintains poll_count for timeout tracking.
+  //
+  // Why: Even with GOTO, each loop iteration adds ~2KB to context:
+  // - State reads, INFORM messages, bash outputs, sleep commands
+  // - After 5-10 polls, this causes OOM during later phases
+  //
+  // The user's automation or manual re-invocation handles the polling loop externally.
 
-    // Sleep 2 minutes
-    bash "sleep 120"
+  INFORM: `PR #${PR_NUMBER} awaiting bot review (poll ${POLL_COUNT + 1} of 15).
+Re-run in ~2 minutes: /execute-spec ${spec_name}`
 
-    // ⚠️ CRITICAL: EXPLICIT LOOP-BACK INSTRUCTION
-    // After sleep, you MUST go back and repeat the AWAITING_REVIEW phase handling.
-    // Start again from: "Get full state including flags" at the top of this phase.
-    // DO NOT EXIT. DO NOT PROCEED TO NEXT PHASE. REPEAT THIS PHASE.
-    GOTO: "Phase: AWAITING_REVIEW" (repeat from the beginning of this section)
+  EXIT with { status: "polling", phase: "AWAITING_REVIEW", poll_count: POLL_COUNT + 1 }
 
-  } else {
-    // Manual mode (MANUAL_MODE === "true") - exit and let user re-invoke
-    INFORM: `PR #${PR_NUMBER} awaiting bot review. Run /execute-spec ${spec_name} to check status.`
-    EXIT with { status: "waiting", phase: "AWAITING_REVIEW" }
-  }
 } else {
   // Timeout reached (30 minutes)
   INFORM: "Review polling timeout (30 minutes). Please check PR manually."
@@ -503,10 +495,6 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" delete [
 
 Then proceed with INIT phase.
 
-### --manual
-
-Stored in state. When true, the orchestrator exits at AWAITING_REVIEW phase instead of polling. User must re-invoke to check status.
-
 ---
 
 ## Main Orchestration Loop
@@ -601,15 +589,20 @@ Return status after orchestrator completes:
 
 ## Context Budget
 
-Target context usage for a 4-wave spec:
+Target context usage **per invocation** (fresh context each time):
 
 | Component | Size |
 |-----------|------|
-| State file reads | ~2 KB × 4 = 8 KB |
-| Execute executor summaries | ~0.5 KB × 4 = 2 KB |
-| Review executor summaries | ~0.5 KB × 8 = 4 KB |
-| Bash script outputs | ~1 KB × 20 = 20 KB |
-| Polling messages | ~0.1 KB × 30 = 3 KB |
-| **Total** | **~37 KB** |
+| State file reads | ~2 KB × 2 = 4 KB |
+| Execute executor summaries | ~0.5 KB × 1 = 0.5 KB |
+| Review executor summaries | ~0.5 KB × 2 = 1 KB |
+| Bash script outputs | ~1 KB × 5 = 5 KB |
+| **Total per invocation** | **~10-15 KB** |
 
-This is well under the context limit, even for large specs with many waves.
+The exit-and-resume pattern ensures each invocation stays lean:
+- **EXECUTE phase**: One invocation spawns executor, creates PR, exits
+- **AWAITING_REVIEW**: One invocation checks status, exits immediately (no in-process polling)
+- **REVIEW_PROCESSING**: One invocation spawns review executor, transitions state, exits
+- **READY_TO_MERGE**: One invocation merges PR, advances wave, exits
+
+This prevents context accumulation across multi-wave specs that previously caused OOM.

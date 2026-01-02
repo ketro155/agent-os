@@ -1,10 +1,9 @@
-# Execute Spec (v4.4)
+# Execute Spec (v4.5.4)
 
 Automate the complete spec execution cycle: execute waves → create PR → wait for review → process feedback → merge → advance to next wave. Repeat until the entire spec is complete.
 
 ## Parameters
 - `spec_name` (required): Specification folder name
-- `--manual`: Disable background polling; requires manual invocations to check status
 - `--status`: Show current execution state without taking action
 - `--retry`: Restart entire wave after fixing failed tasks
 - `--recover`: Reset stuck state and start fresh
@@ -12,11 +11,8 @@ Automate the complete spec execution cycle: execute waves → create PR → wait
 ## Quick Start
 
 ```bash
-# Start executing a spec (background polling - runs continuously)
+# Start executing a spec
 /execute-spec frontend-ui
-
-# Start with manual polling (check status yourself)
-/execute-spec frontend-ui --manual
 
 # Check current status
 /execute-spec frontend-ui --status
@@ -40,21 +36,22 @@ This command automates the workflow you would normally do manually:
 
 ### Context Isolation Architecture
 
-To prevent context exhaustion across multi-wave specs, the orchestrator uses **executor agents**:
+To prevent context exhaustion across multi-wave specs, the orchestrator uses an **exit-and-resume** pattern:
 
 ```
-execute-spec-orchestrator (minimal context ~37KB)
-├── Task: Execute /execute-tasks → Returns summary only
-├── Task: Execute /pr-review-cycle → Returns summary only
-└── Bash calls for state management
+/execute-spec [spec]
+├── EXECUTE phase: Spawns executor, creates PR, EXITS
+├── AWAITING_REVIEW: Checks status, EXITS immediately (re-invoke to check again)
+├── REVIEW_PROCESSING: Spawns review executor, EXITS
+└── READY_TO_MERGE: Merges PR, advances wave, EXITS
 ```
 
-Each executor agent:
-- Runs in **isolated context** (fresh per invocation)
-- Reads and follows command instructions internally
-- Returns **only a compact JSON summary** (~500 bytes)
+Each invocation:
+- Gets **fresh context** (~10-15 KB per invocation)
+- State is persisted to JSON file between invocations
+- No in-process polling loops that accumulate context
 
-This allows execution of 4+ wave specs without context overflow.
+This allows execution of any number of waves without context overflow.
 
 ### State Machine
 
@@ -71,9 +68,8 @@ This allows execution of 4+ wave specs without context overflow.
 └───────────────────────────────────────────────────────────────┘
         ↓
 ┌───────────────────────────────────────────────────────────────┐
-│  AWAITING_REVIEW → Poll for Claude Code bot review            │
-│                   (default: background polling)               │
-│                   (--manual: user invokes to check)           │
+│  AWAITING_REVIEW → Check for Claude Code bot review            │
+│                   (exits immediately - re-invoke to check)     │
 └───────────────────────────────────────────────────────────────┘
         ↓
 ┌───────────────────────────────────────────────────────────────┐
@@ -105,7 +101,9 @@ Wave branches (e.g., `feature/auth-wave-1`) merge to the base feature branch, no
 
 ## Example Session
 
-### Default Behavior (Background Polling)
+### Typical Workflow
+
+Each invocation gets fresh context. Re-invoke every ~2 minutes while waiting for review:
 
 ```bash
 > /execute-spec frontend-ui
@@ -113,42 +111,25 @@ Wave branches (e.g., `feature/auth-wave-1`) merge to the base feature branch, no
 Starting wave 1 of 4. Executing tasks...
 [executes wave 1, creates PR #123]
 
-PR #123 created. Polling for bot review (2 min intervals, max 30 min)...
-[polling in background]
+PR #123 created and awaiting bot review (poll 1 of 15).
+Re-run in ~2 minutes: /execute-spec frontend-ui
 
-Bot reviewed at 10:05. Processing feedback...
+# Wait ~2 minutes, then re-invoke...
+
+> /execute-spec frontend-ui
+
+PR #123 awaiting bot review (poll 2 of 15).
+Re-run in ~2 minutes: /execute-spec frontend-ui
+
+# Keep checking until bot reviews...
+
+> /execute-spec frontend-ui
+
+Bot has reviewed PR #123. Processing feedback...
 [runs pr-review-cycle]
 
-2 blocking issues found. Implementing fixes...
-[implements fixes, pushes]
-
-Fixes pushed. Re-polling for updated review...
-[polls again]
-
-PR #123 approved! Auto-merging to feature/frontend-ui...
-[merges, cleans branch]
-
-Wave 1 complete. Starting wave 2 of 4...
-[continues to wave 2]
-```
-
-### With `--manual` (Manual Polling)
-
-```bash
-> /execute-spec frontend-ui --manual
-
-Starting wave 1 of 4. Executing tasks...
-[executes wave 1, creates PR #123]
-
-PR #123 created. Run /execute-spec frontend-ui to check status.
-
-> /execute-spec frontend-ui
-
-Checking PR #123 status...
-Bot has reviewed. Processing feedback...
-[processes feedback, implements fixes]
-
-Fixes pushed. Run /execute-spec frontend-ui to continue.
+2 blocking issues found and fixed.
+Re-run to continue: /execute-spec frontend-ui
 
 > /execute-spec frontend-ui
 
@@ -181,14 +162,13 @@ const args = parse_command_args()
 
 const spec_name = args[0]  // Required
 const flags = {
-  manual: args.includes('--manual'),  // Default is background polling; --manual disables it
   status: args.includes('--status'),
   retry: args.includes('--retry'),
   recover: args.includes('--recover')
 }
 
 if (!spec_name) {
-  INFORM: "Usage: /execute-spec <spec_name> [--manual] [--status] [--retry] [--recover]"
+  INFORM: "Usage: /execute-spec <spec_name> [--status] [--retry] [--recover]"
   EXIT
 }
 ```
@@ -273,7 +253,6 @@ Input:
 {
   "spec_name": "${spec_name}",
   "flags": {
-    "manual": ${flags.manual},
     "status": false,
     "retry": ${flags.retry},
     "recover": ${flags.recover}
@@ -284,9 +263,7 @@ Instructions:
 1. Load or initialize execution state
 2. Determine current phase
 3. Execute appropriate action for phase
-4. Update state and report progress
-5. Unless --manual mode, poll for review in background
-6. Continue until wave complete or user intervention needed
+4. Update state and EXIT (fresh context on re-invocation)
 `
 })
 ```
@@ -297,6 +274,8 @@ Instructions:
 // Process result from orchestrator
 if (result.status === "completed") {
   INFORM: `🎉 Spec ${spec_name} execution complete!`
+} else if (result.status === "polling") {
+  INFORM: `PR awaiting review (poll ${result.poll_count} of 15).\n\nRe-run in ~2 minutes: /execute-spec ${spec_name}`
 } else if (result.status === "waiting") {
   INFORM: `${result.message}\n\nRun /execute-spec ${spec_name} to continue.`
 } else if (result.status === "failed") {

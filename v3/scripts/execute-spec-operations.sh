@@ -1,5 +1,5 @@
 #!/bin/bash
-# Agent OS v4.5.1 - Execute Spec Operations Script
+# Agent OS v4.5.5 - Execute Spec Operations Script
 # Manages state machine for /execute-spec command
 # Handles spec execution cycle: execute → review → merge → next wave
 
