@@ -10,10 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Execute Spec Polling Bug**: Fixed issue where `/execute-spec` would exit immediately instead of polling for PR review
-  - Root cause: State files missing `flags` object caused `manual_mode` to be `undefined`
-  - Orchestrator treated `undefined` as truthy, triggering manual mode exit behavior
+  - Root cause 1: State files missing `flags` object caused `manual_mode` to be `undefined`
+  - Root cause 2: Pseudocode `while(true)` loop not understood by LLM agents
   - Fix 1: Orchestrator now explicitly loads `manual_mode` from state with `// false` default
   - Fix 2: Operations script `status` command now ensures flags exist with proper defaults
+  - Fix 3: Replaced pseudocode loop with explicit GOTO instructions and step-based routing
+  - Fix 4: Added poll_count increment to track polling iterations in state
   - Affected state files can now resume correctly without manual intervention
 
 ## [4.5.0] - 2025-12-31

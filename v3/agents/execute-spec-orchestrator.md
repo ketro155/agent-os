@@ -207,11 +207,18 @@ if (CONTINUE === "true") {
     // Default: Background polling - wait and check again
     INFORM: `Waiting for bot review... (poll ${POLL_COUNT} of 15)`
 
-    // Sleep 2 minutes then loop back to check again
-    // Note: Use shorter sleep (30s) with more iterations if timeout issues occur
+    // Increment poll count in state
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"poll_count": ${parseInt(POLL_COUNT) + 1}}'`
+
+    // Sleep 2 minutes
     bash "sleep 120"
 
-    // Loop back to check again - continue AWAITING_REVIEW phase
+    // ⚠️ CRITICAL: EXPLICIT LOOP-BACK INSTRUCTION
+    // After sleep, you MUST go back and repeat the AWAITING_REVIEW phase handling.
+    // Start again from: "Get full state including flags" at the top of this phase.
+    // DO NOT EXIT. DO NOT PROCEED TO NEXT PHASE. REPEAT THIS PHASE.
+    GOTO: "Phase: AWAITING_REVIEW" (repeat from the beginning of this section)
+
   } else {
     // Manual mode (MANUAL_MODE === "true") - exit and let user re-invoke
     INFORM: `PR #${PR_NUMBER} awaiting bot review. Run /execute-spec ${spec_name} to check status.`
@@ -467,46 +474,45 @@ Stored in state. When true, the orchestrator exits at AWAITING_REVIEW phase inst
 
 ## Main Orchestration Loop
 
-```javascript
-// Load or initialize state
-const state = loadState(spec_name)
+> ⚠️ **CRITICAL**: LLMs do not execute code loops. You must follow these instructions explicitly.
 
-// Main loop - continues until exit condition
-while (true) {
-  switch (state.phase) {
-    case "INIT":
-      handleInit()
-      // Falls through to EXECUTE
+### STEP 1: Load State
 
-    case "EXECUTE":
-      handleExecute()  // Spawns executor agent
-      break
-
-    case "AWAITING_REVIEW":
-      handleAwaitingReview()  // Polls or exits if manual
-      break
-
-    case "REVIEW_PROCESSING":
-      handleReviewProcessing()  // Spawns executor agent
-      break
-
-    case "READY_TO_MERGE":
-      handleMerge()  // May loop back to EXECUTE
-      break
-
-    case "COMPLETED":
-      handleCompleted()
-      return  // Exit orchestrator
-
-    case "FAILED":
-      handleFailed()
-      return  // Exit orchestrator
-  }
-
-  // Reload state after each phase (may have been updated)
-  state = loadState(spec_name)
-}
+```bash
+STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
+PHASE=$(echo "$STATE" | jq -r '.phase')
 ```
+
+### STEP 2: Route to Phase Handler
+
+Based on `$PHASE`, go to the corresponding "Phase:" section above and execute it.
+
+| Phase | Action |
+|-------|--------|
+| `INIT` | Handle INIT, then immediately handle EXECUTE |
+| `EXECUTE` | Handle EXECUTE, then go to STEP 3 |
+| `AWAITING_REVIEW` | Handle AWAITING_REVIEW (includes internal polling loop) |
+| `REVIEW_PROCESSING` | Handle REVIEW_PROCESSING, then go to STEP 3 |
+| `READY_TO_MERGE` | Handle READY_TO_MERGE, then go to STEP 3 |
+| `COMPLETED` | Handle COMPLETED, then EXIT |
+| `FAILED` | Handle FAILED, then EXIT |
+
+### STEP 3: After Phase Completion
+
+After completing a phase (except COMPLETED/FAILED):
+
+1. **Reload state**: Run the status command again to get updated phase
+2. **Check new phase**: If phase changed, go to STEP 2 with new phase
+3. **Continue until EXIT**: Only stop when a phase handler says EXIT
+
+### Explicit Loop Instruction
+
+**YOU MUST CONTINUE** processing phases until you reach COMPLETED or FAILED.
+- After EXECUTE completes → state becomes AWAITING_REVIEW → handle it
+- After REVIEW_PROCESSING completes → state becomes READY_TO_MERGE → handle it
+- After READY_TO_MERGE merges → state becomes EXECUTE (next wave) or COMPLETED → handle it
+
+**DO NOT EXIT** after completing just one phase (unless that phase explicitly says EXIT).
 
 ---
 
