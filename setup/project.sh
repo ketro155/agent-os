@@ -86,6 +86,7 @@ CURSOR=false
 PROJECT_TYPE=""
 WITH_HOOKS=false
 UPGRADE=false
+TARGET_DIR=""
 
 # Legacy v2.x files to clean up when upgrading to v3
 LEGACY_AGENTS=(
@@ -212,6 +213,14 @@ while [[ $# -gt 0 ]]; do
             PROJECT_TYPE="${1#*=}"
             shift
             ;;
+        --target=*)
+            TARGET_DIR="${1#*=}"
+            shift
+            ;;
+        --target)
+            TARGET_DIR="$2"
+            shift 2
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -219,6 +228,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --claude-code               Add Claude Code support"
             echo "  --cursor                    Add Cursor support"
             echo "  --upgrade                   Upgrade existing installation (overwrites all files)"
+            echo "  --target=PATH               Target project directory (default: current directory)"
             echo "  --with-hooks                Add additional validation hooks"
             echo "  --project-type=TYPE         Use specific project type for installation"
             echo "  --no-base                   Install from GitHub (not from a base installation)"
@@ -244,6 +254,16 @@ echo ""
 echo "🚀 Agent OS Project Installation"
 echo "================================"
 echo ""
+
+# Change to target directory if specified
+if [ -n "$TARGET_DIR" ]; then
+    if [ ! -d "$TARGET_DIR" ]; then
+        echo "❌ Error: Target directory does not exist: $TARGET_DIR"
+        exit 1
+    fi
+    cd "$TARGET_DIR"
+    echo "📍 Target directory: $TARGET_DIR"
+fi
 
 # Get project directory info
 CURRENT_DIR=$(pwd)

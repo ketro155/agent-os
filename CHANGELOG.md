@@ -5,6 +5,20 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.3] - 2026-01-02
+
+### Fixed
+
+- **Execute Spec Wave Transition OOM Crash**: Fixed memory exhaustion when transitioning between waves
+  - Root cause: Missing explicit GOTO instructions after phase transitions caused LLM to spawn new orchestrator agents instead of looping within the same context
+  - Symptom: Claude Code crashed with "JavaScript heap out of memory" after completing wave 3 and starting wave 4
+  - Fix: Added explicit `GOTO:` instructions at all phase transition points in `execute-spec-orchestrator.md`:
+    - After EXECUTE → AWAITING_REVIEW transition
+    - After REVIEW_PROCESSING → READY_TO_MERGE transition
+    - After REVIEW_PROCESSING → AWAITING_REVIEW transition (re-review)
+    - After READY_TO_MERGE → EXECUTE transition (next wave)
+  - Each GOTO now includes "DO NOT SPAWN NEW AGENT" directive to prevent context accumulation
+
 ## [4.5.2] - 2026-01-02
 
 ### Fixed

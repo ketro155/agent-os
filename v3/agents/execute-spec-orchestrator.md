@@ -153,6 +153,10 @@ if (result.status === "success" && result.pr_number) {
 
   // Transition to AWAITING_REVIEW
   bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+
+  // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
+  // State is now AWAITING_REVIEW - proceed to handle it within THIS agent.
+  GOTO: "Phase: AWAITING_REVIEW" (handle the new phase immediately)
 } else {
   // Execution failed
   bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error || 'Wave execution failed'}"`
@@ -293,10 +297,16 @@ if (result.status === "success") {
   if (result.pr_approved || result.blocking_issues_found === 0) {
     // Ready to merge
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
+
+    // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
+    GOTO: "Phase: READY_TO_MERGE" (handle the new phase immediately)
   } else if (result.blocking_issues_fixed > 0) {
     // Fixed some issues, need re-review - go back to AWAITING_REVIEW
     INFORM: `Fixed ${result.blocking_issues_fixed} blocking issues. Waiting for re-review...`
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+
+    // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
+    GOTO: "Phase: AWAITING_REVIEW" (handle the new phase immediately)
   } else {
     // Still has blocking issues we couldn't fix
     INFORM: "PR still has unresolved blocking issues."
@@ -381,7 +391,11 @@ if [ $? -eq 0 ]; then
     NEXT_WAVE=$(echo "$ADVANCE_RESULT" | jq -r '.current_wave')
     INFORM: "Wave merged! Continuing to wave ${NEXT_WAVE}..."
 
-    # Loop back to EXECUTE phase for next wave
+    # ⚠️ CRITICAL: EXPLICIT LOOP-BACK INSTRUCTION
+    # After merge, you MUST go back and repeat from STEP 2 with EXECUTE phase.
+    # DO NOT SPAWN A NEW ORCHESTRATOR AGENT. DO NOT EXIT.
+    # The state has already been updated - just loop back within THIS agent context.
+    GOTO: "STEP 2: Route to Phase Handler" (phase is now EXECUTE for next wave)
   fi
 else
   # Merge failed
