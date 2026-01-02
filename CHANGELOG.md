@@ -5,6 +5,23 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.4] - 2026-01-02
+
+### Fixed
+
+- **PR Review Re-check Skip Bug**: Fixed issue where execute-spec skipped re-review after addressing bot feedback
+  - Root cause: Bots (like Claude Code) post via conversation comments, not formal GitHub reviews
+  - Symptom: After fixing feedback, orchestrator went directly to READY_TO_MERGE instead of AWAITING_REVIEW
+  - The decision logic `pr_approved || blocking_issues_found === 0` incorrectly triggered merge when:
+    - `reviews: []` (empty because bot used conversation comments)
+    - Comments classified as non-blocking (STYLE, SUGGESTION)
+  - Fix: Use `commits_made` to determine if re-review is needed
+  - New decision priority:
+    1. `pr_approved` → READY_TO_MERGE (explicit approval)
+    2. `commits_made > 0` → AWAITING_REVIEW (code changed, need verification)
+    3. No commits → READY_TO_MERGE (only reclassified FUTURE items, or nothing to fix)
+  - Key insight: Reclassifying issues to future waves doesn't change code, so no re-review needed
+
 ## [4.5.3] - 2026-01-02
 
 ### Fixed

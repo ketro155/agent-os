@@ -280,6 +280,10 @@ Process PR review feedback for the current branch.
 }
 \`\`\`
 
+> **NOTE**: \`commits_made\` determines if re-review is needed. If code was changed (commits > 0),
+> we wait for re-review. If only FUTURE items were captured (no commits), PR is mergeable since
+> reclassifying issues doesn't change code.
+
 ## Important
 - Do NOT return verbose logs, comment text, or agent outputs
 - Only return the JSON summary above
@@ -294,23 +298,40 @@ Process PR review feedback for the current branch.
 const result = JSON.parse(executor_response)
 
 if (result.status === "success") {
-  if (result.pr_approved || result.blocking_issues_found === 0) {
-    // Ready to merge
+  // Decision priority:
+  // 1. Explicit approval → merge (reviewer confirmed)
+  // 2. Code changes made (commits) → wait for re-review
+  // 3. No code changes → merge (only reclassified items for future, or nothing to fix)
+  //
+  // Key insight: Reclassifying issues to FUTURE waves doesn't change code,
+  // so no re-review needed. Only actual code fixes require confirmation.
+
+  if (result.pr_approved) {
+    // Explicitly approved by reviewer - ready to merge
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
 
     // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
     GOTO: "Phase: READY_TO_MERGE" (handle the new phase immediately)
-  } else if (result.blocking_issues_fixed > 0) {
-    // Fixed some issues, need re-review - go back to AWAITING_REVIEW
-    INFORM: `Fixed ${result.blocking_issues_fixed} blocking issues. Waiting for re-review...`
+
+  } else if ((result.commits_made || 0) > 0) {
+    // We pushed code changes - need re-review to verify fixes
+    // This handles bots that post via conversation comments instead of formal reviews
+    INFORM: `Made ${result.commits_made} commit(s) to address feedback. Waiting for re-review...`
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
 
     // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
     GOTO: "Phase: AWAITING_REVIEW" (handle the new phase immediately)
+
   } else {
-    // Still has blocking issues we couldn't fix
-    INFORM: "PR still has unresolved blocking issues."
-    EXIT with { status: "blocked", phase: "REVIEW_PROCESSING" }
+    // No code changes made - either:
+    // - Only reclassified issues to future waves/tasks
+    // - No actionable feedback found
+    // - PR was already in good shape
+    // Either way, ready to merge
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
+
+    // ⚠️ CRITICAL: DO NOT EXIT. DO NOT SPAWN NEW AGENT.
+    GOTO: "Phase: READY_TO_MERGE" (handle the new phase immediately)
   }
 } else {
   // Review processing failed
