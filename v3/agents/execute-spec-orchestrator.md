@@ -165,6 +165,8 @@ if (result.status === "success" && result.pr_number) {
 
 Wait for Claude Code bot to review the PR. This phase uses **bash calls only** (minimal context).
 
+> **On Resume**: If you're resuming at this phase (e.g., after session restart), immediately check bot review status below. The PR already exists and we're waiting for the bot to review it.
+
 ```bash
 # Get full state including flags
 STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
@@ -475,12 +477,27 @@ Stored in state. When true, the orchestrator exits at AWAITING_REVIEW phase inst
 ## Main Orchestration Loop
 
 > ⚠️ **CRITICAL**: LLMs do not execute code loops. You must follow these instructions explicitly.
+>
+> ⚠️ **RESUME BEHAVIOR**: This orchestrator handles both fresh starts AND resumes. When invoked:
+> - If state exists → Resume from the current phase (e.g., AWAITING_REVIEW)
+> - If state doesn't exist → Initialize new state (INIT phase)
+>
+> **You MUST always execute the phase handler for whatever phase the state shows**, even if you're resuming mid-execution.
 
 ### STEP 1: Load State
 
 ```bash
 STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-PHASE=$(echo "$STATE" | jq -r '.phase')
+STATE_EXISTS=$(echo "$STATE" | jq -r '.exists // false')
+PHASE=$(echo "$STATE" | jq -r '.phase // "INIT"')
+
+# Log what we're doing
+if [ "$STATE_EXISTS" = "true" ]; then
+  echo "RESUMING execution from phase: $PHASE"
+else
+  echo "Starting NEW execution (will initialize state)"
+  PHASE="INIT"  # Force INIT if no state exists
+fi
 ```
 
 ### STEP 2: Route to Phase Handler

@@ -239,7 +239,29 @@ if flags.retry:
   # Continue to orchestration
 ```
 
-### Step 5: Spawn Orchestrator Agent
+### Step 5: Check Existing State (Resume Support)
+
+This step ensures proper resume behavior when state already exists.
+
+```bash
+# Check if execution state already exists
+STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
+STATE_EXISTS=$(echo "$STATUS" | jq -r '.exists // false')
+CURRENT_PHASE=$(echo "$STATUS" | jq -r '.phase // "none"')
+
+if [ "$STATE_EXISTS" = "true" ]; then
+  # State exists - we're RESUMING an existing execution
+  INFORM: "Resuming execution from phase: $CURRENT_PHASE"
+  # Continue to orchestrator spawn - it will handle the current phase
+fi
+
+# If state doesn't exist, orchestrator will initialize it
+```
+
+> **IMPORTANT**: Whether state exists or not, ALWAYS proceed to Step 6 to spawn the orchestrator.
+> The orchestrator handles both fresh starts (INIT) and resumes (any existing phase).
+
+### Step 6: Spawn Orchestrator Agent
 
 ```javascript
 // Spawn the execute-spec-orchestrator agent to handle the state machine
@@ -269,7 +291,7 @@ Instructions:
 })
 ```
 
-### Step 6: Handle Orchestrator Result
+### Step 7: Handle Orchestrator Result
 
 ```javascript
 // Process result from orchestrator
