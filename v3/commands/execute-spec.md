@@ -1,4 +1,4 @@
-# Execute Spec (v4.5.4)
+# Execute Spec (v4.6.0)
 
 Automate the complete spec execution cycle: execute waves → create PR → wait for review → process feedback → merge → advance to next wave. Repeat until the entire spec is complete.
 
@@ -34,24 +34,29 @@ This command automates the workflow you would normally do manually:
 5. Clean up the wave branch
 6. Advance to next wave
 
-### Context Isolation Architecture
+### Context Isolation Architecture (v4.6.0)
 
-To prevent context exhaustion across multi-wave specs, the orchestrator uses an **exit-and-resume** pattern:
+To prevent context exhaustion across multi-wave specs, we use a **wave-level agent** pattern:
 
 ```
 /execute-spec [spec]
-├── EXECUTE phase: Spawns executor, creates PR, EXITS
-├── AWAITING_REVIEW: Checks status, EXITS immediately (re-invoke to check again)
-├── REVIEW_PROCESSING: Spawns review executor, EXITS
-└── READY_TO_MERGE: Merges PR, advances wave, EXITS
+│
+└── execute-spec-orchestrator (lightweight coordinator)
+    │
+    ├── Wave 1: wave-lifecycle-agent
+    │   └── EXECUTE → AWAIT_REVIEW → PROCESS_REVIEW → MERGE
+    │   └── Context preserved within wave (~4-5 KB)
+    │
+    ├── Wave 2: wave-lifecycle-agent (fresh context)
+    │   └── EXECUTE → AWAIT_REVIEW → PROCESS_REVIEW → MERGE
+    │
+    └── ... until all waves complete
 ```
 
-Each invocation:
-- Gets **fresh context** (~10-15 KB per invocation)
-- State is persisted to JSON file between invocations
-- No in-process polling loops that accumulate context
-
-This allows execution of any number of waves without context overflow.
+**Benefits:**
+- **Context preserved within wave**: PR creation, review feedback, and merge decisions share context
+- **Context isolated between waves**: Each wave agent gets fresh context
+- **No OOM**: Multi-wave specs work because waves don't accumulate
 
 ### State Machine
 
@@ -63,31 +68,31 @@ This allows execution of any number of waves without context overflow.
 └───────────────────────────────────────────────────────────────┘
         ↓
 ┌───────────────────────────────────────────────────────────────┐
-│  EXECUTE → Run /execute-tasks for current wave                │
-│           Creates PR via Phase 3                              │
+│  For each wave: Spawn wave-lifecycle-agent                    │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  EXECUTE → Run /execute-tasks, create PR                │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                         ↓                                     │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  AWAIT_REVIEW → Poll for Claude Code bot review         │  │
+│  │                 (internal loop, max 30 min)             │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                         ↓                                     │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  PROCESS_REVIEW → Run /pr-review-cycle                  │  │
+│  │                   If commits → back to AWAIT_REVIEW     │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                         ↓                                     │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  MERGE → Wave PR: Auto-merge to feature branch          │  │
+│  │          Final PR: User confirmation for main merge     │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                               │
+│  Wave agent returns → Orchestrator advances to next wave      │
 └───────────────────────────────────────────────────────────────┘
         ↓
-┌───────────────────────────────────────────────────────────────┐
-│  AWAITING_REVIEW → Check for Claude Code bot review            │
-│                   (exits immediately - re-invoke to check)     │
-└───────────────────────────────────────────────────────────────┘
-        ↓
-┌───────────────────────────────────────────────────────────────┐
-│  REVIEW_PROCESSING → Run /pr-review-cycle                     │
-│                     Address blocking issues                   │
-│                     Capture future items                      │
-└───────────────────────────────────────────────────────────────┘
-        ↓
-┌───────────────────────────────────────────────────────────────┐
-│  READY_TO_MERGE → Execute merge                               │
-│                  Wave PRs: Auto-merge to feature branch       │
-│                  Final PR: User confirmation for main merge   │
-│                  Cleanup wave branch                          │
-└───────────────────────────────────────────────────────────────┘
-        ↓
-        ├── Next wave exists → Back to EXECUTE
-        │
-        └── All waves complete → COMPLETED 🎉
+  All waves complete → COMPLETED 🎉
 ```
 
 ## Merge Strategy
@@ -103,54 +108,65 @@ Wave branches (e.g., `feature/auth-wave-1`) merge to the base feature branch, no
 
 ### Typical Workflow
 
-Each invocation gets fresh context. Re-invoke every ~2 minutes while waiting for review:
+The orchestrator handles the entire spec automatically. You can check status anytime:
 
 ```bash
 > /execute-spec frontend-ui
 
-Starting wave 1 of 4. Executing tasks...
+Starting execution of spec "frontend-ui"...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WAVE 1 of 4
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Starting wave 1 of 4...
 [executes wave 1, creates PR #123]
-
-PR #123 created and awaiting bot review (poll 1 of 15).
-Re-run in ~2 minutes: /execute-spec frontend-ui
-
-# Wait ~2 minutes, then re-invoke...
-
-> /execute-spec frontend-ui
-
-PR #123 awaiting bot review (poll 2 of 15).
-Re-run in ~2 minutes: /execute-spec frontend-ui
-
-# Keep checking until bot reviews...
-
-> /execute-spec frontend-ui
-
-Bot has reviewed PR #123. Processing feedback...
-[runs pr-review-cycle]
-
-2 blocking issues found and fixed.
-Re-run to continue: /execute-spec frontend-ui
-
-> /execute-spec frontend-ui
-
-PR #123 approved! Auto-merging to feature/frontend-ui...
+PR #123 created. Waiting for bot review...
+Poll 1/15: No review yet. Waiting 120s...
+Poll 2/15: No review yet. Waiting 120s...
+Bot reviewed PR #123. Processing feedback...
+[processes review, fixes issues]
+Made 2 commit(s). Waiting for re-review...
+[continues polling...]
+PR #123 approved! Ready to merge.
+Auto-merging wave PR #123 to feature/frontend-ui...
+Wave 1 merged successfully!
 Wave 1 complete. Advancing to wave 2...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WAVE 2 of 4
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[continues automatically...]
+```
+
+### Review Timeout
+
+If review polling times out, you'll be prompted to check manually:
+
+```bash
+> /execute-spec frontend-ui
+
+⏱️ Review timeout for wave 2. Check PR #124 manually.
+Re-run /execute-spec frontend-ui when review is available.
 ```
 
 ### Final Wave (Merge to Main)
 
 ```bash
-> /execute-spec frontend-ui
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WAVE 4 of 4 (FINAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Wave 4 of 4 complete. PR #130 approved.
-This is the FINAL wave - PR targets main.
+PR #130 approved! Ready to merge.
+This is the FINAL wave. PR will merge to main. Confirm merge?
+[Yes, merge to main / No, wait]
 
-Confirm merge to main? [Yes, merge / No, wait]
+> Yes, merge to main
 
-> Yes, merge
+Wave 4 merged successfully!
 
-Merged to main! Cleaning up feature/frontend-ui branch.
-Spec frontend-ui is complete! 🎉
+🎉 Spec "frontend-ui" is complete! All 4 waves merged.
 ```
 
 ## For Claude Code
@@ -207,7 +223,7 @@ if flags.status:
 if flags.recover:
   bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" delete [spec_name]
   INFORM: "State reset. Starting fresh..."
-  # Continue to initialization
+  # Continue to orchestration
 ```
 
 ### Step 4: Handle --retry Flag
@@ -219,32 +235,10 @@ if flags.retry:
   # Continue to orchestration
 ```
 
-### Step 5: Check Existing State (Resume Support)
-
-This step ensures proper resume behavior when state already exists.
-
-```bash
-# Check if execution state already exists
-STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-STATE_EXISTS=$(echo "$STATUS" | jq -r '.exists // false')
-CURRENT_PHASE=$(echo "$STATUS" | jq -r '.phase // "none"')
-
-if [ "$STATE_EXISTS" = "true" ]; then
-  # State exists - we're RESUMING an existing execution
-  INFORM: "Resuming execution from phase: $CURRENT_PHASE"
-  # Continue to orchestrator spawn - it will handle the current phase
-fi
-
-# If state doesn't exist, orchestrator will initialize it
-```
-
-> **IMPORTANT**: Whether state exists or not, ALWAYS proceed to Step 6 to spawn the orchestrator.
-> The orchestrator handles both fresh starts (INIT) and resumes (any existing phase).
-
-### Step 6: Spawn Orchestrator Agent
+### Step 5: Spawn Orchestrator Agent
 
 ```javascript
-// Spawn the execute-spec-orchestrator agent to handle the state machine
+// Spawn the execute-spec-orchestrator agent to coordinate waves
 Task({
   subagent_type: "execute-spec-orchestrator",
   prompt: `Execute spec: ${spec_name}
@@ -261,25 +255,25 @@ Input:
 
 Instructions:
 1. Load or initialize execution state
-2. Determine current phase
-3. Execute appropriate action for phase
-4. Update state and EXIT (fresh context on re-invocation)
+2. For each wave: spawn wave-lifecycle-agent
+3. Wait for wave completion, then advance
+4. Return when spec is complete or error occurs
 `
 })
 ```
 
-### Step 7: Handle Orchestrator Result
+### Step 6: Handle Orchestrator Result
 
 ```javascript
 // Process result from orchestrator
 if (result.status === "completed") {
   INFORM: `🎉 Spec ${spec_name} execution complete!`
-} else if (result.status === "polling") {
-  INFORM: `PR awaiting review (poll ${result.poll_count} of 15).\n\nRe-run in ~2 minutes: /execute-spec ${spec_name}`
+} else if (result.status === "timeout") {
+  INFORM: `⏱️ Review timeout at wave ${result.wave}. Check PR #${result.pr_number} manually.\n\nRe-run: /execute-spec ${spec_name}`
 } else if (result.status === "waiting") {
-  INFORM: `${result.message}\n\nRun /execute-spec ${spec_name} to continue.`
+  INFORM: `⏸️ Execution paused.\n\nRun /execute-spec ${spec_name} when ready to continue.`
 } else if (result.status === "failed") {
-  INFORM: `❌ Execution failed: ${result.message}\n\nRun /execute-spec ${spec_name} --retry to retry.`
+  INFORM: `❌ Execution failed at wave ${result.wave}: ${result.error}\n\nRun /execute-spec ${spec_name} --retry to retry.`
 }
 ```
 
@@ -292,11 +286,11 @@ Execution state is persisted at: `.agent-os/state/execute-spec-[spec_name].json`
   "spec_name": "frontend-ui",
   "current_wave": 2,
   "total_waves": 4,
-  "phase": "AWAITING_REVIEW",
-  "pr_number": 125,
+  "phase": "EXECUTE",
+  "pr_number": null,
   "review_status": {
     "bot_reviewed": false,
-    "poll_count": 3
+    "poll_count": 0
   },
   "history": [
     {
@@ -314,7 +308,7 @@ Execution state is persisted at: `.agent-os/state/execute-spec-[spec_name].json`
 |-------|----------|
 | Task execution fails | Stops cycle. Fix issues, run `--retry` |
 | PR creation fails | Stops cycle. Check git status, run `--retry` |
-| Review timeout (30 min) | Exits polling. Check PR manually |
+| Review timeout (30 min) | Exits polling. Check PR manually, re-run |
 | Merge conflict | Stops cycle. Resolve conflict, run `--retry` |
 | Stuck state | Run `--recover` to reset |
 

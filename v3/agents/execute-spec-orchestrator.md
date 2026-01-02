@@ -1,53 +1,35 @@
 ---
 name: execute-spec-orchestrator
-description: State machine orchestrator for automated spec execution. Spawns isolated executor agents to prevent context accumulation.
+description: Lightweight coordinator for spec execution. Spawns one wave-lifecycle-agent per wave, achieving context isolation between waves.
 tools: Read, Bash, Grep, Glob, TodoWrite, Task, AskUserQuestion
 ---
 
-# Execute Spec Orchestrator
+# Execute Spec Orchestrator (v4.6.0)
 
-You are the orchestrator for automated spec execution. You manage the state machine that cycles through: execute → review → merge → next wave, until the entire spec is complete.
+You are the lightweight coordinator for automated spec execution. You spawn one **wave-lifecycle-agent** per wave, wait for it to complete, then spawn the next. This achieves **context isolation between waves** while **preserving context within each wave**.
 
-## Critical: Exit-and-Resume Pattern
-
-> ⚠️ **EVERY PHASE EXITS** after completing its work.
->
-> This orchestrator uses an **exit-and-resume** pattern to prevent OOM:
-> 1. Each invocation handles ONE phase
-> 2. State is persisted to JSON file
-> 3. User re-invokes to continue to next phase
-> 4. Each invocation gets fresh context (~10-15 KB)
->
-> **DO NOT use GOTO to continue to another phase.** Always EXIT.
-
-**Each invocation should contain:**
-- State file reads (~2 KB)
-- At most ONE executor agent summary (~500 bytes)
-- Bash script outputs (~1-2 KB)
-- Total: ~10-15 KB per invocation
-
-**Why this matters:**
-- LLMs accumulate context with each "loop iteration"
-- GOTO instructions don't reset context like real code loops
-- After 2-3 phases in one invocation: 6KB+ → OOM risk
-- Exit-and-resume gives fresh context every time
-
----
-
-## State Machine Phases
+## Architecture
 
 ```
-INIT ──────► EXECUTE ──────► AWAITING_REVIEW ──────► REVIEW_PROCESSING
-                 ▲                                          │
-                 │                                          ▼
-                 │                                   READY_TO_MERGE
-                 │                                          │
-                 └────────────────────────────────────────────┘
-                              (next wave)
-                                    │
-                                    ▼
-                              COMPLETED
+execute-spec-orchestrator (this agent)
+│
+├── Wave 1: Spawn wave-lifecycle-agent
+│           └── EXECUTE → AWAIT_REVIEW → PROCESS_REVIEW → MERGE
+│           └── Returns: { status: "success", wave: 1, pr_number: 123 }
+│
+├── Wave 2: Spawn wave-lifecycle-agent (fresh context)
+│           └── EXECUTE → AWAIT_REVIEW → PROCESS_REVIEW → MERGE
+│           └── Returns: { status: "success", wave: 2, pr_number: 124 }
+│
+└── ... until all waves complete
 ```
+
+### Why This Architecture
+
+- **Context preserved within wave**: PR creation, review, and merge share context (~4-5 KB)
+- **Context isolated between waves**: Each wave agent gets fresh context
+- **No OOM**: Multi-wave specs work because waves are isolated
+- **State recovery**: If interrupted, resume from current wave
 
 ---
 
@@ -57,417 +39,156 @@ INIT ──────► EXECUTE ──────► AWAITING_REVIEW ──�
 {
   "spec_name": "frontend-ui",
   "flags": {
-    "status": false,    // --status flag for status check only
-    "retry": false,     // --retry flag to restart wave
-    "recover": false    // --recover flag to reset stuck state
+    "status": false,
+    "retry": false,
+    "recover": false
   }
 }
 ```
 
 ---
 
-## Phase Handling Protocol
+## Orchestration Protocol
 
-### Phase: INIT
-
-First invocation - initialize state and transition to EXECUTE.
+### Step 1: Load State
 
 ```bash
-# Initialize state (--manual flag if set)
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" init [spec_name] [--manual]
-
-# Transition to EXECUTE
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] EXECUTE
-```
-
-Then proceed immediately to EXECUTE handling.
-
----
-
-### Phase: EXECUTE
-
-Execute tasks for the current wave using an **isolated executor agent**.
-
-#### Step 1: Get wave info
-
-```bash
-WAVE_INFO=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh" wave-info [spec_name])
-CURRENT_WAVE=$(echo "$WAVE_INFO" | jq -r '.current_wave')
-TOTAL_WAVES=$(echo "$WAVE_INFO" | jq -r '.total_waves')
-```
-
-#### Step 2: Spawn Execute-Tasks Executor Agent
-
-> ⚠️ **CRITICAL**: Use Task agent, NOT direct execution. This isolates context.
-
-```javascript
-Task({
-  subagent_type: "general-purpose",
-  prompt: `You are an executor agent. Read and execute the /execute-tasks command.
-
-## Your Task
-Execute wave ${CURRENT_WAVE} of spec "${spec_name}".
-
-## Instructions
-1. Read the command file:
-   \`\`\`bash
-   cat "${CLAUDE_PROJECT_DIR}/.claude/commands/execute-tasks.md"
-   \`\`\`
-
-2. Follow ALL instructions in that file for:
-   - Spec: ${spec_name}
-   - Wave: ${CURRENT_WAVE}
-
-3. This includes spawning phase1-discovery, wave-orchestrator, and phase3-delivery agents as specified in the command.
-
-4. When complete, return ONLY this JSON summary (no other output):
-
-\`\`\`json
-{
-  "status": "success" | "failed",
-  "wave": ${CURRENT_WAVE},
-  "tasks_completed": <number of tasks completed>,
-  "tasks_failed": <number of tasks failed>,
-  "pr_number": <PR number if created, null otherwise>,
-  "pr_url": "<PR URL if created>",
-  "error": "<error message if failed, null otherwise>"
-}
-\`\`\`
-
-## Important
-- Do NOT return verbose logs, test output, or phase agent results
-- Only return the JSON summary above
-- The orchestrator needs minimal context to continue
-`
-})
-```
-
-#### Step 3: Process executor result
-
-```javascript
-// Parse the executor's JSON response
-const result = JSON.parse(executor_response)
-
-if (result.status === "success" && result.pr_number) {
-  // Store PR info in state
-  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh set-pr ${spec_name} ${result.pr_number} "${result.pr_url}"`
-
-  // Transition to AWAITING_REVIEW
-  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
-
-  // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-  // Exit now to prevent context accumulation. User re-invokes to continue.
-  // State is AWAITING_REVIEW - next invocation will handle polling.
-  INFORM: `PR #${result.pr_number} created. Waiting for bot review.\n\nRe-run: /execute-spec ${spec_name}`
-  EXIT with { status: "pr_created", phase: "AWAITING_REVIEW", pr_number: result.pr_number }
-} else {
-  // Execution failed
-  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error || 'Wave execution failed'}"`
-}
-```
-
----
-
-### Phase: AWAITING_REVIEW
-
-Wait for Claude Code bot to review the PR. This phase uses **bash calls only** (minimal context).
-
-> **On Resume**: If you're resuming at this phase (e.g., after session restart), immediately check bot review status below. The PR already exists and we're waiting for the bot to review it.
-
-```bash
-# Get state
 STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-PR_NUMBER=$(echo "$STATE" | jq -r '.pr_number')
-
-# Check if bot has reviewed
-BOT_STATUS=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" bot-reviewed $PR_NUMBER)
-BOT_REVIEWED=$(echo "$BOT_STATUS" | jq -r '.reviewed')
-```
-
-**If bot has reviewed:**
-
-```bash
-# Update review status
-REVIEW_DECISION=$(echo "$BOT_STATUS" | jq -r '.review_decision')
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" update-review [spec_name] '{"bot_reviewed": true, "review_decision": "'$REVIEW_DECISION'"}'
-
-# Transition to processing
-bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] REVIEW_PROCESSING
+STATE_EXISTS=$(echo "$STATE" | jq -r '.exists // false')
+PHASE=$(echo "$STATE" | jq -r '.phase // "INIT"')
+CURRENT_WAVE=$(echo "$STATE" | jq -r '.current_wave // 1')
+TOTAL_WAVES=$(echo "$STATE" | jq -r '.total_waves // 0')
 ```
 
 ```javascript
-// ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-// Exit now. Next invocation will handle REVIEW_PROCESSING with fresh context.
-INFORM: `Bot reviewed PR. Processing feedback...\n\nRe-run: /execute-spec ${spec_name}`
-EXIT with { status: "review_found", phase: "REVIEW_PROCESSING" }
-```
-
-**If bot has NOT reviewed:**
-
-```bash
-POLL_CHECK=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" check-poll-timeout [spec_name])
-CONTINUE=$(echo "$POLL_CHECK" | jq -r '.continue_polling')
-POLL_COUNT=$(echo "$POLL_CHECK" | jq -r '.poll_count')
-```
-
-```javascript
-if (CONTINUE === "true") {
-  // Increment poll count in state
-  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"poll_count": ${parseInt(POLL_COUNT) + 1}}'`
-
-  // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-  // Instead of looping in-process (which accumulates context with each iteration),
-  // we EXIT and require re-invocation. This gives FRESH CONTEXT for each poll cycle.
-  // State file maintains poll_count for timeout tracking.
-  //
-  // Why: Even with GOTO, each loop iteration adds ~2KB to context:
-  // - State reads, INFORM messages, bash outputs, sleep commands
-  // - After 5-10 polls, this causes OOM during later phases
-  //
-  // The user's automation or manual re-invocation handles the polling loop externally.
-
-  INFORM: `PR #${PR_NUMBER} awaiting bot review (poll ${POLL_COUNT + 1} of 15).
-Re-run in ~2 minutes: /execute-spec ${spec_name}`
-
-  EXIT with { status: "polling", phase: "AWAITING_REVIEW", poll_count: POLL_COUNT + 1 }
-
+if (STATE_EXISTS === "true") {
+  INFORM: `Resuming spec "${spec_name}" from wave ${CURRENT_WAVE} of ${TOTAL_WAVES}`
 } else {
-  // Timeout reached (30 minutes)
-  INFORM: "Review polling timeout (30 minutes). Please check PR manually."
-  EXIT with { status: "timeout", phase: "AWAITING_REVIEW" }
+  INFORM: `Starting fresh execution of spec "${spec_name}"`
 }
 ```
 
----
-
-### Phase: REVIEW_PROCESSING
-
-Process PR review feedback using an **isolated executor agent**.
-
-#### Step 1: Spawn PR-Review-Cycle Executor Agent
-
-> ⚠️ **CRITICAL**: Use Task agent, NOT direct execution. This isolates context.
+### Step 2: Initialize State (if needed)
 
 ```javascript
-Task({
-  subagent_type: "general-purpose",
-  prompt: `You are an executor agent. Read and execute the /pr-review-cycle command.
+if (STATE_EXISTS !== "true") {
+  // Initialize new execution state
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh init ${spec_name}`
 
-## Your Task
-Process PR review feedback for the current branch.
+  // Get wave info
+  const wave_info = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh wave-info ${spec_name}`
+  CURRENT_WAVE = parseInt(JSON.parse(wave_info).current_wave) || 1
+  TOTAL_WAVES = parseInt(JSON.parse(wave_info).total_waves) || 1
 
-## Instructions
-1. Read the command file:
-   \`\`\`bash
-   cat "${CLAUDE_PROJECT_DIR}/.claude/commands/pr-review-cycle.md"
-   \`\`\`
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} EXECUTE`
+}
+```
 
-2. Follow ALL instructions in that file. This includes:
-   - Spawning pr-review-discovery agent
-   - Spawning pr-review-implementation agent
-   - Processing comments, making fixes, posting replies
+### Step 3: Handle Special Phases
 
-3. When complete, return ONLY this JSON summary (no other output):
+```javascript
+// If in COMPLETED or FAILED state, just report status
+if (PHASE === "COMPLETED") {
+  INFORM: `🎉 Spec "${spec_name}" is already complete!`
+  RETURN: { status: "completed", spec_name }
+}
 
-\`\`\`json
+if (PHASE === "FAILED") {
+  const error = STATE.execution_status?.last_error || "Unknown error"
+  INFORM: `Spec "${spec_name}" is in FAILED state: ${error}\nRun with --retry or --recover to continue.`
+  RETURN: { status: "failed", error }
+}
+
+// Track resume phase for first wave only
+let resume_phase = null
+if (PHASE === "READY_TO_MERGE" || PHASE === "AWAITING_REVIEW") {
+  resume_phase = PHASE
+  INFORM: `Resuming wave ${CURRENT_WAVE} from phase: ${PHASE}`
+}
+```
+
+### Step 4: Execute Waves
+
+Loop through remaining waves, spawning one wave-lifecycle-agent per wave.
+
+```javascript
+// Determine base branch
+const branch_info = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh pr-target`
+const base_branch = JSON.parse(branch_info).base_branch || "main"
+
+// Execute waves
+for (let wave = CURRENT_WAVE; wave <= TOTAL_WAVES; wave++) {
+  const is_final_wave = (wave === TOTAL_WAVES)
+
+  INFORM: `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  INFORM: `  WAVE ${wave} of ${TOTAL_WAVES}${is_final_wave ? " (FINAL)" : ""}`
+  INFORM: `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+
+  // Spawn wave-lifecycle-agent (with resume_phase for first wave if resuming)
+  const wave_result = Task({
+    subagent_type: "wave-lifecycle-agent",
+    prompt: `Execute complete lifecycle for wave ${wave}.
+
+Input:
 {
-  "status": "success" | "failed",
-  "blocking_issues_found": <number>,
-  "blocking_issues_fixed": <number>,
-  "future_items_captured": <number>,
-  "commits_made": <number>,
-  "pr_approved": true | false,
-  "error": "<error message if failed, null otherwise>"
+  "spec_name": "${spec_name}",
+  "wave_number": ${wave},
+  "total_waves": ${TOTAL_WAVES},
+  "is_final_wave": ${is_final_wave},
+  "base_branch": "${base_branch}",
+  "resume_phase": ${resume_phase ? `"${resume_phase}"` : null}
 }
-\`\`\`
 
-> **NOTE**: \`commits_made\` determines if re-review is needed. If code was changed (commits > 0),
-> we wait for re-review. If only FUTURE items were captured (no commits), PR is mergeable since
-> reclassifying issues doesn't change code.
-
-## Important
-- Do NOT return verbose logs, comment text, or agent outputs
-- Only return the JSON summary above
-- The orchestrator needs minimal context to continue
+Instructions:
+${resume_phase ? `RESUME from ${resume_phase} phase - do NOT re-execute earlier phases.` : `1. Execute tasks for this wave (spawn executor)`}
+${resume_phase === "AWAITING_REVIEW" ? `1. Skip to AWAITING_REVIEW - poll for bot review` : resume_phase ? `` : `2. Wait for bot review (polling loop)`}
+${resume_phase === "READY_TO_MERGE" ? `1. Skip to READY_TO_MERGE - merge the PR` : resume_phase ? `2. Process review feedback (spawn executor)` : `3. Process review feedback (spawn executor)`}
+${resume_phase ? `3. Merge PR to target branch` : `4. Merge PR to target branch`}
+${resume_phase ? `4. Return status to orchestrator` : `5. Return status to orchestrator`}
 `
-})
-```
-
-#### Step 2: Process executor result
-
-```javascript
-const result = JSON.parse(executor_response)
-
-if (result.status === "success") {
-  // Decision priority:
-  // 1. Explicit approval → merge (reviewer confirmed)
-  // 2. Code changes made (commits) → wait for re-review
-  // 3. No code changes → merge (only reclassified items for future, or nothing to fix)
-  //
-  // Key insight: Reclassifying issues to FUTURE waves doesn't change code,
-  // so no re-review needed. Only actual code fixes require confirmation.
-
-  if (result.pr_approved) {
-    // Explicitly approved by reviewer - ready to merge
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
-
-    // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-    INFORM: `PR approved! Ready to merge.\n\nRe-run: /execute-spec ${spec_name}`
-    EXIT with { status: "approved", phase: "READY_TO_MERGE" }
-
-  } else if ((result.commits_made || 0) > 0) {
-    // We pushed code changes - need re-review to verify fixes
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
-
-    // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-    INFORM: `Made ${result.commits_made} commit(s) to address feedback. Waiting for re-review...\n\nRe-run: /execute-spec ${spec_name}`
-    EXIT with { status: "fixes_pushed", phase: "AWAITING_REVIEW", commits_made: result.commits_made }
-
-  } else {
-    // No code changes made - ready to merge
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} READY_TO_MERGE`
-
-    // ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-    INFORM: `No blocking issues. Ready to merge.\n\nRe-run: /execute-spec ${spec_name}`
-    EXIT with { status: "no_changes", phase: "READY_TO_MERGE" }
-  }
-} else {
-  // Review processing failed
-  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error}"`
-  EXIT with { status: "failed", error: result.error }
-}
-```
-
----
-
-### Phase: READY_TO_MERGE
-
-Merge the PR and advance to next wave. This phase uses **bash calls + user confirmation** (minimal context).
-
-#### Step 1: Determine merge target
-
-```bash
-PR_TARGET=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" pr-target)
-TARGET_BRANCH=$(echo "$PR_TARGET" | jq -r '.pr_target')
-IS_FINAL=$(echo "$PR_TARGET" | jq -r '.is_final_wave // false')
-
-STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-PR_NUMBER=$(echo "$STATE" | jq -r '.pr_number')
-WAVE_BRANCH=$(echo "$STATE" | jq -r '.wave_branch')
-CURRENT_WAVE=$(echo "$STATE" | jq -r '.current_wave')
-```
-
-#### Step 2: Merge decision
-
-```javascript
-if (TARGET_BRANCH === "main" || IS_FINAL === "true") {
-  // Final PR to main - REQUIRES USER CONFIRMATION
-  const answer = AskUserQuestion({
-    questions: [{
-      question: "This is the FINAL wave. PR will merge to main. Confirm merge?",
-      header: "Merge to main",
-      multiSelect: false,
-      options: [
-        { label: "Yes, merge to main", description: "Merge and complete spec" },
-        { label: "No, wait", description: "Don't merge yet" }
-      ]
-    }]
   })
 
-  if (answer !== "Yes, merge to main") {
-    INFORM: "Merge cancelled. Run /execute-spec [spec_name] when ready."
-    EXIT with { status: "waiting", phase: "READY_TO_MERGE" }
+  // Clear resume_phase after first wave (subsequent waves start fresh)
+  resume_phase = null
+
+  // Process wave result
+  const result = JSON.parse(wave_result)
+
+  if (result.status === "success") {
+    // Wave completed - advance-wave handles recording in history
+    if (is_final_wave) {
+      // Spec complete!
+      bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} COMPLETED`
+      INFORM: `\n🎉 Spec "${spec_name}" is complete! All ${TOTAL_WAVES} waves merged.`
+      RETURN: { status: "completed", spec_name, total_waves: TOTAL_WAVES }
+    }
+
+    // Advance to next wave
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh advance-wave ${spec_name}`
+    INFORM: `Wave ${wave} complete. Advancing to wave ${wave + 1}...`
+    // Continue loop to next wave
+
+  } else if (result.status === "timeout") {
+    // Review polling timed out - need manual intervention
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+    INFORM: `\n⏱️ Review timeout for wave ${wave}. Check PR #${result.pr_number} manually.`
+    INFORM: `Re-run /execute-spec ${spec_name} when review is available.`
+    RETURN: { status: "timeout", wave, pr_number: result.pr_number }
+
+  } else if (result.status === "waiting") {
+    // User chose not to merge - preserve state for later
+    INFORM: `\n⏸️ Wave ${wave}: ${result.message}`
+    INFORM: `Re-run /execute-spec ${spec_name} when ready.`
+    RETURN: { status: "waiting", wave, pr_number: result.pr_number }
+
+  } else {
+    // Wave failed
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh fail ${spec_name} "${result.error}"`
+    INFORM: `\n❌ Wave ${wave} failed at phase ${result.phase}: ${result.error}`
+    INFORM: `Run /execute-spec ${spec_name} --retry to retry.`
+    RETURN: { status: "failed", wave, phase: result.phase, error: result.error }
   }
-} else {
-  // Wave PR to feature branch - AUTO-MERGE
-  INFORM: `Auto-merging wave PR to ${TARGET_BRANCH}...`
 }
-```
-
-#### Step 3: Execute merge
-
-```bash
-# Merge the PR
-gh pr merge $PR_NUMBER --squash --delete-branch
-
-if [ $? -eq 0 ]; then
-  # Checkout base branch and pull
-  git checkout [base_branch]
-  git pull origin [base_branch]
-
-  # Cleanup wave branch (if not already deleted by --delete-branch)
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh" cleanup "$WAVE_BRANCH" 2>/dev/null || true
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" mark-cleaned [spec_name] $CURRENT_WAVE
-
-  # Advance to next wave
-  ADVANCE_RESULT=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" advance-wave [spec_name])
-  COMPLETED=$(echo "$ADVANCE_RESULT" | jq -r '.completed')
-
-  if [ "$COMPLETED" = "true" ]; then
-    # Spec fully complete!
-    bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" transition [spec_name] COMPLETED
-    INFORM: `🎉 Spec ${spec_name} is complete! All waves merged.`
-    EXIT with { status: "completed" }
-  else
-    # More waves to go - EXIT and let next invocation handle EXECUTE
-    NEXT_WAVE=$(echo "$ADVANCE_RESULT" | jq -r '.current_wave')
-    TOTAL_WAVES=$(echo "$ADVANCE_RESULT" | jq -r '.total_waves')
-
-    # ⚠️ CONTEXT-PRESERVING EXIT PATTERN
-    # State is already EXECUTE for next wave (advance-wave sets it).
-    # Exit now. Next invocation will handle the new wave with fresh context.
-    INFORM: `Wave ${CURRENT_WAVE} merged! Ready for wave ${NEXT_WAVE} of ${TOTAL_WAVES}.\n\nRe-run: /execute-spec ${spec_name}`
-    EXIT with { status: "wave_merged", phase: "EXECUTE", current_wave: NEXT_WAVE, total_waves: TOTAL_WAVES }
-  fi
-else
-  # Merge failed
-  bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" fail [spec_name] "Merge failed - possible conflict"
-  INFORM: "Merge failed. Please resolve conflicts manually, then run /execute-spec [spec_name] --retry"
-  EXIT
-fi
-```
-
----
-
-### Phase: FAILED
-
-Handle failure state.
-
-```bash
-STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-ERROR=$(echo "$STATE" | jq -r '.execution_status.last_error')
-```
-
-```javascript
-INFORM: `Execution failed: ${ERROR}
-
-Options:
-- Fix the issue and run: /execute-spec ${spec_name} --retry
-- Reset state completely: /execute-spec ${spec_name} --recover`
-
-EXIT with { status: "failed", error: ERROR }
-```
-
----
-
-### Phase: COMPLETED
-
-Spec is fully executed.
-
-```bash
-STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-TOTAL_WAVES=$(echo "$STATE" | jq -r '.total_waves')
-HISTORY=$(echo "$STATE" | jq -r '.history')
-```
-
-```javascript
-INFORM: `🎉 Spec ${spec_name} is complete!
-All ${TOTAL_WAVES} waves have been merged.
-
-History:
-${HISTORY.map(w => `  Wave ${w.wave}: PR #${w.pr_number} (merged ${w.merged_at})`).join('\n')}`
-
-EXIT with { status: "completed" }
 ```
 
 ---
@@ -492,7 +213,7 @@ Reset current wave and restart:
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" reset [spec_name]
 ```
 
-Then proceed with EXECUTE phase.
+Then proceed with orchestration.
 
 ### --recover
 
@@ -502,86 +223,57 @@ Delete state and start completely fresh:
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" delete [spec_name]
 ```
 
-Then proceed with INIT phase.
-
----
-
-## Main Orchestration Loop
-
-> ⚠️ **CRITICAL**: Each invocation handles ONE phase, then EXITS.
->
-> This prevents context accumulation that causes OOM crashes. Each invocation gets fresh context (~10-15 KB).
->
-> **RESUME BEHAVIOR**: When invoked:
-> - If state exists → Resume from the current phase
-> - If state doesn't exist → Initialize new state (INIT phase)
-
-### STEP 1: Load State
-
-```bash
-STATE=$(bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh" status [spec_name])
-STATE_EXISTS=$(echo "$STATE" | jq -r '.exists // false')
-PHASE=$(echo "$STATE" | jq -r '.phase // "INIT"')
-
-# Log what we're doing
-if [ "$STATE_EXISTS" = "true" ]; then
-  echo "RESUMING execution from phase: $PHASE"
-else
-  echo "Starting NEW execution (will initialize state)"
-  PHASE="INIT"  # Force INIT if no state exists
-fi
-```
-
-### STEP 2: Route to Phase Handler
-
-Based on `$PHASE`, execute the corresponding handler. **Each handler EXITS after completion.**
-
-| Phase | Action | Exit Status |
-|-------|--------|-------------|
-| `INIT` | Initialize state, transition to EXECUTE, then handle EXECUTE | `pr_created` |
-| `EXECUTE` | Spawn executor, create PR | `pr_created` |
-| `AWAITING_REVIEW` | Check for review, transition if found | `polling` or `review_found` |
-| `REVIEW_PROCESSING` | Spawn executor, transition based on result | `approved`, `fixes_pushed`, or `no_changes` |
-| `READY_TO_MERGE` | Merge PR, advance wave | `wave_merged` or `completed` |
-| `COMPLETED` | Display completion message | `completed` |
-| `FAILED` | Display error message | `failed` |
-
-### Exit-and-Resume Pattern
-
-**Every phase EXITS after completing its work.** The user (or automation) re-invokes to continue:
-
-```
-Invocation 1: INIT → EXECUTE → EXIT (pr_created)
-Invocation 2: AWAITING_REVIEW → EXIT (polling)
-...
-Invocation N: AWAITING_REVIEW → EXIT (review_found)
-Invocation N+1: REVIEW_PROCESSING → EXIT (approved/fixes_pushed/no_changes)
-Invocation N+2: READY_TO_MERGE → EXIT (wave_merged)
-Invocation N+3: EXECUTE (next wave) → EXIT (pr_created)
-...
-Final: READY_TO_MERGE → EXIT (completed)
-```
-
-This ensures each invocation stays under ~15 KB context, preventing OOM across multi-wave specs.
+Then proceed with initialization.
 
 ---
 
 ## Output Format
 
-Return status after orchestrator completes:
-
-```json
+```javascript
+// Success - all waves completed
 {
-  "status": "success|waiting|failed|completed|timeout",
-  "spec_name": "frontend-ui",
-  "current_wave": 2,
-  "total_waves": 4,
-  "phase": "AWAITING_REVIEW",
-  "pr_number": 123,
-  "message": "Human-readable status message",
-  "next_action": "Run /execute-spec frontend-ui to continue"
+  status: "completed",
+  spec_name: "frontend-ui",
+  total_waves: 4
+}
+
+// Timeout - review polling timed out (manual check needed)
+{
+  status: "timeout",
+  wave: 2,
+  pr_number: 125
+}
+
+// Waiting - user deferred merge
+{
+  status: "waiting",
+  wave: 4,
+  pr_number: 128
+}
+
+// Failed - something went wrong
+{
+  status: "failed",
+  wave: 2,
+  phase: "EXECUTE",
+  error: "Task execution failed"
 }
 ```
+
+---
+
+## Context Budget
+
+This orchestrator is lightweight. Each wave agent handles the heavy lifting:
+
+| Component | Size |
+|-----------|------|
+| State reads | ~2 KB |
+| Wave agent return summary | ~0.5 KB × waves |
+| Bash script outputs | ~1 KB |
+| **Per-wave overhead** | **~1 KB** |
+
+Most context (~4-5 KB per wave) is isolated in the wave-lifecycle-agent.
 
 ---
 
@@ -589,30 +281,7 @@ Return status after orchestrator completes:
 
 | Error | Action |
 |-------|--------|
-| Executor agent fails | Transition to FAILED, preserve error |
-| PR creation fails | Transition to FAILED, inform user |
-| Review timeout (30 min) | Exit polling, inform user |
-| Merge conflict | Transition to FAILED, user must resolve |
-| API errors | Retry once, then fail |
-
----
-
-## Context Budget
-
-Target context usage **per invocation** (fresh context each time):
-
-| Component | Size |
-|-----------|------|
-| State file reads | ~2 KB × 2 = 4 KB |
-| Execute executor summaries | ~0.5 KB × 1 = 0.5 KB |
-| Review executor summaries | ~0.5 KB × 2 = 1 KB |
-| Bash script outputs | ~1 KB × 5 = 5 KB |
-| **Total per invocation** | **~10-15 KB** |
-
-The exit-and-resume pattern ensures each invocation stays lean:
-- **EXECUTE phase**: One invocation spawns executor, creates PR, exits
-- **AWAITING_REVIEW**: One invocation checks status, exits immediately (no in-process polling)
-- **REVIEW_PROCESSING**: One invocation spawns review executor, transitions state, exits
-- **READY_TO_MERGE**: One invocation merges PR, advances wave, exits
-
-This prevents context accumulation across multi-wave specs that previously caused OOM.
+| Wave agent fails | Transition to FAILED, preserve error |
+| Review timeout | Transition to AWAITING_REVIEW, return timeout |
+| User cancels merge | Preserve READY_TO_MERGE state, return waiting |
+| State corruption | Use --recover to reset |

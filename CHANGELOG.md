@@ -5,6 +5,70 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.1] - 2026-01-02
+
+### Fixed
+
+- **CRITICAL: Removed non-existent `record-wave` call**: Orchestrator was calling `record-wave` which doesn't exist in the operations script. Removed the call since `advance-wave` already handles recording wave history.
+
+- **CRITICAL: Fixed phase name mismatch**: Wave-lifecycle-agent was using `PROCESS_REVIEW` but the state machine uses `REVIEW_PROCESSING`. Updated all references to use correct phase names.
+
+- **CRITICAL: Implemented proper re-review loop**: Previous version used pseudo-GOTO instructions that wouldn't work. Rewrote with proper labeled `while(true)` loop structure with `break` and `continue` statements.
+
+- **HIGH: Added poll count state synchronization**: Polling loop now syncs `poll_count` to state file after each iteration, enabling crash recovery to resume polling from correct position.
+
+- **HIGH: Added resume phase support**: Wave-lifecycle-agent now accepts `resume_phase` input parameter. Orchestrator passes current phase when resuming, allowing wave agent to skip completed steps.
+
+### Changed
+
+- Wave-lifecycle-agent input format now includes optional `resume_phase` field
+- Orchestrator prompt to wave agent now includes phase-specific resume instructions
+- Polling loop saves state after each poll for durability
+
+## [4.6.0] - 2026-01-02
+
+### Added
+
+- **Wave Lifecycle Agent**: New `wave-lifecycle-agent.md` that handles complete wave execution
+  - Preserves context within wave (~4-5 KB): PR creation, review, and merge share context
+  - Isolates context between waves: each wave gets fresh context
+  - Internal polling loop for review (no exit-and-resume within wave)
+  - Spawns executor agents for /execute-tasks and /pr-review-cycle
+  - Returns structured result to orchestrator when wave is merged or fails
+
+### Changed
+
+- **Execute Spec Orchestrator Simplified**: Lightweight coordinator instead of phase-by-phase exit
+  - Spawns one `wave-lifecycle-agent` per wave
+  - Waits for wave completion, then advances to next
+  - ~1 KB overhead per wave (vs. ~10-15 KB per phase in v4.5.x)
+  - Better user experience: continuous progress instead of manual re-invocations
+
+- **Architecture Shift from Phase-Level to Wave-Level Isolation**:
+  ```
+  v4.5.x (Exit After Every Phase):
+  /execute-spec → EXECUTE → EXIT → AWAIT → EXIT → REVIEW → EXIT → MERGE → EXIT
+  (Lost context between related operations)
+
+  v4.6.0 (Wave-Level Isolation):
+  /execute-spec → Wave 1 Agent (full lifecycle) → Wave 2 Agent → ... → Complete
+  (Context preserved within wave, isolated between waves)
+  ```
+
+- **Updated Documentation**: `execute-spec.md` reflects new wave-level architecture
+
+### Why This Change
+
+v4.5.6 fixed OOM by exiting after every phase, but this lost valuable context:
+- PR number needed during review processing
+- Review feedback needed for merge decision
+- Related operations became disconnected
+
+v4.6.0 balances memory safety with context preservation:
+- Within a wave: PR creation → review → merge share context
+- Between waves: fresh context prevents accumulation
+- Multi-wave specs work without OOM or context loss
+
 ## [4.5.6] - 2026-01-02
 
 ### Fixed
