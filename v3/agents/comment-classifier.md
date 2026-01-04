@@ -106,6 +106,14 @@ Assign exactly ONE category per comment:
 - HIGH: Reviewer explicitly marked as important/blocking/must-fix
 - Other: No explicit priority elevation
 
+> ⚠️ **CRITICAL RULE: HIGH OVERRIDES FUTURE**
+> If ANY of these signals appear in a comment, classify as HIGH (priority 2), NOT FUTURE - even if the comment appears under a "Future" section header:
+> - "High priority", "Important", "Must fix", "Should fix", "Blocking"
+> - "Required", "Needs to be addressed", "Critical for this PR"
+> - Explicit severity markers: `[HIGH]`, `[IMPORTANT]`, `[BLOCKING]`
+>
+> The presence of HIGH signals means the reviewer wants it fixed NOW, regardless of section placement.
+
 ## Future Item Sub-Classification
 
 For FUTURE category items, also determine:
@@ -196,6 +204,16 @@ Each numbered item inherits category from its section:
 - Items 2, 3 → FUTURE (from "Future Improvements")
 
 Return MULTIPLE classifications if one comment body contains multiple sections.
+
+> ⚠️ **EXCEPTION: HIGH signals override section headers**
+> ```markdown
+> ## Future Improvements
+>
+> 1. [HIGH] Add input validation - security risk  ← Classify as HIGH, not FUTURE
+> 2. Consider adding caching for performance      ← Classify as FUTURE
+> ```
+>
+> If an item under "Future" contains HIGH signals (see "HIGH OVERRIDES FUTURE" rule above), classify it as HIGH (priority 2) to ensure it gets fixed in this PR.
 
 ## Error Handling
 

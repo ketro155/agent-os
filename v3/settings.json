@@ -77,6 +77,6 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "4.6.2"
+    "AGENT_OS_VERSION": "4.6.3"
   }
 }

@@ -5,6 +5,22 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.3] - 2026-01-04
+
+### Fixed
+
+- **PR Review: HIGH items no longer deferred to FUTURE**: Added validation to ensure reviewer-marked HIGH priority items are addressed immediately, not captured for future waves
+  - Added "HIGH OVERRIDES FUTURE" rule to comment-classifier
+  - HIGH signals ("high priority", "must fix", "blocking", etc.) now override section headers
+  - Post-classification validation in discovery agent reclassifies misplaced HIGH items
+  - Implementation agent validates FUTURE bucket before capturing
+
+### Changed
+
+- `comment-classifier.md`: Added explicit rule that HIGH signals override FUTURE section headers
+- `pr-review-discovery.md`: Added step 2e to validate no HIGH items in FUTURE bucket
+- `pr-review-implementation.md`: Added pre-check before capturing FUTURE items
+
 ## [4.6.2] - 2026-01-04
 
 ### Fixed

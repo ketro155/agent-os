@@ -177,6 +177,17 @@ FOR each SUGGESTION:
 
 > **Important:** Items categorized as FUTURE by LLM classification should be captured, not implemented in this PR. The LLM classifier provides `future_type` (WAVE_TASK or ROADMAP_ITEM) based on scope analysis.
 
+> ⚠️ **PRE-CHECK: Validate no HIGH items in FUTURE bucket**
+> Before capturing FUTURE items, scan for misclassified HIGH items:
+> ```
+> FOR each FUTURE comment:
+>   IF body contains HIGH signals ("high priority", "important", "must fix", "should fix", "blocking", "[HIGH]"):
+>     RECLASSIFY as HIGH (priority 2)
+>     MOVE to high priority queue
+>     ADDRESS immediately (not captured for later)
+> ```
+> This catches cases where section headers incorrectly overrode HIGH signals.
+
 ```
 FOR each FUTURE comment:
   1. DO NOT implement code changes

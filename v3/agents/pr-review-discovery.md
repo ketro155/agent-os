@@ -157,7 +157,24 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" categorize 
 - `Can Be Addressed in Future|Future Waves|Tech Debt` → FUTURE
 - `Nice to Have|Optional|Low Priority` → SUGGESTION
 
-#### 2e. Build Comment Index
+#### 2e. Validate HIGH Items Not Misclassified
+
+> ⚠️ **CRITICAL**: HIGH items must NEVER be deferred to FUTURE
+
+```javascript
+// Post-classification validation
+FOR each comment classified as FUTURE:
+  IF body contains HIGH signals:
+    // HIGH signals: "high priority", "important", "must fix", "should fix",
+    //               "blocking", "[HIGH]", "required", "needs to be addressed"
+    RECLASSIFY: category = "HIGH", priority = 2
+    REMOVE: future_type field
+    LOG: "Reclassified FUTURE→HIGH: ${comment.id} (HIGH signal detected)"
+```
+
+This ensures reviewers' HIGH priority items are never accidentally deferred.
+
+#### 2f. Build Comment Index
 
 ```
 FOR each classified comment:
