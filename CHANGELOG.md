@@ -5,6 +5,21 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.2] - 2026-01-04
+
+### Fixed
+
+- **CRITICAL: Orchestrator stops after wave 1**: The `for` loop pseudocode lacked explicit continuation instructions. The agent would complete wave 1 successfully but not continue to wave 2.
+  - Root cause: `// Continue loop to next wave` was just a comment - no explicit instruction for agent to iterate
+  - Symptom: First `/execute-spec` run stops after wave 1 merges; restart continues from wave 2
+  - Fix: Changed to labeled `WAVE_LOOP: while(wave <= TOTAL_WAVES)` with explicit `wave++` and `continue WAVE_LOOP`
+  - Added `CRITICAL` callout box explaining loop must iterate through ALL waves
+
+### Changed
+
+- Orchestrator wave loop now uses `while` pattern with explicit increment and `continue` statement
+- Matches the labeled loop pattern already used in wave-lifecycle-agent's re-review loop
+
 ## [4.6.1] - 2026-01-02
 
 ### Fixed

@@ -111,13 +111,17 @@ if (PHASE === "READY_TO_MERGE" || PHASE === "AWAITING_REVIEW") {
 
 Loop through remaining waves, spawning one wave-lifecycle-agent per wave.
 
+> **CRITICAL**: This is an iterative loop. After each successful wave, you MUST continue to the next wave iteration. Do NOT exit after wave 1 - continue until `wave > TOTAL_WAVES`.
+
 ```javascript
 // Determine base branch
 const branch_info = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh pr-target`
 const base_branch = JSON.parse(branch_info).base_branch || "main"
 
-// Execute waves
-for (let wave = CURRENT_WAVE; wave <= TOTAL_WAVES; wave++) {
+// Execute waves - MUST iterate through ALL waves
+let wave = CURRENT_WAVE
+
+WAVE_LOOP: while (wave <= TOTAL_WAVES) {
   const is_final_wave = (wave === TOTAL_WAVES)
 
   INFORM: `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
@@ -163,10 +167,13 @@ ${resume_phase ? `4. Return status to orchestrator` : `5. Return status to orche
       RETURN: { status: "completed", spec_name, total_waves: TOTAL_WAVES }
     }
 
-    // Advance to next wave
+    // Advance to next wave - MUST CONTINUE LOOP
     bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh advance-wave ${spec_name}`
     INFORM: `Wave ${wave} complete. Advancing to wave ${wave + 1}...`
-    // Continue loop to next wave
+
+    // INCREMENT AND CONTINUE - do NOT exit here!
+    wave++
+    continue WAVE_LOOP  // ← CRITICAL: Go back to top of loop for next wave
 
   } else if (result.status === "timeout") {
     // Review polling timed out - need manual intervention
