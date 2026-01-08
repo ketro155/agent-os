@@ -1,6 +1,5 @@
 # Agent OS: A Complete Guide to AI-Assisted Software Development
 
-> **Version**: 4.5.0
 > **Purpose**: Educational reference for understanding how Agent OS orchestrates AI agents, manages state, and maintains context efficiency in software development workflows.
 
 ---
@@ -16,7 +15,8 @@
 7. [State Management & Recovery](#7-state-management--recovery)
 8. [Git Integration & Branch Strategy](#8-git-integration--branch-strategy)
 9. [Hooks: Deterministic Validation](#9-hooks-deterministic-validation)
-10. [Practical Examples](#10-practical-examples)
+10. [Automated Spec Execution](#10-automated-spec-execution)
+11. [Practical Examples](#11-practical-examples)
 
 ---
 
@@ -51,9 +51,10 @@ Traditional AI-assisted coding suffers from several fundamental issues:
 │     • Derived views auto-generated via hooks                        │
 │     • No manual sync required                                       │
 │                                                                      │
-│  3. CONTEXT ISOLATION                                               │
-│     • Fresh context per phase/wave/worker                           │
-│     • Only verified artifacts cross boundaries                      │
+│  3. WAVE-LEVEL CONTEXT ISOLATION                                    │
+│     • Fresh context per wave (not just per phase)                   │
+│     • Exit-and-resume after EVERY phase to prevent OOM              │
+│     • Only verified artifacts cross wave boundaries                 │
 │     • Scales to unlimited feature complexity                        │
 │                                                                      │
 │  4. VERIFICATION OVER TRUST                                         │
@@ -77,13 +78,13 @@ Traditional AI-assisted coding suffers from several fundamental issues:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         AGENT OS v4.5.0                             │
+│                            AGENT OS                                  │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   USER LAYER                                                        │
 │   ┌──────────────────────────────────────────────────────────────┐  │
 │   │  /plan-product  /create-spec  /create-tasks  /execute-tasks  │  │
-│   │  /analyze-product  /shape-spec  /debug  /pr-review-cycle     │  │
+│   │  /analyze-product  /shape-spec  /debug  /execute-spec        │  │
 │   └──────────────────────────────────────────────────────────────┘  │
 │                              │                                       │
 │                              ▼                                       │
@@ -93,6 +94,10 @@ Traditional AI-assisted coding suffers from several fundamental issues:
 │   │  • Define workflow steps and user interactions               │  │
 │   │  • Invoke agents via Task tool with subagent_type            │  │
 │   │  • Maintain phase transitions and state updates              │  │
+│   │                                                              │  │
+│   │  Orchestrators (.claude/agents/)                             │  │
+│   │  • wave-orchestrator: Coordinates wave execution             │  │
+│   │  • execute-spec-orchestrator: State machine for automation   │  │
 │   └──────────────────────────────────────────────────────────────┘  │
 │                              │                                       │
 │                              ▼                                       │
@@ -147,11 +152,14 @@ your-project/
 │   │   ├── create-spec.md
 │   │   ├── create-tasks.md
 │   │   ├── execute-tasks.md
+│   │   ├── execute-spec.md
 │   │   └── ...
 │   ├── agents/              # Subagent definitions
 │   │   ├── phase1-discovery.md
 │   │   ├── phase2-implementation.md
 │   │   ├── phase3-delivery.md
+│   │   ├── wave-orchestrator.md
+│   │   ├── execute-spec-orchestrator.md
 │   │   ├── git-workflow.md
 │   │   └── ...
 │   ├── hooks/               # Deterministic validation
@@ -228,10 +236,12 @@ your-project/
             │
             ▼
   ┌─────────────────────┐
-  │   /execute-tasks    │  TDD Implementation
-  │                     │  • Phase 1: Discovery & setup
-  └─────────────────────┘  • Phase 2: RED → GREEN → REFACTOR
-            │              • Phase 3: Delivery & PR
+  │   /execute-tasks    │  TDD Implementation (Manual)
+  │        or           │  • Phase 1: Discovery & setup
+  │   /execute-spec     │  • Phase 2: RED → GREEN → REFACTOR
+  │   (Automated)       │  • Phase 3: Delivery & PR
+  └─────────────────────┘
+            │
             ▼
 
   Output: Working code + Tests + PR
@@ -239,9 +249,9 @@ your-project/
             │
             ▼
   ┌─────────────────────┐
-  │   /pr-review-cycle  │  Handle PR feedback
+  │   PR Review Cycle   │  Handle PR feedback
   │   (if needed)       │  • Parse review comments
-  └─────────────────────┘  • Implement fixes
+  └─────────────────────┘  • Implement fixes (HIGH priority immediate)
                            • Capture future_tasks for backlog
 ```
 
@@ -268,7 +278,7 @@ your-project/
                                       │   .json (per task) │
                                       └────────────────────┘
                                                │
-/execute-tasks                                 │
+/execute-tasks or /execute-spec                │
 ┌────────────────────┐                         │
 │ Input:             │◄────────────────────────┘
 │ • tasks.json       │
@@ -333,9 +343,9 @@ Brief description of what this command does.
 | `/shape-spec` | Refine requirements interactively | None | Clarified requirements |
 | `/create-spec` | Generate detailed specification | None | spec.md |
 | `/create-tasks` | Break spec into tasks | None | tasks.json, tasks.md |
-| `/execute-tasks` | TDD implementation | Phase 1, 2, 3 | Code, tests, PR |
+| `/execute-tasks` | TDD implementation (manual) | Phase 1, 2, 3 | Code, tests, PR |
+| `/execute-spec` | Automated spec execution | Orchestrators | Full implementation |
 | `/debug` | Context-aware debugging | Explore | Bug fix |
-| `/pr-review-cycle` | Handle PR feedback | PR Review agents | Fixes, future_tasks |
 
 ### How Commands Invoke Agents
 
@@ -458,10 +468,14 @@ PHASE 3 (Delivery)
 | `phase1-discovery` | phase1-discovery.md | haiku | Task discovery, branch setup, mode selection |
 | `phase2-implementation` | phase2-implementation.md | sonnet | TDD implementation cycle |
 | `phase3-delivery` | phase3-delivery.md | sonnet | Verification, PR creation |
+| `wave-orchestrator` | wave-orchestrator.md | sonnet | Parallel wave execution, artifact verification |
 | `subtask-group-worker` | subtask-group-worker.md | sonnet | Parallel subtask execution |
+| `execute-spec-orchestrator` | execute-spec-orchestrator.md | sonnet | State machine for automated execution |
 | `git-workflow` | git-workflow.md | sonnet | Branch/commit/PR operations |
 | `project-manager` | project-manager.md | haiku | Task/roadmap state updates |
 | `future-classifier` | future-classifier.md | haiku | Classify PR feedback items |
+| `pr-review-discovery` | pr-review-discovery.md | haiku | Parse and categorize PR comments |
+| `pr-review-implementation` | pr-review-implementation.md | sonnet | Implement PR feedback |
 | `roadmap-integrator` | roadmap-integrator.md | haiku | Add items to roadmap |
 
 ### Context Passing Between Phases
@@ -495,18 +509,15 @@ PHASE 3 (Delivery)
         ▼
 /execute-tasks receives config
         │
-        │ For each task, spawns Phase 2 with:
-        │ • task_id
-        │ • task_description
-        │ • subtasks
-        │ • predecessor_artifacts (if wave > 1)
-        │ • context_summary (pre-computed)
+        │ EXIT SESSION ← Critical for OOM prevention
+        │ (Resume on next session with fresh context)
         │
         ▼
 ┌───────────────────┐
-│    Phase 2        │
-│  Implementation   │
-└───────────────────┘
+│    Phase 2        │   ← Fresh context, only receives:
+│  Implementation   │     • task_id, description, subtasks
+└───────────────────┘     • predecessor_artifacts (verified)
+        │                 • context_summary
         │
         │ Returns JSON:
         │ {
@@ -520,17 +531,14 @@ PHASE 3 (Delivery)
         │ }
         │
         ▼
-/execute-tasks collects artifacts
+EXIT SESSION ← Critical for OOM prevention
         │
-        │ VERIFICATION STEP (Critical!)
-        │ For each export claimed:
-        │   grep -r "export.*loginUser" src/
-        │   → If not found: HALT with error
-        │   → If found: Add to verified_artifacts
-        │
-        │ For each file claimed:
-        │   ls src/auth/login.ts
-        │   → If not found: HALT with error
+        ▼
+VERIFICATION STEP (Critical!)
+For each export claimed:
+  grep -r "export.*loginUser" src/
+  → If not found: HALT with error
+  → If found: Add to verified_artifacts
         │
         ▼
 Wave 2 receives VERIFIED artifacts:
@@ -548,7 +556,7 @@ Wave 2 receives VERIFIED artifacts:
         │
         ▼
 ┌───────────────────┐
-│    Phase 3        │
+│    Phase 3        │   ← Fresh context again
 │    Delivery       │
 └───────────────────┘
         │
@@ -633,36 +641,56 @@ Main Agent Context:
 ├── Task 4 implementation (TDD output)                 ~15,000 tokens
 ├── Task 5 implementation (TDD output)                 ~15,000 tokens
 ├── ...                                                        ...
-└── TOTAL: 80,000+ tokens (CONTEXT OVERFLOW!)
+└── TOTAL: 80,000+ tokens (CONTEXT OVERFLOW / OOM!)
 
 Problems:
 • Earlier instructions get pushed out of context
 • Agent "forgets" spec requirements
 • Quality degrades as tasks progress
 • Large features impossible to complete
+• Out-of-memory crashes on wave transitions
 ```
 
-### Solution 1: Phase-Based Context Isolation
+### Solution 1: Wave-Level Context Isolation
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                 PHASE-BASED CONTEXT ISOLATION                        │
+│                 WAVE-LEVEL CONTEXT ISOLATION                         │
 └─────────────────────────────────────────────────────────────────────┘
+
+KEY INSIGHT: Exit after EVERY phase to get fresh context
 
 AGENT OS APPROACH:
 
-Main Orchestrator Context:               Phase 2 Agent Context (Fresh!):
-├── User request           ~500          ├── Agent instructions    ~2,000
-├── Phase 1 config result  ~300          ├── Single task details   ~1,000
-├── Phase 2 artifacts      ~500/task     ├── Context summary       ~800
-├── Phase 3 result         ~200          └── TDD implementation   ~15,000
-└── TOTAL: ~3,000 tokens                     TOTAL: ~19,000 tokens
+Session 1: Phase 1 Discovery
+├── Load spec, analyze tasks                    ~5,000 tokens
+├── Return execution config                     ~500 tokens
+└── EXIT SESSION ← Forces fresh context
+
+Session 2: Phase 2 Wave 1
+├── Fresh context!                              ~0 tokens
+├── Load single task                            ~1,000 tokens
+├── TDD implementation                          ~15,000 tokens
+└── EXIT SESSION ← Forces fresh context
+
+Session 3: Phase 2 Wave 1 (next task)
+├── Fresh context!                              ~0 tokens
+├── Load single task + verified artifacts       ~1,500 tokens
+├── TDD implementation                          ~15,000 tokens
+└── EXIT SESSION ← Forces fresh context
+
+... (continues for each task)
+
+Session N: Phase 3 Delivery
+├── Fresh context!                              ~0 tokens
+├── Run tests, create PR                        ~5,000 tokens
+└── COMPLETE
 
 Benefits:
-• Each Phase 2 invocation: fresh 19K context (well under limits)
-• Main orchestrator stays lean: ~3K tokens
-• Phase 2 output (15K) discarded after artifacts extracted
+• Each session: maximum ~20K tokens (well under limits)
+• No OOM crashes on wave transitions
 • Can execute unlimited tasks without accumulation
+• Quality consistent across all tasks
 ```
 
 ### Solution 2: Wave Orchestration
@@ -690,9 +718,9 @@ Wave 1 Execution:
 ┌────────────────────────────────────────────────────────────────────┐
 │                                                                    │
 │  ┌─────────┐     ┌─────────┐     ┌─────────┐                      │
-│  │ Task 1  │     │ Task 2  │     │ Task 3  │   Run in PARALLEL    │
-│  │ Phase 2 │     │ Phase 2 │     │ Phase 2 │   (independent)      │
-│  └────┬────┘     └────┬────┘     └────┬────┘                      │
+│  │ Task 1  │     │ Task 2  │     │ Task 3  │   Each in SEPARATE   │
+│  │ Session │     │ Session │     │ Session │   SESSION (fresh     │
+│  └────┬────┘     └────┬────┘     └────┬────┘   context each)      │
 │       │               │               │                           │
 │       ▼               ▼               ▼                           │
 │  artifacts       artifacts       artifacts                        │
@@ -716,7 +744,7 @@ Wave 2 Execution:
 │                                                                    │
 │  ┌─────────┐     ┌─────────┐                                      │
 │  │ Task 4  │     │ Task 5  │   Can import Wave 1 exports          │
-│  │ Phase 2 │     │ Phase 2 │   with confidence (verified!)        │
+│  │ Session │     │ Session │   with confidence (verified!)        │
 │  └─────────┘     └─────────┘                                      │
 │                                                                   │
 └────────────────────────────────────────────────────────────────────┘
@@ -829,15 +857,15 @@ Orchestrator total: ~3,000 tokens (artifacts only)
 
 Strategy                        │ Context Reduction │ When Applied
 ────────────────────────────────┼───────────────────┼──────────────────
-Phase isolation                 │ ~60% per phase    │ Always
+Exit-after-phase                │ ~100% reset       │ Always (OOM fix)
 Wave orchestration              │ ~99% between waves│ Multi-task specs
 Pre-computed context            │ ~82% per task     │ Always
 Batched subtasks                │ ~70% for large    │ 5+ subtasks
                                 │     tasks         │
 
 COMBINED EFFECT:
-• Naive approach: 100K+ tokens for 10-task feature
-• Agent OS approach: ~25K tokens peak, ~5K orchestrator steady-state
+• Naive approach: 100K+ tokens for 10-task feature (OOM crash)
+• Agent OS approach: ~20K tokens peak per session, full reset between
 • Result: Can execute unlimited complexity features
 ```
 
@@ -852,12 +880,7 @@ COMBINED EFFECT:
 │               SINGLE-SOURCE-OF-TRUTH TASK FORMAT                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-PROBLEM (v2.x architecture):
-├── tasks.md (human-readable, editable)
-├── tasks.json (machine-readable, editable)
-└── Both files must stay in sync → Sync drift bugs!
-
-SOLUTION (v3.0+ architecture):
+ARCHITECTURE:
 ├── tasks.json (SOURCE OF TRUTH - human-editable JSON)
 └── tasks.md (AUTO-GENERATED via hook - read-only view)
 
@@ -942,6 +965,7 @@ Benefits:
     {
       "id": "ft-001",
       "type": "WAVE_TASK",
+      "priority": "HIGH",
       "description": "Add refresh token support",
       "source": "PR review comment",
       "target_wave": 2,
@@ -1301,16 +1325,10 @@ Example invocation from Phase 3:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                 HOOKS VS SKILLS COMPARISON                           │
+│                 HOOKS: DETERMINISTIC VALIDATION                      │
 └─────────────────────────────────────────────────────────────────────┘
 
-SKILLS (v2.x approach):
-├── Invoked by: Model decides to call them
-├── Problem: Model can "forget" or choose not to call
-├── Example: "Validate before commit" skill might be skipped
-└── Result: Inconsistent validation, bugs slip through
-
-HOOKS (v3.0+ approach):
+HOOKS:
 ├── Invoked by: Claude Code runtime (deterministic)
 ├── Trigger: Specific events (file change, commit, session start)
 ├── Cannot be skipped: Shell script executes regardless of model
@@ -1454,7 +1472,7 @@ fi
 exit 0
 ```
 
-### Future Tasks Auto-Promotion (v4.5.0)
+### Future Tasks Auto-Promotion
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1469,12 +1487,14 @@ PR Review captures deferred items:
 │      {                                                             │
 │        "id": "ft-001",                                             │
 │        "type": "ROADMAP_ITEM",                                     │
+│        "priority": "MEDIUM",                                       │
 │        "description": "Add OAuth2 support",                        │
 │        "source": "PR #42 review comment"                           │
 │      },                                                            │
 │      {                                                             │
 │        "id": "ft-002",                                             │
 │        "type": "WAVE_TASK",                                        │
+│        "priority": "HIGH",     ← HIGH priority = IMMEDIATE         │
 │        "description": "Add rate limiting to auth endpoints",       │
 │        "target_wave": 2,                                           │
 │        "needs_subtask_expansion": true                             │
@@ -1487,13 +1507,19 @@ PR Review captures deferred items:
 post-file-change.sh hook triggers auto-promotion:
 ┌────────────────────────────────────────────────────────────────────┐
 │                                                                    │
-│  For type: "ROADMAP_ITEM"                                          │
-│  ──────────────────────────                                        │
+│  For priority: "HIGH"                                              │
+│  ─────────────────────                                             │
+│  → NEVER defer to FUTURE                                           │
+│  → Add as task in CURRENT wave (immediate implementation)          │
+│  → Subtasks generated immediately if needed                        │
+│                                                                    │
+│  For type: "ROADMAP_ITEM" (non-HIGH)                               │
+│  ────────────────────────────────────                              │
 │  → Append to .agent-os/product/roadmap.md                          │
 │  → Remove from future_tasks                                        │
 │                                                                    │
-│  For type: "WAVE_TASK"                                             │
-│  ─────────────────────                                             │
+│  For type: "WAVE_TASK" (non-HIGH)                                  │
+│  ─────────────────────────────────                                 │
 │  → Add to tasks array with:                                        │
 │    • status: "pending"                                             │
 │    • wave: target_wave                                             │
@@ -1504,14 +1530,204 @@ post-file-change.sh hook triggers auto-promotion:
 └────────────────────────────────────────────────────────────────────┘
 
 Result: No orphaned backlog items
+• HIGH → implemented immediately in current wave
 • ROADMAP_ITEM → lives in roadmap.md (product backlog)
 • WAVE_TASK → becomes real task (implementation backlog)
-• Both tracked, neither lost
+• All tracked, none lost
 ```
 
 ---
 
-## 10. Practical Examples
+## 10. Automated Spec Execution
+
+### The /execute-spec Command
+
+For hands-off feature implementation, `/execute-spec` provides fully automated execution:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    /EXECUTE-SPEC ARCHITECTURE                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+PURPOSE: Fully automated spec-to-PR pipeline with PR review handling
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│   /execute-spec                                                     │
+│        │                                                            │
+│        ▼                                                            │
+│   ┌────────────────────────────────────┐                           │
+│   │  execute-spec-orchestrator         │                           │
+│   │  (State Machine)                   │                           │
+│   │                                    │                           │
+│   │  States:                           │                           │
+│   │  • INIT → WAVE_DISCOVERY           │                           │
+│   │  • WAVE_DISCOVERY → WAVE_EXECUTE   │                           │
+│   │  • WAVE_EXECUTE → PR_CREATE        │                           │
+│   │  • PR_CREATE → PR_REVIEW_WAIT      │                           │
+│   │  • PR_REVIEW_WAIT → PR_REVIEW_IMPL │                           │
+│   │  • PR_REVIEW_IMPL → PR_APPROVED    │                           │
+│   │  • PR_APPROVED → NEXT_WAVE         │                           │
+│   │  • NEXT_WAVE → WAVE_DISCOVERY      │  (loop)                   │
+│   │  • FINAL → COMPLETE                │                           │
+│   └────────────────────────────────────┘                           │
+│                    │                                                │
+│        ┌──────────┼──────────┐                                     │
+│        ▼          ▼          ▼                                     │
+│   ┌─────────┐ ┌─────────┐ ┌─────────┐                             │
+│   │ Phase 1 │ │ Phase 2 │ │ Phase 3 │                             │
+│   │Discovery│ │Implement│ │Delivery │                             │
+│   └─────────┘ └─────────┘ └─────────┘                             │
+│        │          │          │                                     │
+│        └──────────┼──────────┘                                     │
+│                   ▼                                                │
+│        ┌─────────────────────┐                                     │
+│        │    PR Created       │                                     │
+│        │    (await review)   │                                     │
+│        └─────────────────────┘                                     │
+│                   │                                                │
+│                   ▼                                                │
+│        ┌─────────────────────┐                                     │
+│        │  PR Review Agents   │                                     │
+│        │  • pr-review-       │                                     │
+│        │    discovery        │                                     │
+│        │  • pr-review-       │                                     │
+│        │    implementation   │                                     │
+│        └─────────────────────┘                                     │
+│                   │                                                │
+│                   ▼                                                │
+│        ┌─────────────────────┐                                     │
+│        │    Next Wave        │ ──► Loop until all waves complete   │
+│        └─────────────────────┘                                     │
+│                   │                                                │
+│                   ▼                                                │
+│        ┌─────────────────────┐                                     │
+│        │   COMPLETE          │                                     │
+│        │   All PRs merged    │                                     │
+│        └─────────────────────┘                                     │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### State Machine Details
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│              EXECUTE-SPEC STATE MACHINE                              │
+└─────────────────────────────────────────────────────────────────────┘
+
+STATE: INIT
+├── Load spec and tasks.json
+├── Validate prerequisites
+├── Set up execution flags
+└── Transition → WAVE_DISCOVERY
+
+STATE: WAVE_DISCOVERY
+├── Invoke phase1-discovery agent
+├── Get tasks for current wave
+├── Set up wave branch
+└── Transition → WAVE_EXECUTE
+
+STATE: WAVE_EXECUTE
+├── For each task in wave:
+│   ├── Invoke phase2-implementation (fresh session each)
+│   ├── Collect artifacts
+│   └── EXIT SESSION (prevents OOM)
+├── Verify all artifacts via grep
+└── Transition → PR_CREATE
+
+STATE: PR_CREATE
+├── Invoke phase3-delivery agent
+├── Run full test suite
+├── Create wave PR
+├── Record PR URL
+└── Transition → PR_REVIEW_WAIT
+
+STATE: PR_REVIEW_WAIT
+├── Poll for PR review status
+├── Wait for approval OR comments
+├── If approved → PR_APPROVED
+└── If comments → PR_REVIEW_IMPL
+
+STATE: PR_REVIEW_IMPL
+├── Invoke pr-review-discovery
+│   └── Classify comments (HIGH/MEDIUM/LOW)
+├── For HIGH priority:
+│   └── Implement immediately (don't defer!)
+├── For MEDIUM/LOW:
+│   └── Add to future_tasks
+├── Push fixes
+└── Transition → PR_REVIEW_WAIT (re-review)
+
+STATE: PR_APPROVED
+├── Merge PR to base branch
+├── Update tasks.json wave status
+├── Check for more waves
+└── If more waves → NEXT_WAVE
+    If no more → FINAL
+
+STATE: NEXT_WAVE
+├── Increment wave counter
+├── Promote any ready future_tasks
+└── Transition → WAVE_DISCOVERY
+
+STATE: FINAL
+├── Create final PR: base → main
+├── Update roadmap with completed feature
+├── Log completion to progress.json
+└── Transition → COMPLETE
+```
+
+### Exit-and-Resume Pattern
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                   EXIT-AND-RESUME PATTERN                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+KEY INSIGHT: Exit after EVERY phase to prevent OOM
+
+Traditional (OOM crash):
+Session 1:
+├── Phase 1: Discovery          ~5,000 tokens
+├── Phase 2: Task 1 impl       ~15,000 tokens
+├── Phase 2: Task 2 impl       ~15,000 tokens
+├── Phase 2: Task 3 impl       ~15,000 tokens
+├── Phase 3: Delivery          ~5,000 tokens
+└── CRASH! Context: 55,000+ tokens (OOM)
+
+Exit-and-Resume (safe):
+Session 1:
+├── Phase 1: Discovery          ~5,000 tokens
+├── Save state: "phase1_complete"
+└── EXIT (write: "Resume with phase2, task 1")
+
+Session 2:
+├── Load state: "phase1_complete"
+├── Phase 2: Task 1 impl       ~15,000 tokens
+├── Save artifacts
+└── EXIT (write: "Resume with phase2, task 2")
+
+Session 3:
+├── Load state: "task1_complete"
+├── Phase 2: Task 2 impl       ~15,000 tokens
+├── Save artifacts
+└── EXIT (write: "Resume with phase2, task 3")
+
+... (continues for each task)
+
+Session N:
+├── Load state: "all_tasks_complete"
+├── Phase 3: Delivery          ~5,000 tokens
+├── Create PR
+└── EXIT (success)
+
+BENEFIT: Each session ~15K tokens max (no OOM)
+```
+
+---
+
+## 11. Practical Examples
 
 ### Example 1: Simple Feature Implementation
 
@@ -1535,16 +1751,14 @@ WORKFLOW:
 
        Waves: [[1, 2], [3, 4]]  (1&2 parallel, then 3&4 parallel)
 
-3. /execute-tasks
-   └── Phase 1: Sets up branch, selects tasks
-   └── Phase 2 (Wave 1):
-       • Task 1 & 2 execute in parallel
-       • TDD for each: test → implement → refactor
-       • Commits after each subtask
-   └── Phase 2 (Wave 2):
-       • Task 3 & 4 execute in parallel
-       • Receive verified artifacts from Wave 1
-   └── Phase 3: Run full tests, create PR
+3. /execute-tasks (or /execute-spec for automated)
+   └── Session 1: Phase 1 sets up branch, selects tasks, EXIT
+   └── Session 2: Task 1 TDD implementation, EXIT
+   └── Session 3: Task 2 TDD implementation, EXIT
+   └── Session 4: Wave 1 verification + Wave 2 setup, EXIT
+   └── Session 5: Task 3 TDD implementation, EXIT
+   └── Session 6: Task 4 TDD implementation, EXIT
+   └── Session 7: Phase 3 - Run full tests, create PR
 
 4. PR merged → Feature complete!
 ```
@@ -1568,12 +1782,17 @@ WORKFLOW:
        Wave 4: [Admin API endpoints, Dashboard components]
        Wave 5: [Integration tests, Documentation]
 
-3. /execute-tasks
-   └── Context efficiency kicks in:
-       • Each wave: fresh context
-       • Each task: isolated Phase 2 agent
+3. /execute-spec (automated execution)
+   └── Wave-level context isolation kicks in:
+       • Each wave: completely fresh context
+       • Each task within wave: separate session
        • Artifacts verified between waves
-       • Total context never exceeds 30K tokens
+       • Total context never exceeds 20K tokens per session
+
+   └── Per-wave PR creation:
+       • Wave 1 PR created and reviewed
+       • Wave 2 PR created after Wave 1 merged
+       • ... continues through all waves
 
    └── If blocker found:
        • Task marked blocked
@@ -1581,7 +1800,8 @@ WORKFLOW:
        • User prompted for resolution
        • Can continue with independent tasks
 
-4. Multiple PRs created (one per wave or aggregate)
+4. Multiple PRs created (one per wave)
+5. Final PR: base → main (after all waves merged)
 ```
 
 ### Example 3: PR Review Feedback Loop
@@ -1591,27 +1811,30 @@ USER: Got feedback on my auth PR, please handle it.
 
 WORKFLOW:
 
-1. /pr-review-cycle
-   └── Reads PR comments
+1. /execute-spec (continues from PR_REVIEW_WAIT state)
+   └── pr-review-discovery reads PR comments
    └── Classifies each comment:
-       • FIX_NOW: Add to current wave
-       • FUTURE_TASK: Add to future_tasks
+       • HIGH: Fix immediately in current wave
+       • MEDIUM: Add to next wave
+       • LOW: Add to roadmap
        • QUESTION: Prompt user for response
        • NITPICK: Apply if trivial
 
-2. For FIX_NOW items:
+2. For HIGH priority items:
    └── Creates tasks for fixes
-   └── Runs Phase 2 for each fix
+   └── Runs Phase 2 for each fix (separate sessions)
    └── Commits and pushes
+   └── Does NOT defer to future_tasks
 
-3. For FUTURE_TASK items:
+3. For MEDIUM/LOW priority items:
    └── Added to future_tasks in tasks.json
    └── Hook auto-promotes:
        • ROADMAP_ITEM → roadmap.md
        • WAVE_TASK → next wave
 
 4. PR updated with fixes
-   └── User reviews and merges
+   └── Automatic re-review wait
+   └── Cycle continues until approved
 ```
 
 ---
@@ -1628,10 +1851,10 @@ WORKFLOW:
    Solution: Shell hooks execute unconditionally
    Result: Guaranteed validation before every commit
 
-2. CONTEXT ISOLATION
-   Problem: Large features overflow context
-   Solution: Phase/wave/worker isolation, verified artifact passing
-   Result: Unlimited feature complexity without context degradation
+2. WAVE-LEVEL CONTEXT ISOLATION
+   Problem: Large features overflow context, causing OOM crashes
+   Solution: Exit-and-resume after EVERY phase, fresh context each session
+   Result: Unlimited feature complexity without context degradation or crashes
 
 3. SINGLE SOURCE OF TRUTH
    Problem: Multiple state files drift out of sync
@@ -1657,6 +1880,16 @@ WORKFLOW:
    Problem: PR feedback items get lost
    Solution: Auto-promotion hooks graduate items to roadmap/waves
    Result: Zero orphaned backlog items
+
+8. HIGH PRIORITY OVERRIDE
+   Problem: Critical PR feedback gets deferred inappropriately
+   Solution: HIGH priority items never deferred, implemented immediately
+   Result: Responsive PR review cycle, faster approval
+
+9. AUTOMATED EXECUTION
+   Problem: Manual intervention required between waves
+   Solution: /execute-spec with state machine orchestration
+   Result: Hands-off spec-to-PR pipeline
 ```
 
 ---
@@ -1672,4 +1905,4 @@ WORKFLOW:
 
 ---
 
-*This guide reflects Agent OS v4.5.0. For the latest updates, check CHANGELOG.md.*
+*For the latest updates, check CHANGELOG.md.*
