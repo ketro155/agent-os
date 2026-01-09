@@ -47,3 +47,22 @@ node_modules/
 # Exclude entire directories created by running installer locally for testing
 .agent-os/
 .claude/
+
+# Agent-OS state and tracking files
+
+# Session state (ephemeral)
+.agent-os/state/session.json
+.agent-os/state/session-cache.json
+.agent-os/state/command-state.json
+.agent-os/state/checkpoints/
+.agent-os/state/recovery/
+.agent-os/state/.lock
+.agent-os/cache/
+.agent-os/debugging/
+.agent-os/**/*.cache
+.agent-os/**/*.tmp
+
+# Progress tracking (session-specific, causes merge conflicts)
+.agent-os/progress/progress.json
+.agent-os/progress/progress.md
+.agent-os/progress/archive/

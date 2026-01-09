@@ -1,10 +1,14 @@
-# Agent OS v3.0 - Native Claude Code Architecture
+# Agent OS v3 Architecture (Current Release: v4.7.1)
 
 ## Overview
 
-Agent OS v3.0 is a major architectural refactor that leverages Claude Code's native capabilities to simplify the framework while improving reliability.
+This directory contains the **v3 architecture** source templates that get installed to target projects. The "v3" refers to the architectural approach (native hooks, single-source JSON), while the current release version is **v4.7.1**.
+
+Agent OS v3 architecture is a major refactor that leverages Claude Code's native capabilities to simplify the framework while improving reliability.
 
 **No external dependencies** - uses only Claude Code's built-in tools (Bash, Read, Write, Grep, Task).
+
+> **Note**: Files in this directory are templates. Run `./setup/project.sh --claude-code --target /path/to/project` to install them.
 
 ## Key Changes from v2.x
 
@@ -29,9 +33,23 @@ Agent OS v3.0 is a major architectural refactor that leverages Claude Code's nat
 │   ├── git-conventions.md       # Git rules
 │   └── execute-tasks.md         # Task execution rules
 ├── agents/
-│   ├── phase1-discovery.md      # Task discovery (haiku)
-│   ├── phase2-implementation.md # TDD implementation (sonnet)
-│   └── phase3-delivery.md       # Completion workflow (sonnet)
+│   ├── phase1-discovery.md      # Task discovery (inherits model)
+│   ├── phase2-implementation.md # TDD implementation (inherits model)
+│   ├── phase3-delivery.md       # Completion workflow (inherits model)
+│   ├── wave-orchestrator.md     # Parallel wave execution
+│   ├── subtask-group-worker.md  # Parallel subtask execution
+│   ├── execute-spec-orchestrator.md # Automated spec execution state machine
+│   ├── wave-lifecycle-agent.md  # Wave branch management (v4.6)
+│   ├── pr-review-discovery.md   # PR comment analysis
+│   ├── pr-review-implementation.md # PR feedback implementation
+│   ├── comment-classifier.md    # Comment priority classification (haiku)
+│   ├── future-classifier.md     # Deferred item classification (haiku)
+│   ├── roadmap-integrator.md    # Roadmap phase placement (haiku)
+│   ├── git-workflow.md          # Branch management, commits, PRs
+│   ├── project-manager.md       # Task/roadmap state updates
+│   ├── test-discovery.md        # Browser test discovery (v4.7)
+│   ├── test-executor.md         # Browser test execution (v4.7)
+│   └── test-reporter.md         # Test result reporting (v4.7)
 ├── hooks/
 │   ├── session-start.sh         # Load progress context
 │   ├── session-end.sh           # Save checkpoint
@@ -39,10 +57,16 @@ Agent OS v3.0 is a major architectural refactor that leverages Claude Code's nat
 │   └── pre-commit-gate.sh       # Validate before commit
 └── scripts/
     ├── json-to-markdown.js      # Generate MD from JSON
-    └── task-operations.sh       # Task management utilities
+    ├── task-operations.sh       # Task management utilities
+    ├── branch-setup.sh          # Wave branch creation
+    ├── pr-review-operations.sh  # PR review utilities
+    ├── execute-spec-operations.sh # Execute-spec state management
+    ├── test-operations.sh       # Browser test utilities (v4.7)
+    ├── test-plan-to-markdown.js # Test plan MD generation (v4.7)
+    └── test-report-to-markdown.js # Test report MD generation (v4.7)
 
 .agent-os/
-├── tasks/[spec]/
+├── specs/[spec]/
 │   ├── tasks.json               # SOURCE OF TRUTH
 │   └── tasks.md                 # Auto-generated (read-only)
 ├── progress/
@@ -146,14 +170,15 @@ Integrated across commands with thoroughness levels:
 | shape-spec (deep) | `very thorough` | Complex features |
 | debug | `very thorough` | Root cause investigation |
 
-## Files Created
+## Source Templates
 
 ```
 v3/
 ├── README.md                    # This file
-├── UPGRADE-PLAN.md              # Migration guide
+├── UPGRADE-PLAN.md              # Historical migration guide (v2→v3)
 ├── schemas/
-│   └── tasks-v3.json            # JSON schema for tasks
+│   ├── tasks-v3.json            # JSON schema for tasks
+│   └── execute-spec-v1.json     # Execute-spec state schema
 ├── settings.json                # Hooks configuration
 ├── hooks/
 │   ├── session-start.sh
@@ -162,21 +187,49 @@ v3/
 │   └── pre-commit-gate.sh
 ├── scripts/
 │   ├── json-to-markdown.js
-│   └── task-operations.sh       # All task operations
-├── agents/
-│   ├── phase1-discovery.md      # + Explore agent integration
+│   ├── task-operations.sh       # Task management
+│   ├── branch-setup.sh          # Wave branching
+│   ├── pr-review-operations.sh  # PR review utilities
+│   ├── execute-spec-operations.sh # Execute-spec state
+│   ├── test-operations.sh       # Browser test utilities
+│   ├── test-plan-to-markdown.js # Test plan generation
+│   └── test-report-to-markdown.js # Test report generation
+├── agents/                      # 17 specialized agents
+│   ├── phase1-discovery.md
 │   ├── phase2-implementation.md
-│   └── phase3-delivery.md
+│   ├── phase3-delivery.md
+│   ├── wave-orchestrator.md
+│   ├── subtask-group-worker.md
+│   ├── execute-spec-orchestrator.md
+│   ├── wave-lifecycle-agent.md
+│   ├── pr-review-discovery.md
+│   ├── pr-review-implementation.md
+│   ├── comment-classifier.md
+│   ├── future-classifier.md
+│   ├── roadmap-integrator.md
+│   ├── git-workflow.md
+│   ├── project-manager.md
+│   ├── test-discovery.md
+│   ├── test-executor.md
+│   └── test-reporter.md
 ├── memory/
 │   ├── CLAUDE.md
 │   └── rules/
 │       ├── tdd-workflow.md
 │       ├── git-conventions.md
 │       └── execute-tasks.md
-└── commands/
-    ├── execute-tasks.md         # Simplified command
-    ├── shape-spec.md            # NEW: Planning Mode + Explore
-    └── debug.md                 # NEW: Explore agent for debugging
+└── commands/                    # 11 commands
+    ├── plan-product.md          # Mission & roadmap for new products
+    ├── analyze-product.md       # Mission & roadmap for existing products
+    ├── shape-spec.md            # Explore & refine requirements
+    ├── create-spec.md           # Detailed specification
+    ├── create-tasks.md          # Task breakdown with waves
+    ├── execute-tasks.md         # TDD implementation
+    ├── execute-spec.md          # Full automated workflow
+    ├── pr-review-cycle.md       # PR feedback processing
+    ├── debug.md                 # Root cause analysis
+    ├── create-test-plan.md      # Browser test planning (v4.7)
+    └── run-tests.md             # Browser test execution (v4.7)
 ```
 
 ## Size Comparison
@@ -198,15 +251,17 @@ v3/
 
 **No MCP servers required.**
 
-## Installation (Future)
+## Installation
 
 ```bash
-# Upgrade from v2.x
-./setup/project.sh --claude-code --upgrade --v3
+# Fresh installation to a project
+./setup/project.sh --claude-code --target /path/to/project
 
-# Fresh v3.0 installation
-./setup/project.sh --claude-code --v3
+# Upgrade existing installation
+./setup/project.sh --claude-code --upgrade --target /path/to/project
 ```
+
+The installer reads version from `v3/settings.json` and copies all templates to the target project.
 
 ## Benefits
 
@@ -219,9 +274,22 @@ v3/
 
 ## Answering: Do We Need Both tasks.json and tasks.md?
 
-**No.** In v3.0:
+**No.** In v3 architecture:
 
 - `tasks.json` is the **source of truth**
 - `tasks.md` is **auto-generated** for human readability
 - Hooks automatically regenerate MD when JSON changes
 - No sync logic, no drift, no dedicated skill needed
+
+## Version History (v3 Architecture)
+
+| Version | Key Features |
+|---------|--------------|
+| v3.0 | Native hooks, single-source JSON, subagents |
+| v4.0 | Wave orchestration, parallel execution |
+| v4.5 | Execute-spec automation, PR review cycle |
+| v4.6 | Wave-lifecycle-agent, browser testing workflow |
+| v4.7 | Chrome MCP integration, AskUserQuestion in specs |
+| **v4.7.1** | Current release |
+
+See [CHANGELOG.md](../CHANGELOG.md) for detailed release notes.

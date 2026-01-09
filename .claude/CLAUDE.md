@@ -1,125 +1,123 @@
-# CLAUDE.md
+# Agent OS v3.0 - Core Memory
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> This file is automatically loaded by Claude Code at session start.
+> It replaces embedded instructions in commands with native memory hierarchy.
 
-## Project Overview
+## Agent OS Overview
 
-Agent OS is a development framework that installs into other projects to provide structured AI-assisted software development workflows. It uses native Claude Code hooks for mandatory validation and single-source JSON tasks.
+Agent OS is a development framework providing structured AI-assisted workflows. Version 3.0 uses Claude Code's native features:
 
-**Critical**: This is the Agent OS **source repository**. Changes here affect all projects that install Agent OS via `./setup/project.sh`. Files in `v3/` are templates that get copied to target projects during installation.
+- **Hooks** for deterministic validation (cannot be skipped)
+- **Memory hierarchy** for instructions (this file + rules/)
+- **Native subagents** for phase-based execution
+- **Single-source tasks** (JSON primary, MD auto-generated)
 
-## Development Commands
+## Core Workflows
 
-```bash
-# Test installation in a separate test project
-./setup/project.sh --claude-code --target /path/to/test-project
-./setup/project.sh --claude-code --upgrade --target /path/to/existing-project
-```
-
-**Workflow**: Make changes in `v3/` → Test in separate project → Update SYSTEM-OVERVIEW.md → Update CHANGELOG.md → Commit
-
-## Core Architecture
-
-### Feature Pipeline (End-User Commands)
-```
-/plan-product or /analyze-product  →  Product foundation (mission.md, roadmap.md)
-        ↓
-/shape-spec (optional)             →  Explore & refine requirements
-        ↓
-/create-spec                       →  Detailed specification (spec.md)
-        ↓
-/create-tasks                      →  Task breakdown with waves (tasks.json)
-        ↓
-/execute-tasks                     →  TDD implementation via Phase 1→2→3
-        ↓
-/execute-spec (automated)          →  Full wave automation with PR review
-```
-
-### Three-Phase Execution Model
-The core innovation is **context isolation** via native subagents:
-
-| Phase | Agent | Model | Tools | Purpose |
-|-------|-------|-------|-------|---------|
-| 1 | phase1-discovery | haiku | Read, Grep, Glob, Task | Discovery (read-only) |
-| 2 | phase2-implementation | sonnet | Read, Edit, Write, Bash | TDD implementation |
-| 3 | phase3-delivery | sonnet | Read, Bash, Grep, Write | Verification, PR creation |
-
-Each phase gets **fresh context** - prevents accumulation that causes large features to fail.
-
-### Key Architectural Patterns
-- **Deterministic hooks** over model-invoked skills (hooks cannot be skipped)
-- **Single-source tasks.json** with auto-generated tasks.md via hook
-- **Artifact verification** via grep before passing to next wave (prevents hallucinations)
-- **Wave-aware branching**: Each wave gets its own branch from base feature branch
-
-## Source Structure
+### Feature Development Pipeline
 
 ```
-v3/
-├── commands/     # 9 commands → .claude/commands/
-├── agents/       # 13 agents → .claude/agents/
-├── hooks/        # 4 hooks → .claude/hooks/
-├── scripts/      # Utilities → .claude/scripts/
-├── memory/       # CLAUDE.md template → .claude/
-└── settings.json # Hook config → .claude/settings.json
+/plan-product    → Initialize product with mission/vision/roadmap
+/analyze-product → Set up Agent OS for existing codebase
+/shape-spec      → Explore and refine feature concepts
+/create-spec     → Create detailed feature specification
+/create-tasks    → Generate task breakdown with parallelization analysis
+/execute-tasks   → Implement with TDD workflow
 ```
 
-## Making Changes
+### Task Execution Philosophy
 
-### Modifying Commands/Agents
-1. Edit source in `v3/commands/` or `v3/agents/`
-2. Test: `./setup/project.sh --claude-code --upgrade --target /path/to/test-project`
-3. Run the command in test project to verify
-4. Update SYSTEM-OVERVIEW.md and CHANGELOG.md
+1. **Single-task focus** is strongly recommended (research-backed)
+2. **TDD is mandatory**: RED → GREEN → REFACTOR
+3. **Validation gates cannot be skipped** (enforced by hooks)
+4. **Artifacts are auto-collected** after task completion
 
-### Adding New Components
-- **New agent**: Create `v3/agents/[name].md`, add to `setup/project.sh` AGENTS array
-- **New hook**: Create `v3/hooks/[name].sh`, add config to `v3/settings.json`
-- **New script**: Create `v3/scripts/[name].sh`, add to SCRIPTS array in installer
+## Key Conventions
 
-### Key Files When Debugging
-- `v3/agents/phase2-implementation.md` - TDD loop, subtask protocols
-- `v3/hooks/post-file-change.sh` - tasks.json → tasks.md sync, future_tasks promotion
-- `v3/hooks/pre-commit-gate.sh` - Validation before commits
-- `v3/scripts/task-operations.sh` - Task state manipulation
-- `v3/scripts/branch-setup.sh` - Wave branch creation
+### Task Format (v3.0)
 
-## Agents Reference
+- `tasks.json` is the **source of truth**
+- `tasks.md` is **auto-generated** (read-only)
+- Edit tasks via commands or direct JSON editing
+- Hooks auto-regenerate markdown on JSON changes
 
-| Agent | Purpose |
-|-------|---------|
-| phase1-discovery | Task discovery, branch setup, execution mode selection |
-| phase2-implementation | TDD loop with batched/parallel subtask protocols |
-| phase3-delivery | Test verification, PR creation, roadmap updates |
-| wave-orchestrator | Parallel wave execution, artifact verification |
-| subtask-group-worker | Parallel subtask group execution within a task |
-| execute-spec-orchestrator | State machine for automated spec execution |
-| git-workflow | Branch management, commits, PRs |
-| project-manager | Task/roadmap state updates |
-| pr-review-discovery | PR comment analysis and categorization |
-| pr-review-implementation | PR feedback implementation |
-| future-classifier | Classify deferred items (ROADMAP_ITEM vs WAVE_TASK) |
-| comment-classifier | Categorize PR review comments by priority |
-| roadmap-integrator | Place roadmap items in appropriate phase |
+### Git Workflow
 
-## Hooks (Deterministic Validation)
+- Feature branches: `feature/SPEC-NAME-brief-description`
+- Commit after each completed subtask
+- PR created automatically in Phase 3
+- Pre-commit hooks validate build/tests/types
+
+### Standards Location
+
+```
+.agent-os/standards/
+├── global/      # Cross-cutting (coding-style, conventions, error-handling)
+├── frontend/    # UI patterns (react-patterns, styling)
+├── backend/     # Server patterns (api-design, database)
+└── testing/     # Test patterns
+```
+
+## Hooks (Automatic)
+
+These run automatically - you don't need to invoke them:
 
 | Hook | Trigger | Purpose |
 |------|---------|---------|
-| session-start | Session begins | Set CLAUDE_PROJECT_DIR, load context |
-| session-end | Session ends | Log progress, cleanup |
-| post-file-change | Write/Edit to tasks.json | Regenerate tasks.md, auto-promote future_tasks |
-| pre-commit-gate | git commit | Validate build/types/tests, warn on orphaned future_tasks |
+| SessionStart | Session begins | Load progress context, set up state |
+| SessionEnd | Session ends | Log progress, create checkpoint |
+| PostToolUse (Write/Edit) | File changes | Regenerate tasks.md from JSON |
+| PreToolUse (git commit) | Before commits | Validate build, tests, types |
 
-## State Management
+## Subagents Available
 
-- **tasks.json**: Single source of truth for tasks (human-editable JSON)
-- **tasks.md**: Auto-generated via hook (read-only view)
-- **Atomic writes**: All state ops use temp file → atomic rename
-- **Recovery**: `.agent-os/state/recovery/` keeps last 5 backups
+Use `Task` tool to invoke these specialized agents:
 
-## References
+| Agent | Purpose | When to Use |
+|-------|---------|-------------|
+| phase0-startup | Session initialization | Start of execute-tasks |
+| phase1-discovery | Task discovery & mode selection | After Phase 0 |
+| phase2-implementation | TDD implementation | For each task |
+| phase3-delivery | Completion & PR workflow | After all tasks done |
+| git-workflow | Branch, commit, PR operations | Called by phases |
 
-- **SYSTEM-OVERVIEW.md**: Comprehensive technical documentation
-- **CHANGELOG.md**: Version history with migration notes
-- **docs/AGENT-OS-ARCHITECTURE-GUIDE.md**: Educational guide to the architecture
+## Important: Extended Thinking
+
+For complex planning tasks (/create-spec, /shape-spec), extended thinking is available:
+
+```
+When facing complex architectural decisions:
+1. Consider multiple approaches
+2. Analyze trade-offs thoroughly
+3. Document reasoning in spec
+```
+
+## Progress Log
+
+Cross-session memory is maintained in `.agent-os/progress/progress.json`:
+
+- Automatically updated by hooks
+- Contains: session events, task completions, blockers
+- **Local-only** (gitignored v3.8.0+) to prevent merge conflicts
+
+## Quick Reference
+
+### Check Task Status
+```bash
+jq '.summary' .agent-os/specs/*/tasks.json
+```
+
+### View Recent Progress
+```bash
+jq '.entries[-5:]' .agent-os/progress/progress.json
+```
+
+### Manual Task Regeneration
+```bash
+node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json
+```
+
+---
+
+@import rules/tdd-workflow.md
+@import rules/git-conventions.md
