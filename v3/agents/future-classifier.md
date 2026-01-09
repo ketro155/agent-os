@@ -3,6 +3,11 @@ name: future-classifier
 description: Classify PR review future recommendations into WAVE_TASK or ROADMAP_ITEM. Now section-aware for Claude Code GitHub App output.
 tools: Read, Glob, Grep
 model: haiku
+disallowedTools:
+  - Write
+  - Edit
+  - Bash
+  - NotebookEdit
 ---
 
 # Future Classifier Agent

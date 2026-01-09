@@ -3,6 +3,11 @@ name: comment-classifier
 description: LLM-based PR review comment classifier. Intelligently categorizes review comments regardless of formatting variations. Uses context-aware analysis.
 tools: Read
 model: haiku
+disallowedTools:
+  - Write
+  - Edit
+  - Bash
+  - NotebookEdit
 ---
 
 # Comment Classifier Agent

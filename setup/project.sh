@@ -11,9 +11,9 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.7.1"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.8.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="4.7.1"
+    AGENT_OS_VERSION="4.8.0"
 fi
 AGENT_OS_RELEASE_DATE="2026-01-09"
 
@@ -132,15 +132,8 @@ cleanup_legacy_v2_files() {
         done
     fi
 
-    # Clean up legacy skills directory (v3 doesn't use skills)
-    if [ -d "./.claude/skills" ]; then
-        local skill_count=$(find ./.claude/skills -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-        if [ "$skill_count" -gt 0 ]; then
-            rm -rf "./.claude/skills"
-            echo "  ✓ Removed skills/ directory (${skill_count} files)"
-            ((cleaned_count++))
-        fi
-    fi
+    # NOTE: v4.8.0+ uses skills directory - do NOT remove
+    # Legacy v2.x skills were different format; v4.8.0 skills use SKILL.md in subdirectories
 
     # Clean up legacy phases directory (v3 uses native subagents)
     if [ -d "./.claude/commands/phases" ]; then
@@ -423,6 +416,10 @@ if [ "$CLAUDE_CODE" = true ]; then
     create_tracked_dir "./.claude/hooks"
     create_tracked_dir "./.claude/scripts"
     create_tracked_dir "./.claude/rules"
+    create_tracked_dir "./.claude/skills"
+    create_tracked_dir "./.claude/skills/artifact-verification"
+    create_tracked_dir "./.claude/skills/context-summary"
+    create_tracked_dir "./.claude/skills/tdd-helper"
 
     if [ "$IS_FROM_BASE" = true ]; then
         # Install commands
@@ -458,10 +455,10 @@ if [ "$CLAUDE_CODE" = true ]; then
             fi
         done
 
-        # Install hooks (mandatory validation)
+        # Install hooks (mandatory validation + subagent lifecycle v4.8.0)
         echo ""
         echo "  📂 Hooks:"
-        for hook in session-start session-end post-file-change pre-commit-gate; do
+        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop; do
             if [ -f "$BASE_AGENT_OS/v3/hooks/${hook}.sh" ]; then
                 copy_file "$BASE_AGENT_OS/v3/hooks/${hook}.sh" "./.claude/hooks/${hook}.sh" "$OVERWRITE_CLAUDE" "hooks/${hook}.sh"
                 chmod +x "./.claude/hooks/${hook}.sh"
@@ -511,6 +508,15 @@ if [ "$CLAUDE_CODE" = true ]; then
         for rule in tdd-workflow git-conventions execute-tasks; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
+            fi
+        done
+
+        # Install skills (v4.8.0 - hot-reloadable patterns)
+        echo ""
+        echo "  📂 Skills:"
+        for skill in artifact-verification context-summary tdd-helper; do
+            if [ -f "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" "./.claude/skills/${skill}/SKILL.md" "$OVERWRITE_CLAUDE" "skills/${skill}/SKILL.md"
             fi
         done
 
@@ -687,6 +693,7 @@ if [ -f .gitignore ]; then
         echo ".agent-os/state/.lock" >> .gitignore
         echo ".agent-os/cache/" >> .gitignore
         echo ".agent-os/debugging/" >> .gitignore
+        echo ".agent-os/metrics/" >> .gitignore
         echo ".agent-os/**/*.cache" >> .gitignore
         echo ".agent-os/**/*.tmp" >> .gitignore
         echo "" >> .gitignore
@@ -710,6 +717,7 @@ else
 .agent-os/state/.lock
 .agent-os/cache/
 .agent-os/debugging/
+.agent-os/metrics/
 .agent-os/**/*.cache
 .agent-os/**/*.tmp
 
@@ -800,9 +808,10 @@ if [ "$CLAUDE_CODE" = true ]; then
     echo "   .claude/CLAUDE.md          - Core memory (auto-loaded)"
     echo "   .claude/commands/          - Claude Code commands"
     echo "   .claude/agents/            - Phase subagents and utility agents"
-    echo "   .claude/hooks/             - Mandatory validation hooks"
+    echo "   .claude/hooks/             - Validation + lifecycle hooks (v4.8.0)"
     echo "   .claude/scripts/           - Task operations utilities"
     echo "   .claude/rules/             - Path-specific rules (TDD, git)"
+    echo "   .claude/skills/            - Hot-reloadable skills (v4.8.0)"
     echo "   .claude/settings.json      - Hooks configuration"
 fi
 
@@ -814,11 +823,14 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-echo "v4 Architecture Features:"
+echo "v4.8 Architecture Features:"
 echo "  • Native hooks (mandatory validation - cannot be skipped)"
+echo "  • Subagent lifecycle hooks (track agent spawns/completions)"
 echo "  • Single-source JSON tasks (tasks.md auto-generated)"
-echo "  • Native subagents for phases (fresh context per task)"
+echo "  • Native subagents with disallowedTools security"
+echo "  • Hot-reloadable skills (artifact-verification, tdd-helper, etc.)"
 echo "  • Memory hierarchy (CLAUDE.md + rules/)"
+echo "  • Wildcard permissions for simplified configuration"
 echo ""
 
 echo "Next steps:"

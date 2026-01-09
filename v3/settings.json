@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v4.7.1 - Native Claude Code hooks configuration (no MCP required)",
+  "_comment": "Agent OS v4.8.0 - Enhanced hooks with subagent lifecycle and wildcard permissions",
 
   "hooks": {
     "SessionStart": [
@@ -22,6 +22,32 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-end.sh\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+
+    "SubagentStart": [
+      {
+        "_comment": "Initialize subagent context and track lifecycle metrics (v4.8.0)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-start.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+
+    "SubagentStop": [
+      {
+        "_comment": "Capture subagent completion and transcript for debugging (v4.8.0)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-stop.sh\"",
+            "timeout": 5
           }
         ]
       }
@@ -64,11 +90,11 @@
       "Write(.agent-os/progress/**)",
       "Write(.agent-os/state/**)",
       "Bash(.claude/scripts/*)",
-      "Bash(npm run test:*)",
-      "Bash(npm run build:*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)"
+      "Bash(npm *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "mcp__claude-in-chrome__*",
+      "mcp__ide__*"
     ],
     "deny": [
       "Read(.env*)",
@@ -77,6 +103,6 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "4.7.1"
+    "AGENT_OS_VERSION": "4.8.0"
   }
 }

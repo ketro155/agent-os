@@ -3,6 +3,11 @@ name: roadmap-integrator
 description: Analyze roadmap structure and determine optimal phase placement for new ROADMAP_ITEMs. Called after future-classifier.
 tools: Read, Grep
 model: haiku
+disallowedTools:
+  - Write
+  - Edit
+  - Bash
+  - NotebookEdit
 ---
 
 # Roadmap Integrator Agent
