@@ -5,6 +5,25 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [Unreleased] - v4.9.0 Architecture Refinement
+
+### Added
+
+- **Subtask Expansion Skill**: Extracted inline subtask logic from phase1-discovery into reusable `.claude/skills/subtask-expansion/SKILL.md` with complexity heuristics and TDD templates (Wave 1, PR #3)
+
+- **Spec Templates**: Added template library for common spec types - feature.md, bugfix.md, refactor.md, integration.md at `.claude/templates/specs/` (Wave 1, PR #3)
+
+- **Dependency Detection**: New `detectDependencies` function in create-spec analyzing imports and package relationships (Wave 1, PR #3)
+
+- **Feasibility Analysis**: Added `analyzeFeasibility` using Explore agent in shape-spec (Wave 1, PR #3)
+
+### Changed
+
+- **Classifier Batch Processing**: comment-classifier now processes in batches of 10 for 20+ items (Wave 1, PR #3)
+
+- **Explore-Based Complexity**: future-classifier uses Explore agent instead of crude heuristics for complexity estimation (Wave 1, PR #3)
+
 ## [4.7.1] - 2026-01-09
 
 ### Added
