@@ -1,8 +1,9 @@
 #!/bin/bash
-# Agent OS v4.5 - Post File Change Hook
+# Agent OS v4.6 - Post File Change Hook
 # Replaces: task-sync skill
-# Automatically regenerates tasks.md when tasks.json changes
+# Automatically regenerates markdown from JSON source-of-truth files
 # v4.5: Auto-graduates future_tasks to prevent orphans
+# v4.6: Added test-plan.json and test-report.json handlers
 
 set -e
 
@@ -155,6 +156,48 @@ EOF
 }
 EOF
     exit 0
+  fi
+fi
+
+# Handle test-plan.json files
+if [[ "$FILE_PATH" == *"test-plan.json" ]]; then
+  VERSION=$(jq -r '.version // "unknown"' "$FILE_PATH" 2>/dev/null || echo "unknown")
+
+  if [[ "$VERSION" == "1"* ]]; then
+    SCRIPT_DIR="$(dirname "$0")/../scripts"
+
+    # Regenerate markdown
+    if [ -f "$SCRIPT_DIR/test-plan-to-markdown.js" ]; then
+      node "$SCRIPT_DIR/test-plan-to-markdown.js" "$FILE_PATH" 2>/dev/null || true
+      cat << EOF
+{
+  "continue": true,
+  "systemMessage": "test-plan.md auto-regenerated from test-plan.json"
+}
+EOF
+      exit 0
+    fi
+  fi
+fi
+
+# Handle test-report.json files
+if [[ "$FILE_PATH" == *"test-report.json" ]]; then
+  VERSION=$(jq -r '.version // "unknown"' "$FILE_PATH" 2>/dev/null || echo "unknown")
+
+  if [[ "$VERSION" == "1"* ]]; then
+    SCRIPT_DIR="$(dirname "$0")/../scripts"
+
+    # Regenerate markdown
+    if [ -f "$SCRIPT_DIR/test-report-to-markdown.js" ]; then
+      node "$SCRIPT_DIR/test-report-to-markdown.js" "$FILE_PATH" 2>/dev/null || true
+      cat << EOF
+{
+  "continue": true,
+  "systemMessage": "test-report.md auto-regenerated from test-report.json"
+}
+EOF
+      exit 0
+    fi
   fi
 fi
 

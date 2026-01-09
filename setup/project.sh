@@ -441,11 +441,18 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/commands/execute-spec.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/commands/execute-spec.md" "./.claude/commands/execute-spec.md" "$OVERWRITE_CLAUDE" "commands/execute-spec.md"
         fi
+        # Browser testing commands (v4.6)
+        if [ -f "$BASE_AGENT_OS/v3/commands/create-test-plan.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/commands/create-test-plan.md" "./.claude/commands/create-test-plan.md" "$OVERWRITE_CLAUDE" "commands/create-test-plan.md"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/commands/run-tests.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/commands/run-tests.md" "./.claude/commands/run-tests.md" "$OVERWRITE_CLAUDE" "commands/run-tests.md"
+        fi
 
         # Install agents (phase subagents + utility agents)
         echo ""
         echo "  📂 Agents:"
-        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent; do
+        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter; do
             if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             fi
@@ -482,6 +489,17 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/scripts/execute-spec-operations.sh" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/execute-spec-operations.sh" "./.claude/scripts/execute-spec-operations.sh" "$OVERWRITE_CLAUDE" "scripts/execute-spec-operations.sh"
             chmod +x "./.claude/scripts/execute-spec-operations.sh"
+        fi
+        # Browser testing scripts (v4.6)
+        if [ -f "$BASE_AGENT_OS/v3/scripts/test-operations.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/test-operations.sh" "./.claude/scripts/test-operations.sh" "$OVERWRITE_CLAUDE" "scripts/test-operations.sh"
+            chmod +x "./.claude/scripts/test-operations.sh"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/test-plan-to-markdown.js" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/test-plan-to-markdown.js" "./.claude/scripts/test-plan-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/test-plan-to-markdown.js"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/test-report-to-markdown.js" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/test-report-to-markdown.js" "./.claude/scripts/test-report-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/test-report-to-markdown.js"
         fi
 
         # Install memory/rules
