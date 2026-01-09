@@ -20,8 +20,19 @@ This command uses Claude Code's native capabilities:
 | Feature | Tool | Purpose |
 |---------|------|---------|
 | **Planning Mode** | `EnterPlanMode` / `ExitPlanMode` | Formal exploration with read-only restriction |
-| **Explore Agent** | `Task` with `subagent_type='Explore'` | Deep codebase analysis |
+| **Explore Agent** | `Task` with `subagent_type='Explore'` | Deep codebase analysis (autonomous) |
+| **User Decisions** | `AskUserQuestion` | Structured decision points (blocking) |
 | **Brainstorming** | `brainstorming` skill | Approach exploration and trade-offs |
+
+### Tool Handoff Pattern
+
+```
+Explore Agent (autonomous) → AskUserQuestion (decision) → Continue
+```
+
+- **Explore**: Gathers context without user interaction
+- **AskUserQuestion**: Presents findings, gets user decision
+- Never mix autonomous exploration with user interaction in same step
 
 ## Workflow
 
@@ -34,10 +45,29 @@ PURPOSE: Signal exploration phase, restrict to read-only tools
 
 ### 2. Concept Understanding
 
-Ask user clarifying questions (one at a time):
+Ask user clarifying questions using `AskUserQuestion` for structured choices or freeform for open-ended questions:
+
+**For problem framing (freeform is often better):**
 - What problem does this solve?
 - Who benefits?
 - What does "done" look like?
+
+**For scoped decisions (use AskUserQuestion):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What type of feature is this?",
+    header: "Type",
+    multiSelect: false,
+    options: [
+      { label: "New Feature", description: "Adding new functionality to the product" },
+      { label: "Enhancement", description: "Improving existing functionality" },
+      { label: "Integration", description: "Connecting with external systems" },
+      { label: "Refactor", description: "Restructuring without changing behavior" }
+    ]
+  }]
+})
+```
 
 ### 3. Product Alignment
 
@@ -71,20 +101,77 @@ ASSESS: Stack compatibility, new dependencies, complexity
 INCORPORATE: Explore agent results
 ```
 
-### 6. Approach Exploration
+### 6. Approach Exploration (USER DECISION POINT)
 
-Use brainstorming skill:
+**Phase A: Generate approaches (autonomous)**
+Use brainstorming skill to:
 - Generate 2-3 approaches
 - Analyze trade-offs
-- Recommend one approach with rationale
+- Identify recommended approach
 
-### 7. Scope Definition
-
+**Phase B: Get user selection (AskUserQuestion)**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "Which implementation approach do you prefer?",
+    header: "Approach",
+    multiSelect: false,
+    options: [
+      {
+        label: "Approach A (Recommended)",
+        description: "[Brief summary of recommended approach with key trade-off]"
+      },
+      {
+        label: "Approach B",
+        description: "[Brief summary with key trade-off]"
+      },
+      {
+        label: "Approach C",
+        description: "[Brief summary with key trade-off]"
+      }
+    ]
+  }]
+})
 ```
-ASK: Confirm in-scope and out-of-scope items
-OUTPUT:
-  - In Scope: [list]
-  - Out of Scope: [list]
+
+> **Handoff**: Brainstorming generates options → AskUserQuestion gets decision → Continue with chosen approach
+
+### 7. Scope Definition (USER DECISION POINT)
+
+**Use AskUserQuestion with multi-select for scope confirmation:**
+
+```javascript
+AskUserQuestion({
+  questions: [
+    {
+      question: "Which items should be IN SCOPE for this feature?",
+      header: "In Scope",
+      multiSelect: true,
+      options: [
+        { label: "[Suggested item 1]", description: "Core requirement" },
+        { label: "[Suggested item 2]", description: "Based on exploration findings" },
+        { label: "[Suggested item 3]", description: "Enhancement opportunity" },
+        { label: "[Suggested item 4]", description: "Edge case handling" }
+      ]
+    },
+    {
+      question: "Confirm items to EXCLUDE from scope?",
+      header: "Out of Scope",
+      multiSelect: true,
+      options: [
+        { label: "[Excluded item 1]", description: "Future enhancement" },
+        { label: "[Excluded item 2]", description: "Out of current timeline" },
+        { label: "[Excluded item 3]", description: "Separate feature" }
+      ]
+    }
+  ]
+})
+```
+
+**OUTPUT after user selection:**
+```
+- In Scope: [user-confirmed list]
+- Out of Scope: [user-confirmed list]
 ```
 
 ### 8. Create Shaped Spec

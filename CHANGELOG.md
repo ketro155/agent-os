@@ -5,6 +5,30 @@ All notable changes to Agent OS will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.1] - 2026-01-09
+
+### Added
+
+- **Explicit `AskUserQuestion` tool integration in spec commands**: Added structured decision points to `/shape-spec` and `/create-spec` for better user interaction
+  - Clear handoff pattern: `Explore Agent (autonomous) → AskUserQuestion (decision) → Continue`
+  - Distinguishes autonomous codebase exploration from user decision points
+  - Prevents vague "ASK" directives that left Claude guessing how to interact
+
+### Changed
+
+- **`/shape-spec`**:
+  - Added `AskUserQuestion` to Native Integration tool table
+  - Step 2 (Concept Understanding): Optional structured question for feature type classification
+  - Step 6 (Approach Exploration): Split into Phase A (brainstorming) + Phase B (AskUserQuestion for selection)
+  - Step 7 (Scope Definition): Multi-select AskUserQuestion for in-scope/out-of-scope confirmation
+
+- **`/create-spec`**:
+  - Added Tool Handoff Pattern section explaining Explore → AskUserQuestion → brainstorming flow
+  - Step 1 (Spec Initiation): Marked as USER DECISION POINT with roadmap acceptance options
+  - Step 3 (Requirements Clarification): Split into Phase A/B/C with approach selection AskUserQuestion
+  - Step 11 (User Review): Full approval workflow with Approve/Request Changes/Major Revision/Cancel
+  - Subagent Integration: New table mapping tools to purposes and usage patterns
+
 ## [4.6.3] - 2026-01-04
 
 ### Fixed

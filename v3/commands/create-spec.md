@@ -59,9 +59,20 @@ When executing this command:
 1. **Initialize TodoWrite** with the workflow steps above for visibility
 2. Follow the embedded instructions below completely
 3. Use Task tool to invoke subagents as specified
-4. Handle conditional logic for database and API specs
-5. **Update TodoWrite** status throughout execution
-6. Ensure user approval before proceeding to create-tasks
+4. Use **AskUserQuestion** at decision points (see workflow steps marked "USER DECISION POINT")
+5. Handle conditional logic for database and API specs
+6. **Update TodoWrite** status throughout execution
+7. Ensure user approval before proceeding to create-tasks
+
+### Tool Handoff Pattern
+
+```
+Explore Agent (autonomous) → AskUserQuestion (decision) → Continue
+```
+
+- **Explore**: Gathers context without user interaction (roadmap scanning, file reading)
+- **AskUserQuestion**: Presents findings, gets user decision (blocking)
+- **brainstorming**: Generates approaches → feeds into AskUserQuestion for selection
 
 ---
 
@@ -76,17 +87,44 @@ Generate detailed feature specifications aligned with product roadmap and missio
 
 ## Process Flow
 
-### Step 1: Spec Initiation
+### Step 1: Spec Initiation (USER DECISION POINT)
 
-Use the Explore agent (native) to identify spec initiation method by either finding the next uncompleted roadmap item when user asks "what's next?" or accepting a specific spec idea from the user.
+**Phase A: Identify spec source (Explore agent - autonomous)**
+Use the Explore agent (native) to scan roadmap when user asks "what's next?" or accept a specific spec idea directly from the user.
 
-**Option A Flow:**
+**Option A Flow (Roadmap-driven):**
 - **Trigger phrases**: "what's next?"
 - **Actions**:
-  1. CHECK @.agent-os/product/roadmap.md
+  1. CHECK @.agent-os/product/roadmap.md (Explore agent)
   2. FIND next uncompleted item
-  3. SUGGEST item to user
-  4. WAIT for approval
+  3. Present selection to user
+
+**Phase B: Get user confirmation (AskUserQuestion)**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "Ready to create a spec for this feature?",
+    header: "Feature",
+    multiSelect: false,
+    options: [
+      {
+        label: "Accept (Recommended)",
+        description: "[Roadmap item title]: [Brief description]"
+      },
+      {
+        label: "Choose Different Item",
+        description: "Select a different item from the roadmap"
+      },
+      {
+        label: "Custom Feature",
+        description: "Describe a new feature not on the roadmap"
+      }
+    ]
+  }]
+})
+```
+
+> **Handoff**: Explore scans roadmap → AskUserQuestion confirms selection → Continue with chosen feature
 
 **Option B Flow:**
 - **Trigger**: user describes specific spec idea
@@ -113,37 +151,53 @@ ELSE:
 - **mission_lite**: core product purpose and value
 - **tech_stack**: technical requirements
 
-### Step 3: Requirements Clarification (brainstorming skill)
+### Step 3: Requirements Clarification (USER DECISION POINT)
 
 Use the brainstorming skill to explore approaches and refine requirements through Socratic questioning.
 
 **Core Principle:** UNDERSTAND BEFORE DESIGNING
 
-**Brainstorming Workflow:**
-```
-ACTION: brainstorming skill invoked for complex features
-APPROACH:
-  1. Ask ONE question at a time (avoid overwhelming)
-  2. Provide multiple-choice options when possible
-  3. Present 2-3 approaches with trade-offs
-  4. Validate understanding incrementally
-```
-
-**Questions to Explore:**
+**Phase A: Initial clarification (freeform questions)**
+For open-ended understanding, ask ONE question at a time:
 - What problem does this feature solve?
 - Who are the primary users?
 - What are the success criteria?
 - Are there hard constraints (performance, compatibility)?
 - What's explicitly out of scope?
 
-**Approach Exploration (for complex features):**
+**Phase B: Approach generation (brainstorming skill - autonomous)**
 ```
-IF multiple_valid_approaches:
-  GENERATE: 2-3 distinct approaches
-  PRESENT: Trade-offs for each (pros, cons, complexity)
-  RECOMMEND: One approach with reasoning
-  VALIDATE: User agreement before proceeding
+ACTION: brainstorming skill invoked for complex features
+GENERATE: 2-3 distinct approaches with trade-offs
+IDENTIFY: Recommended approach with reasoning
 ```
+
+**Phase C: Approach selection (AskUserQuestion)**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "Which implementation approach do you prefer?",
+    header: "Approach",
+    multiSelect: false,
+    options: [
+      {
+        label: "Approach A (Recommended)",
+        description: "[Summary]: [Key trade-off - e.g., 'Simpler but less flexible']"
+      },
+      {
+        label: "Approach B",
+        description: "[Summary]: [Key trade-off - e.g., 'More complex but extensible']"
+      },
+      {
+        label: "Approach C",
+        description: "[Summary]: [Key trade-off - e.g., 'Third-party dependency but faster']"
+      }
+    ]
+  }]
+})
+```
+
+> **Handoff**: Brainstorming generates approaches → AskUserQuestion gets selection → Continue with chosen approach
 
 **Clarification Areas:**
 - **Scope**:
@@ -564,11 +618,11 @@ For documents:
 - **Reference Name**: `landingPageCopy`
 ```
 
-### Step 11: User Review
+### Step 11: User Review (USER DECISION POINT)
 
-Request user review of spec.md and all sub-specs files, waiting for approval or revision requests.
+Request user review of spec.md and all sub-specs files, then get structured approval.
 
-**Review Request:**
+**Review Request Message:**
 ```
 I've created the spec documentation:
 
@@ -582,9 +636,58 @@ I've created the spec documentation:
 [IF_CONTENT_MAPPING_CREATED]
 - Content Mapping: @.agent-os/specs/YYYY-MM-DD-spec-name/sub-specs/content-mapping.md
 
-Please review and let me know if any changes are needed.
+Please review the files above.
+```
 
-When you're ready, run the /create-tasks command to have me build the tasks checklist from this spec.
+**Approval Workflow (AskUserQuestion):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "How would you like to proceed with this specification?",
+    header: "Review",
+    multiSelect: false,
+    options: [
+      {
+        label: "Approve",
+        description: "Spec is complete, proceed to /create-tasks"
+      },
+      {
+        label: "Request Changes",
+        description: "I'll provide specific edits needed"
+      },
+      {
+        label: "Major Revision",
+        description: "Significant rework required - discuss changes first"
+      },
+      {
+        label: "Cancel",
+        description: "Discard this spec and start over"
+      }
+    ]
+  }]
+})
+```
+
+**Response Handling:**
+```
+IF "Approve":
+  OUTPUT: "Great! Run /create-tasks to generate the task breakdown."
+  END: Spec creation complete
+
+IF "Request Changes":
+  ASK: "What specific changes would you like me to make?"
+  WAIT: For user response
+  APPLY: Changes to relevant spec files
+  RETURN TO: Step 11 (re-review)
+
+IF "Major Revision":
+  ASK: "What aspects need rethinking?"
+  DISCUSS: With user to clarify direction
+  RETURN TO: Appropriate earlier step (Step 3 for approach, Step 6 for scope)
+
+IF "Cancel":
+  CONFIRM: "Are you sure? This will discard all spec files created."
+  IF confirmed: DELETE spec folder, END
 ```
 
 <!-- END EMBEDDED CONTENT -->
@@ -625,5 +728,14 @@ See @shared/error-recovery.md for general recovery procedures.
 | User review timeout | Save progress, provide resumption instructions |
 
 ## Subagent Integration
-When the instructions mention agents, use the Task tool to invoke these subagents:
-- Use native Explore agent for reading product documentation and gathering requirements
+When the instructions mention agents and tools, use the appropriate native tools:
+
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| **Task** with `subagent_type='Explore'` | Codebase/document scanning | Autonomous discovery (no user input) |
+| **AskUserQuestion** | Structured decisions | Steps marked "USER DECISION POINT" |
+| **brainstorming** skill | Approach generation | Before AskUserQuestion for approach selection |
+
+- Use Explore agent for reading product documentation and gathering requirements (autonomous)
+- Use AskUserQuestion for all decision points requiring user input (blocking)
+- Follow the handoff pattern: Explore → AskUserQuestion → Continue
