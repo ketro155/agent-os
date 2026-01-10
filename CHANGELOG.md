@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Export Type Verification**: New `verifyExportTypes()` function in ast-verify.ts validating type exports match expected TypeKind (interface, type, enum, class) with detailed error messages (Wave 4, PR #6)
 
+- **Three-Tier Error Handling System**: New `.claude/rules/error-handling.md` with `ErrorTier` enum (BLOCKING, WARN_CONTINUE, RETRY_THEN_FAIL), `AgentError` interface, `ERROR_CATALOG` with 20+ pre-defined error codes, `handleError()`, `withRetry()`, and `mapErrorToCode()` functions (Wave 5, PR #7)
+
+- **Agent Changelog Sections**: All 17 agents now include inline `## Changelog` sections documenting version history and v4.9.0 enhancements (Wave 5, PR #7)
+
 ### Changed
 
 - **Classifier Batch Processing**: comment-classifier now processes in batches of 10 for 20+ items (Wave 1, PR #3)
@@ -64,6 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Artifact Verification Skill**: Upgraded to v2.0.0 with auto-invocation at wave boundaries and AST-based type verification using `verifyExportTypes()` (Wave 4, PR #6)
 
+- **All Agents Updated to v4.9.0**: Updated version references and added standardized error handling imports via `@import rules/error-handling.md` across 17 agents (Wave 5, PR #7)
+
+- **CLAUDE.md Core Memory**: Version bumped from v4.8.0 to v4.9.0 with updated agent security documentation and error handling reference (Wave 5, PR #7)
+
 ## [4.7.1] - 2026-01-09
 
 ### Added
@@ -82,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Step 7 (Scope Definition): Multi-select AskUserQuestion for in-scope/out-of-scope confirmation
 
 - **`/create-spec`**:
-  - Added Tool Handoff Pattern section explaining Explore → AskUserQuestion → brainstorming flow
+  - Added Tool Handoff Pattern section explaining Explore -> AskUserQuestion -> brainstorming flow
   - Step 1 (Spec Initiation): Marked as USER DECISION POINT with roadmap acceptance options
   - Step 3 (Requirements Clarification): Split into Phase A/B/C with approach selection AskUserQuestion
   - Step 11 (User Review): Full approval workflow with Approve/Request Changes/Major Revision/Cancel
@@ -145,7 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Wave-based PR review workflow**: Full state machine implementation for multi-wave PR review cycles
   - `execute-spec-orchestrator.md`: Top-level coordinator managing spec execution across waves
-  - `wave-lifecycle-agent.md`: Individual wave manager handling task execution → PR → review cycle
+  - `wave-lifecycle-agent.md`: Individual wave manager handling task execution -> PR -> review cycle
   - `state-machine.json`: Wave state tracking with phases: PREP, IMPL, REVIEW_PENDING, REVIEW_PROCESSING, COMPLETE
   - `wave-operations.sh`: CLI for state transitions (create-state, advance-wave, set-phase, record-review)
 
@@ -411,7 +419,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AskUserQuestion Tool Pattern**: Structured decision points
   - Clear separation from autonomous exploration
   - Multi-select and single-select options
-  - Documented handoff pattern: Explore → AskUserQuestion
+  - Documented handoff pattern: Explore -> AskUserQuestion
 
 ### Changed
 

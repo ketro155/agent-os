@@ -337,7 +337,10 @@ Remember: Your goal is to make smart, context-aware routing decisions so future 
 
 ## Changelog
 
-### v4.9.0 (2026-01-09)
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre (2026-01-09)
 - Replaced crude keyword-based complexity heuristics with Explore agent
 - Added estimateComplexity function using Task tool
 - Fallback to keyword analysis when Explore agent unavailable

@@ -492,7 +492,10 @@ jq 'has("key")' file.json
 
 ## Changelog
 
-### v4.9.0 (2026-01-09)
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre (2026-01-09)
 - Added AST-based verification using TypeScript compiler API
 - Added verification caching with file hash invalidation
 - Improved accuracy over grep patterns for export/function detection

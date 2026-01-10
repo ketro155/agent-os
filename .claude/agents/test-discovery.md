@@ -416,7 +416,10 @@ If discovery cannot proceed:
 
 ## Changelog
 
-### v4.9.0
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre
 - Added discoverNegativeTests function for automatic negative case generation
 - Added template-based scenario generation from .claude/templates/test-scenarios/
 - Added selector priority patterns (data-testid preferred)

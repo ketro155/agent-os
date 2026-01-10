@@ -410,7 +410,10 @@ Most context (~4-5 KB per wave) is isolated in the wave-lifecycle-agent.
 
 ## Changelog
 
-### v4.9.0
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre
 - Added parallel task execution within waves
 - Integration with wave-parallel.ts for dependency analysis
 - AST-based artifact verification using ast-verify.ts

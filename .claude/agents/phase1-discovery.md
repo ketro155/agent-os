@@ -438,3 +438,63 @@ AskUserQuestion({
   "blockers": ["Task 3 blocked by incomplete Task 1"]
 }
 ```
+
+---
+
+## Error Handling
+
+This agent uses standardized error handling from `rules/error-handling.md`:
+
+```javascript
+// Error handling for discovery failures
+const handleDiscoveryError = (err, operation) => {
+  return handleError({
+    code: mapErrorToCode(err),
+    agent: 'phase1-discovery',
+    operation: operation,
+    details: { spec_folder: input.spec_folder }
+  });
+};
+
+// Example: Tasks not found
+if (!tasksJson) {
+  return handleError({
+    code: 'E100',
+    agent: 'phase1-discovery',
+    operation: 'load_tasks',
+    details: { expected_path: `${spec_folder}/tasks.json` }
+  });
+}
+
+// Example: Branch setup failure
+if (branchResult.status === 'error') {
+  return handleError({
+    code: branchResult.error.includes('protected') ? 'E201' : 'E107',
+    agent: 'phase1-discovery',
+    operation: 'branch_setup',
+    details: { branch: branchResult.branch }
+  });
+}
+```
+
+---
+
+## Changelog
+
+### v4.9.0 (2026-01-10)
+- Added skill-based subtask expansion (Step 1.7)
+- Integrated with subtask-expansion skill for complexity heuristics
+- Added complexity_override support
+- Standardized error handling with error-handling.md rule
+
+### v4.3.0
+- Added wave-specific branch setup
+- Git branch validation and setup using branch-setup.sh
+
+### v3.4.0
+- Simplified future task verification (pre-assigned wave tasks)
+- Added legacy backlog migration
+
+### v3.0.0
+- Initial Explore agent integration
+- Task discovery and execution mode selection

@@ -516,7 +516,10 @@ Return structured result:
 
 ## Changelog
 
-### v4.9.0
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre
 - Added resolveSelector with data-testid priority
 - Added inferSelectorFromDescription helper
 - Added verify_error action for negative tests
