@@ -1,0 +1,48 @@
+{
+  "template_name": "react-component",
+  "description": "Template for creating React component tasks with TDD structure",
+  "version": "1.0.0",
+  "complexity_default": "MEDIUM",
+  "subtask_template": [
+    {
+      "order": 1,
+      "description": "Write failing tests for {component} component - rendering, props, user interactions (TDD RED)",
+      "tdd_phase": "red",
+      "files_pattern": ["src/components/{component}/*.test.tsx", "tests/components/*.test.tsx"]
+    },
+    {
+      "order": 2,
+      "description": "Create {component} component structure with TypeScript interfaces",
+      "tdd_phase": "green",
+      "files_pattern": ["src/components/{component}/index.tsx", "src/components/{component}/types.ts"]
+    },
+    {
+      "order": 3,
+      "description": "Implement component logic and event handlers",
+      "tdd_phase": "green",
+      "files_pattern": ["src/components/{component}/*.tsx"]
+    },
+    {
+      "order": 4,
+      "description": "Add styles and accessibility attributes",
+      "tdd_phase": "green",
+      "files_pattern": ["src/components/{component}/*.css", "src/components/{component}/*.module.css"]
+    },
+    {
+      "order": 5,
+      "description": "Verify all tests pass, add Storybook stories if applicable, and commit",
+      "tdd_phase": "verify",
+      "files_pattern": ["src/components/{component}/*.stories.tsx"]
+    }
+  ],
+  "complexity_factors": {
+    "file_count_threshold": 4,
+    "integration_keywords": ["state management", "context", "redux", "api call", "form"],
+    "increases_complexity": true
+  },
+  "validation_requirements": [
+    "component_name_defined",
+    "props_interface_defined",
+    "user_interactions_listed"
+  ]
+}

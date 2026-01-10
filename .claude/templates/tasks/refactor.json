@@ -1,0 +1,54 @@
+{
+  "template_name": "refactor",
+  "description": "Template for refactoring tasks with safe transformation patterns",
+  "version": "1.0.0",
+  "complexity_default": "HIGH",
+  "subtask_template": [
+    {
+      "order": 1,
+      "description": "Write characterization tests for existing {module} behavior (TDD RED - tests should pass on current code)",
+      "tdd_phase": "red",
+      "files_pattern": ["tests/**/*.test.ts"]
+    },
+    {
+      "order": 2,
+      "description": "Extract {functionality} into separate module with new interface",
+      "tdd_phase": "green",
+      "files_pattern": ["src/**/*.ts"]
+    },
+    {
+      "order": 3,
+      "description": "Update all callers to use new module interface",
+      "tdd_phase": "green",
+      "files_pattern": ["src/**/*.ts"]
+    },
+    {
+      "order": 4,
+      "description": "Remove old code and update imports",
+      "tdd_phase": "refactor",
+      "files_pattern": ["src/**/*.ts"]
+    },
+    {
+      "order": 5,
+      "description": "Verify all characterization tests still pass, update documentation, and commit",
+      "tdd_phase": "verify",
+      "files_pattern": ["docs/**/*.md", "*.md"]
+    }
+  ],
+  "complexity_factors": {
+    "file_count_threshold": 5,
+    "integration_keywords": ["architecture", "migration", "breaking change", "API change"],
+    "increases_complexity": true
+  },
+  "validation_requirements": [
+    "current_behavior_documented",
+    "target_architecture_defined",
+    "caller_list_identified",
+    "rollback_plan_available"
+  ],
+  "safety_checks": [
+    "existing_tests_pass_before_start",
+    "no_behavior_change_intended",
+    "backwards_compatible_if_public_api"
+  ]
+}
