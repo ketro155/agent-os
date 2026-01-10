@@ -1,0 +1,49 @@
+{
+  "template_name": "api-endpoint",
+  "description": "Template for creating API endpoint tasks with TDD structure",
+  "version": "1.0.0",
+  "complexity_default": "MEDIUM",
+  "subtask_template": [
+    {
+      "order": 1,
+      "description": "Write failing tests for {endpoint} endpoint - request validation, response format, error cases (TDD RED)",
+      "tdd_phase": "red",
+      "files_pattern": ["tests/{module}/*.test.ts"]
+    },
+    {
+      "order": 2,
+      "description": "Implement {endpoint} route handler with request parsing (TDD GREEN)",
+      "tdd_phase": "green",
+      "files_pattern": ["src/{module}/routes/*.ts"]
+    },
+    {
+      "order": 3,
+      "description": "Add input validation and error handling middleware",
+      "tdd_phase": "green",
+      "files_pattern": ["src/{module}/middleware/*.ts"]
+    },
+    {
+      "order": 4,
+      "description": "Implement business logic and database operations",
+      "tdd_phase": "green",
+      "files_pattern": ["src/{module}/services/*.ts"]
+    },
+    {
+      "order": 5,
+      "description": "Verify all tests pass, add integration tests, and commit",
+      "tdd_phase": "verify",
+      "files_pattern": ["tests/{module}/*.integration.test.ts"]
+    }
+  ],
+  "complexity_factors": {
+    "file_count_threshold": 3,
+    "integration_keywords": ["database", "external", "third-party", "authentication"],
+    "increases_complexity": true
+  },
+  "validation_requirements": [
+    "endpoint_path_defined",
+    "http_methods_specified",
+    "request_schema_defined",
+    "response_schema_defined"
+  ]
+}
