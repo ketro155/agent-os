@@ -1,0 +1,43 @@
+{
+  "template_name": "bugfix",
+  "description": "Template for bugfix tasks with regression prevention",
+  "version": "1.0.0",
+  "complexity_default": "LOW",
+  "subtask_template": [
+    {
+      "order": 1,
+      "description": "Write failing test that reproduces the bug - {bug_description} (TDD RED)",
+      "tdd_phase": "red",
+      "files_pattern": ["tests/**/*.test.ts"]
+    },
+    {
+      "order": 2,
+      "description": "Identify root cause and apply minimal fix (TDD GREEN)",
+      "tdd_phase": "green",
+      "files_pattern": ["src/**/*.ts"]
+    },
+    {
+      "order": 3,
+      "description": "Verify fix works and add regression test, then commit",
+      "tdd_phase": "verify",
+      "files_pattern": ["tests/**/*.test.ts"]
+    }
+  ],
+  "complexity_factors": {
+    "file_count_threshold": 2,
+    "integration_keywords": ["race condition", "memory leak", "security", "data corruption"],
+    "increases_complexity": true
+  },
+  "validation_requirements": [
+    "bug_description_clear",
+    "reproduction_steps_provided",
+    "expected_vs_actual_defined"
+  ],
+  "complexity_adjustments": {
+    "race_condition": "HIGH",
+    "memory_leak": "HIGH",
+    "security_vulnerability": "HIGH",
+    "simple_typo": "LOW",
+    "missing_validation": "MEDIUM"
+  }
+}
