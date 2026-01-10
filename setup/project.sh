@@ -279,12 +279,11 @@ if [ "$NO_BASE" = true ]; then
     rm "$TEMP_FUNCTIONS"
 else
     IS_FROM_BASE=true
-    # Get the base Agent OS directory
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
+    # SCRIPT_DIR and BASE_AGENT_OS are already set at the top of the file
+    # before any cd commands, so they remain valid
     echo "✓ Using Agent OS base installation at $BASE_AGENT_OS"
     # Source shared functions from base installation
-    source "$SCRIPT_DIR/functions.sh"
+    source "$BASE_AGENT_OS/setup/functions.sh"
 fi
 
 echo ""
