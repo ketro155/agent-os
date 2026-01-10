@@ -632,7 +632,10 @@ Before returning:
 
 ## Changelog
 
-### v4.9.0
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre
 - Added checkTestCoverage function for coverage gap detection
 - Added COVERAGE category for test-related comments
 - Added coverage_analysis to context output

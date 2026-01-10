@@ -372,7 +372,10 @@ const processBatchWithRetry = async (batch, maxRetries = 2) => {
 
 ## Changelog
 
-### v4.9.0 (2026-01-09)
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre (2026-01-09)
 - Added batch processing for 20+ comments
 - Parallel batch execution (up to 3 concurrent)
 - Batch-aware input/output formats

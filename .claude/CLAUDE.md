@@ -1,11 +1,11 @@
-# Agent OS v4.8.0 - Core Memory
+# Agent OS v4.9.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 4.8.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 4.9.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)

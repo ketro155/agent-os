@@ -905,7 +905,12 @@ const runTests = async (testFile) => {
 
 ## Changelog
 
-### v4.9.0 (2026-01-09)
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+- Use handleError() with ERROR_CATALOG codes
+- Use mapErrorToCode() for error classification
+
+### v4.9.0-pre (2026-01-09)
 - Added context compression between subtasks using context-summary skill
 - Added discoverTestPatterns function for Jest/Vitest configuration detection
 - Added executeSubtask wrapper with automatic context management
