@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Test Pattern Discovery**: New `discoverTestPatterns()` utility in phase2-implementation reading from jest.config.js and vitest.config.ts (Wave 2, PR #4)
 
+- **Parallel Wave Execution**: New `.claude/scripts/wave-parallel.ts` with `identifyParallelWaves()` for dependency-aware parallel task execution (Wave 3, PR #5)
+
+- **Test Scenario Templates**: Three JSON templates for common test patterns at `.claude/templates/test-scenarios/` - authentication, form-validation, crud-operations with negative test cases (Wave 3, PR #5)
+
+- **Negative Test Discovery**: New `discoverNegativeTests()` function in test-discovery generating invalid input and missing field cases (Wave 3, PR #5)
+
+- **Coverage Gap Detection**: New `checkTestCoverage()` function in pr-review-discovery analyzing changed files against test files (Wave 3, PR #5)
+
+- **Reproduction Script Generation**: New `generateReproScript()` function in debug command for minimal bug reproduction (Wave 3, PR #5)
+
 ### Changed
 
 - **Classifier Batch Processing**: comment-classifier now processes in batches of 10 for 20+ items (Wave 1, PR #3)
@@ -37,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wave Orchestrator**: Integrated `verifyWithCache()` and `batchVerifyExports()` for AST-based artifact verification with caching (Wave 2, PR #4)
 
 - **Phase2 Implementation**: Added context compression via `invokeContextSummary()` between subtasks, explicit `executeSubtask()` flow with context handoff (Wave 2, PR #4)
+
+- **Execute-Spec-Orchestrator**: Step 4 updated for parallel wave spawning with `run_in_background` and barrier synchronization (Wave 3, PR #5)
+
+- **Test Discovery Agent**: Enhanced with negative test case generation and spec template integration (Wave 3, PR #5)
+
+- **Test Executor Agent**: New `resolveSelector()` with `data-testid` priority over fragile CSS selectors (Wave 3, PR #5)
+
+- **Create-Test-Plan Command**: Added `detectBaseUrl()` reading from package.json scripts (Wave 3, PR #5)
+
+- **Run-Tests Command**: Added `--parallel` flag for concurrent scenario execution and `--headless` flag for CI pipelines (Wave 3, PR #5)
+
+- **PR Review Cycle Command**: Added `finalizeReviewResponse()` with `gh pr ready` and automatic reviewer re-request (Wave 3, PR #5)
 
 ## [4.7.1] - 2026-01-09
 
