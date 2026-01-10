@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Reproduction Script Generation**: New `generateReproScript()` function in debug command for minimal bug reproduction (Wave 3, PR #5)
 
+- **Export Type Verification**: New `verifyExportTypes()` function in ast-verify.ts validating type exports match expected TypeKind (interface, type, enum, class) with detailed error messages (Wave 4, PR #6)
+
 ### Changed
 
 - **Classifier Batch Processing**: comment-classifier now processes in batches of 10 for 20+ items (Wave 1, PR #3)
@@ -59,6 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Run-Tests Command**: Added `--parallel` flag for concurrent scenario execution and `--headless` flag for CI pipelines (Wave 3, PR #5)
 
 - **PR Review Cycle Command**: Added `finalizeReviewResponse()` with `gh pr ready` and automatic reviewer re-request (Wave 3, PR #5)
+
+- **Artifact Verification Skill**: Upgraded to v2.0.0 with auto-invocation at wave boundaries and AST-based type verification using `verifyExportTypes()` (Wave 4, PR #6)
 
 ## [4.7.1] - 2026-01-09
 
