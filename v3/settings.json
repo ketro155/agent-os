@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v4.8.0 - Enhanced hooks with subagent lifecycle and wildcard permissions",
+  "_comment": "Agent OS v4.9.0 - AST verification, parallel waves, three-tier error handling",
 
   "hooks": {
     "SessionStart": [
@@ -103,6 +103,6 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "4.8.0"
+    "AGENT_OS_VERSION": "4.9.0"
   }
 }

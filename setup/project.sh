@@ -11,11 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.8.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.9.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="4.8.0"
+    AGENT_OS_VERSION="4.9.0"
 fi
-AGENT_OS_RELEASE_DATE="2026-01-09"
+AGENT_OS_RELEASE_DATE="2026-01-10"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -420,6 +420,11 @@ if [ "$CLAUDE_CODE" = true ]; then
     create_tracked_dir "./.claude/skills/artifact-verification"
     create_tracked_dir "./.claude/skills/context-summary"
     create_tracked_dir "./.claude/skills/tdd-helper"
+    create_tracked_dir "./.claude/skills/subtask-expansion"
+    create_tracked_dir "./.claude/templates"
+    create_tracked_dir "./.claude/templates/specs"
+    create_tracked_dir "./.claude/templates/tasks"
+    create_tracked_dir "./.claude/templates/test-scenarios"
 
     if [ "$IS_FROM_BASE" = true ]; then
         # Install commands
@@ -498,6 +503,13 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/scripts/test-report-to-markdown.js" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/test-report-to-markdown.js" "./.claude/scripts/test-report-to-markdown.js" "$OVERWRITE_CLAUDE" "scripts/test-report-to-markdown.js"
         fi
+        # v4.9.0 scripts
+        if [ -f "$BASE_AGENT_OS/v3/scripts/ast-verify.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/ast-verify.ts" "./.claude/scripts/ast-verify.ts" "$OVERWRITE_CLAUDE" "scripts/ast-verify.ts"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/wave-parallel.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/wave-parallel.ts" "./.claude/scripts/wave-parallel.ts" "$OVERWRITE_CLAUDE" "scripts/wave-parallel.ts"
+        fi
 
         # Install memory/rules
         echo ""
@@ -505,18 +517,40 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
         fi
-        for rule in tdd-workflow git-conventions execute-tasks; do
+        for rule in tdd-workflow git-conventions execute-tasks error-handling; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
             fi
         done
 
-        # Install skills (v4.8.0 - hot-reloadable patterns)
+        # Install skills (v4.9.0 - hot-reloadable patterns)
         echo ""
         echo "  📂 Skills:"
-        for skill in artifact-verification context-summary tdd-helper; do
+        for skill in artifact-verification context-summary tdd-helper subtask-expansion; do
             if [ -f "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" "./.claude/skills/${skill}/SKILL.md" "$OVERWRITE_CLAUDE" "skills/${skill}/SKILL.md"
+            fi
+        done
+
+        # Install templates (v4.9.0)
+        echo ""
+        echo "  📂 Templates:"
+        # Spec templates
+        for template in feature bugfix refactor integration; do
+            if [ -f "$BASE_AGENT_OS/v3/templates/specs/${template}.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/templates/specs/${template}.md" "./.claude/templates/specs/${template}.md" "$OVERWRITE_CLAUDE" "templates/specs/${template}.md"
+            fi
+        done
+        # Task templates
+        for template in api-endpoint react-component bugfix refactor; do
+            if [ -f "$BASE_AGENT_OS/v3/templates/tasks/${template}.json" ]; then
+                copy_file "$BASE_AGENT_OS/v3/templates/tasks/${template}.json" "./.claude/templates/tasks/${template}.json" "$OVERWRITE_CLAUDE" "templates/tasks/${template}.json"
+            fi
+        done
+        # Test scenario templates
+        for template in authentication form-validation crud-operations; do
+            if [ -f "$BASE_AGENT_OS/v3/templates/test-scenarios/${template}.json" ]; then
+                copy_file "$BASE_AGENT_OS/v3/templates/test-scenarios/${template}.json" "./.claude/templates/test-scenarios/${template}.json" "$OVERWRITE_CLAUDE" "templates/test-scenarios/${template}.json"
             fi
         done
 
@@ -823,14 +857,15 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-echo "v4.8 Architecture Features:"
+echo "v4.9 Architecture Features:"
 echo "  • Native hooks (mandatory validation - cannot be skipped)"
-echo "  • Subagent lifecycle hooks (track agent spawns/completions)"
+echo "  • AST-based verification (TypeScript compiler API for export/function checks)"
+echo "  • Parallel wave execution (dependency graph analysis for concurrent tasks)"
+echo "  • Three-tier error handling (TRANSIENT → RECOVERABLE → FATAL)"
+echo "  • Test infrastructure (templates, negative tests, parallel execution)"
+echo "  • Hot-reloadable skills (artifact-verification v2.0, subtask-expansion)"
 echo "  • Single-source JSON tasks (tasks.md auto-generated)"
-echo "  • Native subagents with disallowedTools security"
-echo "  • Hot-reloadable skills (artifact-verification, tdd-helper, etc.)"
 echo "  • Memory hierarchy (CLAUDE.md + rules/)"
-echo "  • Wildcard permissions for simplified configuration"
 echo ""
 
 echo "Next steps:"
