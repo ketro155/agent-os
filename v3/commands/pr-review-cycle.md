@@ -1,9 +1,15 @@
-# PR Review Cycle (v3.0)
+# PR Review Cycle (v4.9.0)
 
 Process and address PR review feedback with deep codebase understanding.
 
+**v4.9.0 Enhancements:**
+- finalizeReviewResponse with gh pr ready and reviewer re-request
+- Test coverage gap detection and recommendations
+- Enhanced completion reporting
+
 ## Parameters
 - `pr_number` (optional): PR number to process. Auto-detects from current branch if omitted.
+- `--re-request` (optional): Automatically re-request review from original reviewers (v4.9.0)
 
 ## Quick Start
 
@@ -13,18 +19,22 @@ Process and address PR review feedback with deep codebase understanding.
 
 # Process specific PR
 /pr-review-cycle 123
+
+# Process and re-request review when done (v4.9.0)
+/pr-review-cycle 123 --re-request
 ```
 
 ## How It Works
 
 v3.0 uses a discovery-first approach with native Claude Code features:
 
-| v2.x | v3.0 |
+| v2.x | v3.0+ |
 |------|------|
 | Shallow context (file + grep) | Deep context via Explore agent |
 | Embedded instructions (348 lines) | Native subagents + scripts |
 | Manual GitHub API calls | Shell script abstraction |
 | No convention awareness | Convention discovery before fixing |
+| No coverage analysis | Test coverage gap detection (v4.9.0) |
 
 ## Execution Flow
 
@@ -34,6 +44,7 @@ Git Branch Gate → Verify on PR branch
 PR Review Discovery Agent → Analyze scope, discover conventions
         │
         ├── PR Scope Analysis (files, modules)
+        ├── Test Coverage Analysis (v4.9.0)
         ├── Comment Categorization (priority ordering)
         ├── Convention Discovery (Explore agent)
         └── Reviewer Reference Resolution
@@ -42,10 +53,16 @@ PR Review Discovery Agent → Analyze scope, discover conventions
         ↓
 PR Review Implementation Agent → Address comments with context
         │
-        ├── Priority-ordered fixes (SECURITY → BUG → STYLE)
+        ├── Priority-ordered fixes (SECURITY → BUG → COVERAGE → STYLE)
         ├── Convention-matched implementation
         ├── Commit and push
         ├── Post replies to GitHub
+        └── Update PR with completion summary
+        ↓
+Finalize Review Response (v4.9.0)
+        │
+        ├── gh pr ready (mark as ready for review)
+        ├── Re-request review from original reviewers
         └── Update PR with completion summary
         ↓
 [Cycle complete - ready for re-review]
@@ -143,7 +160,7 @@ Task({
            PR Info: ${JSON.stringify(pr_info)}
            Comments: ${JSON.stringify(comments)}
 
-           Return: Scope analysis, convention discovery, prioritized comments`
+           Return: Scope analysis, convention discovery, prioritized comments, coverage analysis`
 })
 ```
 
@@ -153,9 +170,16 @@ Task({
   "status": "ready",
   "pr_number": 123,
   "actionable_comments": 6,
+  "coverage_issues": 1,
   "execution_recommendation": {...},
+  "coverage_summary": {
+    "percentage": 75,
+    "gaps": 1,
+    "action_required": true
+  },
   "context": {
     "pr_scope": {...},
+    "coverage_analysis": {...},
     "comments_by_priority": {...},
     "conventions_discovered": {...},
     "reference_resolutions": [...]
@@ -170,12 +194,12 @@ If discovery returns high complexity or many comments:
 ```javascript
 AskUserQuestion({
   questions: [{
-    question: `Discovery found ${actionable_comments} comments to address. Proceed?`,
+    question: `Discovery found ${actionable_comments} comments to address (including ${coverage_issues} coverage issues). Proceed?`,
     header: "Confirm",
     multiSelect: false,
     options: [
       { label: "Address All", description: `Process all ${actionable_comments} comments in priority order` },
-      { label: "Critical Only", description: "Only address SECURITY and BUG categories" },
+      { label: "Critical Only", description: "Only address SECURITY, BUG, and COVERAGE categories" },
       { label: "Review First", description: "Show me the comments before proceeding" }
     ]
   }]
@@ -196,7 +220,85 @@ Task({
 })
 ```
 
-### Step 6: Report Results
+### Step 6: Finalize Review Response (v4.9.0)
+
+> **NEW in v4.9.0**: After implementation completes, finalize the review response
+
+```javascript
+/**
+ * Finalize the PR review response
+ * Marks PR as ready and optionally re-requests review
+ */
+async function finalizeReviewResponse(
+  prNumber: number,
+  options: { reRequest: boolean, originalReviewers: string[] }
+): Promise<FinalizeResult> {
+  const result: FinalizeResult = {
+    pr_ready: false,
+    reviewers_requested: [],
+    errors: []
+  };
+  
+  // 1. Mark PR as ready for review (converts from draft if applicable)
+  try {
+    await Bash({
+      command: `gh pr ready ${prNumber} 2>/dev/null || echo "PR already ready"`
+    });
+    result.pr_ready = true;
+  } catch (e) {
+    result.errors.push(`Failed to mark PR ready: ${e.message}`);
+  }
+  
+  // 2. Re-request review from original reviewers
+  if (options.reRequest && options.originalReviewers.length > 0) {
+    for (const reviewer of options.originalReviewers) {
+      try {
+        await Bash({
+          command: `gh pr edit ${prNumber} --add-reviewer "${reviewer}"`
+        });
+        result.reviewers_requested.push(reviewer);
+      } catch (e) {
+        result.errors.push(`Failed to request review from ${reviewer}: ${e.message}`);
+      }
+    }
+  }
+  
+  // 3. Post completion comment with @claude-code trigger
+  const completionComment = `
+## Review Feedback Addressed
+
+All actionable review comments have been addressed in the latest commit.
+
+### Changes Made
+${generateChangesSummary(implementationResult)}
+
+### Coverage Status
+${formatCoverageStatus(discoveryContext.coverage_analysis)}
+
+---
+
+**@claude-code** please review the changes in the latest commit.
+`;
+  
+  await Bash({
+    command: `gh pr comment ${prNumber} --body "${escapeForBash(completionComment)}"`
+  });
+  
+  return result;
+}
+
+/**
+ * Get original reviewers from PR
+ */
+async function getOriginalReviewers(prNumber: number): Promise<string[]> {
+  const result = await Bash({
+    command: `gh pr view ${prNumber} --json reviews --jq '.reviews[].author.login' | sort -u`
+  });
+  return result.trim().split('\n').filter(Boolean);
+}
+```
+
+### Step 7: Report Results
 
 Display completion summary:
 
@@ -209,14 +311,23 @@ Display completion summary:
 ║ Commit: [SHORT_SHA]                                          ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ Comments Addressed: [COUNT]                                   ║
-║   • Security: [X]  • Bugs: [Y]  • Style: [Z]                ║
+║   • Security: [X]  • Bugs: [Y]  • Coverage: [Z]  • Style: [W] ║
 ║ Replies Posted: [COUNT]                                       ║
 ║ PR Updated: ✅                                                ║
 ║ Re-Review Triggered: ✅                                       ║
 ╠══════════════════════════════════════════════════════════════╣
+║ COVERAGE STATUS (v4.9.0):                                     ║
+║   • Coverage: [XX]%                                          ║
+║   • Tests Added: [N] files                                   ║
+║   • Gaps Remaining: [M]                                      ║
+╠══════════════════════════════════════════════════════════════╣
 ║ FUTURE ITEMS CAPTURED: [COUNT]                                ║
 ║   • tasks.json: [WAVE_TASK_COUNT] items                      ║
 ║   • roadmap.md: [ROADMAP_COUNT] items                        ║
+╠══════════════════════════════════════════════════════════════╣
+║ REVIEW RE-REQUEST (v4.9.0):                                   ║
+║   • Reviewers notified: [REVIEWER_LIST]                      ║
+║   • PR marked as ready: ✅                                    ║
 ╠══════════════════════════════════════════════════════════════╣
 ║ NEXT STEPS:                                                   ║
 ║                                                               ║
@@ -250,6 +361,57 @@ Display completion summary:
 ║   • Future items will be available in next wave              ║
 ╚══════════════════════════════════════════════════════════════╝
 ```
+
+### Step 8: Memory Layer Integration (v4.9.1)
+
+After review cycle completes, evaluate logging opportunities:
+
+```
+EVALUATE logging opportunity:
+
+IF review revealed code conventions not previously documented:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Conventions discovered from PR #[number] review"
+    - Pattern name and description
+    - Example code demonstrating the pattern
+    - When to apply this convention
+
+IF significant architectural feedback was addressed:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Architectural feedback addressed in PR #[number]"
+    - What the reviewer suggested
+    - How it was implemented
+    - Why this approach was taken
+
+IF future items were triaged (WAVE_TASK or ROADMAP_ITEM):
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "PR review backlog triage for #[number]"
+    - Items promoted to tasks.json
+    - Items added to roadmap
+    - Rationale for categorization
+
+IF test coverage gaps were discovered and addressed:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Test coverage patterns from PR #[number]"
+    - What gaps were found
+    - How they were addressed
+    - Test patterns to remember
+```
+
+**Example prompt:**
+```
+PR review revealed 2 new code conventions and added 3 items to roadmap.
+Would you like to log these discoveries for future reference?
+
+> /log-entry insight   (for conventions)
+> /log-entry decision  (for triage decisions)
+```
+
+---
 
 ## Automated Re-Review Trigger
 
@@ -299,33 +461,12 @@ bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" reply-inlin
 
 # Generate summary
 bash "${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh" summary [pr] [addressed] [replies]
-```
 
-## Native Agent Benefits
+# Mark PR ready (v4.9.0)
+gh pr ready [pr_number]
 
-### Discovery Agent + Explore
-
-```
-WITHOUT Explore (v2.x):
-  Comment: "This doesn't match our error handling pattern"
-  Context: Only reads the specific file
-  Result: May fix incorrectly, causing another review round
-
-WITH Explore (v3.0):
-  Comment: "This doesn't match our error handling pattern"
-  Context: Discovers error handling pattern across codebase
-  Result: Fix matches existing patterns, reviewer satisfied
-```
-
-### Convention-Aware Implementation
-
-```
-BEFORE: Fix based on general best practices
-AFTER:  Fix matches discovered project conventions
-
-Example:
-  Convention discovered: "All handlers use AppError class with error codes"
-  Fix applied: Uses AppError with appropriate code, not generic Error
+# Re-request review (v4.9.0)
+gh pr edit [pr_number] --add-reviewer "[reviewer]"
 ```
 
 ## Error Handling
@@ -361,17 +502,13 @@ IF GitHub API fails:
   Report failed replies in summary
 ```
 
-## Comparison: v2.x vs v3.0
-
-| Aspect | v2.x | v3.0 |
-|--------|------|------|
-| Command size | 348 lines | ~150 lines |
-| Context depth | File + grep | Explore agent + conventions |
-| Comment handling | pr-review-handler skill | Native subagents |
-| GitHub API | Inline bash | Shell script |
-| Convention awareness | None | Full discovery |
-| Reference resolution | None | Automatic |
-| PR update | Manual | Automatic summary comment |
+### Re-Request Failed (v4.9.0)
+```
+IF reviewer re-request fails:
+  Log warning
+  PR is still marked as ready
+  Report in summary for manual follow-up
+```
 
 ## Dependencies
 
@@ -384,16 +521,23 @@ IF GitHub API fails:
 
 **No MCP server required** - all operations use native Bash tool with shell scripts.
 
-## Integration with execute-tasks
+---
 
-After PR is approved:
-```bash
-# Merge the PR
-gh pr merge [NUMBER] --squash
+## Changelog
 
-# Switch to main and pull
-git checkout main && git pull
+### v4.9.1
+- Added Memory Layer integration (Step 8)
+- Prompts for `/log-entry insight` when conventions discovered
+- Prompts for `/log-entry decision` when backlog triaged
+- Cross-session memory for PR review learnings
 
-# Continue to next task/spec
-/execute-tasks [SPEC_NAME]
-```
+### v4.9.0
+- Added finalizeReviewResponse with gh pr ready integration
+- Added automatic reviewer re-request functionality
+- Added coverage analysis to discovery context
+- Added --re-request flag parameter
+- Enhanced completion report with coverage status
+
+### v3.0
+- Discovery-first architecture
+- Native subagents + scripts

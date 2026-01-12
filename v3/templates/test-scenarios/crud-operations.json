@@ -1,0 +1,143 @@
+{
+  "template_name": "crud-operations",
+  "version": "1.0.0",
+  "description": "Test scenarios for Create, Read, Update, Delete operations",
+  "positive_scenarios": [
+    {
+      "id": "CRUD-P1",
+      "name": "User can create new item",
+      "category": "crud",
+      "priority": "critical",
+      "steps_hint": [
+        "navigate to list page",
+        "click create new button",
+        "fill item details",
+        "click save button",
+        "verify item appears in list"
+      ],
+      "expected_outcome": "New item created and visible in list"
+    },
+    {
+      "id": "CRUD-P2",
+      "name": "User can view item details",
+      "category": "crud",
+      "priority": "high",
+      "depends_on": ["CRUD-P1"],
+      "steps_hint": [
+        "navigate to list page",
+        "click on item row",
+        "verify details page displays"
+      ],
+      "expected_outcome": "Item details displayed correctly"
+    },
+    {
+      "id": "CRUD-P3",
+      "name": "User can update existing item",
+      "category": "crud",
+      "priority": "high",
+      "depends_on": ["CRUD-P1"],
+      "steps_hint": [
+        "navigate to item details",
+        "click edit button",
+        "modify item fields",
+        "click save button",
+        "verify changes saved"
+      ],
+      "expected_outcome": "Item updated with new values"
+    },
+    {
+      "id": "CRUD-P4",
+      "name": "User can delete item",
+      "category": "crud",
+      "priority": "high",
+      "depends_on": ["CRUD-P1"],
+      "steps_hint": [
+        "navigate to item details",
+        "click delete button",
+        "confirm deletion",
+        "verify item removed from list"
+      ],
+      "expected_outcome": "Item deleted and no longer in list"
+    }
+  ],
+  "negative_scenarios": [
+    {
+      "id": "CRUD-N1",
+      "name": "Create fails with duplicate name",
+      "category": "crud",
+      "priority": "high",
+      "test_type": "duplicate",
+      "depends_on": ["CRUD-P1"],
+      "steps_hint": [
+        "create item with name 'Test Item'",
+        "attempt to create another item with same name",
+        "verify duplicate error message"
+      ],
+      "expected_outcome": "Error message for duplicate name"
+    },
+    {
+      "id": "CRUD-N2",
+      "name": "Create fails with missing required fields",
+      "category": "crud",
+      "priority": "high",
+      "test_type": "missing_field",
+      "steps_hint": [
+        "click create new button",
+        "leave required fields empty",
+        "click save button",
+        "verify validation errors"
+      ],
+      "expected_outcome": "Validation errors for required fields"
+    },
+    {
+      "id": "CRUD-N3",
+      "name": "Update fails with invalid data",
+      "category": "crud",
+      "priority": "medium",
+      "test_type": "invalid_input",
+      "depends_on": ["CRUD-P1"],
+      "steps_hint": [
+        "navigate to edit page",
+        "enter invalid data in fields",
+        "click save button",
+        "verify validation errors"
+      ],
+      "expected_outcome": "Validation errors displayed"
+    },
+    {
+      "id": "CRUD-N4",
+      "name": "Delete requires confirmation",
+      "category": "crud",
+      "priority": "medium",
+      "test_type": "confirmation",
+      "depends_on": ["CRUD-P1"],
+      "steps_hint": [
+        "click delete button",
+        "click cancel in confirmation dialog",
+        "verify item still exists"
+      ],
+      "expected_outcome": "Item not deleted when cancelled"
+    },
+    {
+      "id": "CRUD-N5",
+      "name": "Cannot access deleted item",
+      "category": "crud",
+      "priority": "medium",
+      "test_type": "not_found",
+      "depends_on": ["CRUD-P4"],
+      "steps_hint": [
+        "delete an item",
+        "navigate directly to deleted item URL",
+        "verify 404 or not found message"
+      ],
+      "expected_outcome": "404 or not found error displayed"
+    }
+  ],
+  "selector_patterns": {
+    "create_button": "[data-testid='create-btn'], .create-btn, button:contains('Create')",
+    "edit_button": "[data-testid='edit-btn'], .edit-btn, button:contains('Edit')",
+    "delete_button": "[data-testid='delete-btn'], .delete-btn, button:contains('Delete')",
+    "save_button": "[data-testid='save-btn'], button[type='submit'], .save-btn",
+    "confirm_dialog": "[role='dialog'], .modal, .confirmation-dialog"
+  }
+}

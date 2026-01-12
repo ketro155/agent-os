@@ -43,6 +43,65 @@ You receive:
 
 ## Execution Protocol
 
+### Step 0: Handle Verification Feedback (Ralph Pattern v4.9.0)
+
+> **Ralph Wiggum Pattern**: If you're seeing verification feedback, your previous completion
+> claim failed verification. You MUST address the specific failures before returning "pass".
+>
+> @see https://awesomeclaude.ai/ralph-wiggum
+
+**Check for Verification Feedback in Prompt:**
+
+```javascript
+// Parse input for verification feedback
+const hasVerificationFeedback = input.includes("VERIFICATION FEEDBACK");
+
+if (hasVerificationFeedback) {
+  // Extract verification failures from the prompt
+  const feedbackSection = extractSection(input, "VERIFICATION FEEDBACK", "═══");
+
+  INFORM: `⚠️ Re-invocation with verification feedback detected.`;
+  INFORM: `Previous attempt failed verification. Addressing failures...`;
+
+  // Parse the specific failures
+  const previousClaims = JSON.parse(extractSection(input, "PREVIOUS CLAIMS", "IMPORTANT"));
+
+  // Create focused remediation plan
+  TodoWrite([
+    { content: "Address verification failures", status: "in_progress", activeForm: "Fixing verification failures" },
+    ...verification.failures.map(f => ({
+      content: `Fix: ${f.category} - ${f.claimed}`,
+      status: "pending",
+      activeForm: `Fixing ${f.category} issue`
+    }))
+  ]);
+
+  // DO NOT repeat all work - focus on fixing failures
+  // 1. If file missing → Create the file
+  // 2. If export missing → Add the export keyword
+  // 3. If function missing → Implement the function
+  // 4. If tests failing → Fix the tests
+  // 5. If TypeScript errors → Fix type errors
+
+  // After fixing, verification will run again automatically
+}
+```
+
+**Verification Failure Remediation Protocol:**
+
+| Failure Type | Remediation Action |
+|--------------|-------------------|
+| `file` | Create the missing file with expected content |
+| `export` | Add `export` keyword to the function/const |
+| `function` | Implement the missing function |
+| `test` | Fix failing tests - run and verify locally |
+| `typescript` | Fix TypeScript errors - run `tsc --noEmit` |
+| `subtask` | Mark subtask complete in tasks.json |
+
+**IMPORTANT**: After remediation, return the SAME structured result format. The orchestrator will verify again. If all failures are fixed, you'll pass verification.
+
+---
+
 ### Pre-Implementation Gate: Branch Validation (v3.0.2)
 
 > ⚠️ **DEFENSE-IN-DEPTH** - Verify branch before ANY implementation begins
@@ -646,6 +705,42 @@ for file_path in predecessor_artifacts.files_created:
 // ONLY THEN write the import
 ```
 
+## Memory Layer Integration (v4.9.1)
+
+Before returning, evaluate if this task should trigger a log entry:
+
+```
+EVALUATE logging opportunity:
+
+IF task required non-obvious solutions:
+  SUGGEST: /log-entry implementation
+  CONTENT:
+    - Title: "Task [task_id]: [brief description]"
+    - Files changed
+    - What was implemented
+    - Gotchas: Non-obvious issues encountered
+    - Future work: What this enables
+
+IF verification re-invocation was needed (Ralph Wiggum pattern):
+  SUGGEST: /log-entry implementation
+  CONTENT:
+    - What verification failed
+    - Why it failed
+    - How it was fixed
+    - Pattern to avoid in future
+
+IF new patterns were established:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Pattern name and purpose
+    - When to use it
+    - Example from this implementation
+```
+
+**Note:** Phase 2 is focused on execution, so logging suggestions should be lightweight. Only prompt for truly non-obvious implementations.
+
+---
+
 ## Output Format
 
 Return this JSON when task is complete:
@@ -706,3 +801,212 @@ Before returning "pass":
 - [ ] Code follows project standards
 - [ ] Commits made for each subtask
 - [ ] Artifacts accurately reported
+
+---
+
+## Context Management (v4.9.0)
+
+### Context Compression Between Subtasks
+
+After completing each subtask, compress context to prevent overflow on tasks with many subtasks.
+
+**Invoke Context-Summary Skill:**
+
+```javascript
+// After each subtask completion
+const executeSubtask = async (subtask, context) => {
+  // ... existing subtask execution ...
+  
+  // After TDD phases complete
+  const subtaskResult = {
+    status: 'pass',
+    files_modified: [...],
+    exports_added: [...],
+    test_results: {...}
+  };
+  
+  // Compress context for next subtask
+  const compressedContext = await invokeContextSummary({
+    scope: `subtask-${subtask.id}`,
+    currentState: {
+      task: context.task,
+      subtask: subtask,
+      completedSubtasks: context.completedSubtasks,
+      remainingSubtasks: context.remainingSubtasks
+    },
+    keyDecisions: extractKeyDecisions(),
+    filesModified: subtaskResult.files_modified,
+    criticalContext: [
+      `Completed: ${subtask.description}`,
+      `Next: ${context.remainingSubtasks[0]?.description || 'Final verification'}`
+    ]
+  });
+  
+  return {
+    ...subtaskResult,
+    compressedContext
+  };
+};
+
+const invokeContextSummary = async (params) => {
+  // Use the context-summary skill
+  return Skill({
+    skill: 'context-summary',
+    args: JSON.stringify({
+      scope: params.scope,
+      currentState: params.currentState,
+      keyDecisions: params.keyDecisions,
+      filesModified: params.filesModified,
+      criticalContext: params.criticalContext
+    })
+  });
+};
+```
+
+### Test Pattern Discovery
+
+Automatically discover test patterns from project configuration.
+
+**discoverTestPatterns Function:**
+
+```javascript
+const discoverTestPatterns = async (projectRoot = '.') => {
+  const patterns = {
+    testMatch: [],
+    testPathIgnorePatterns: [],
+    moduleFileExtensions: [],
+    framework: null,
+    setupFiles: [],
+    testEnvironment: 'node'
+  };
+  
+  // Check for Jest configuration
+  const jestConfigPaths = [
+    `${projectRoot}/jest.config.js`,
+    `${projectRoot}/jest.config.ts`,
+    `${projectRoot}/jest.config.json`,
+    `${projectRoot}/package.json` // jestconfig in package.json
+  ];
+  
+  for (const configPath of jestConfigPaths) {
+    if (fs.existsSync(configPath)) {
+      try {
+        let config;
+        if (configPath.endsWith('package.json')) {
+          const pkg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          config = pkg.jest;
+          if (!config) continue;
+        } else if (configPath.endsWith('.json')) {
+          config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        } else {
+          // For .js/.ts, try to extract patterns with regex
+          const content = fs.readFileSync(configPath, 'utf-8');
+          const testMatchMatch = content.match(/testMatch:\s*\[([\s\S]*?)\]/);
+          if (testMatchMatch) {
+            patterns.testMatch = extractArrayValues(testMatchMatch[1]);
+          }
+        }
+        
+        if (config) {
+          patterns.framework = 'jest';
+          patterns.testMatch = config.testMatch || ['**/__tests__/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'];
+          patterns.testPathIgnorePatterns = config.testPathIgnorePatterns || ['/node_modules/'];
+          patterns.moduleFileExtensions = config.moduleFileExtensions || ['js', 'jsx', 'ts', 'tsx'];
+          patterns.testEnvironment = config.testEnvironment || 'node';
+          patterns.setupFiles = config.setupFilesAfterEnv || config.setupFiles || [];
+        }
+        break;
+      } catch (e) {
+        console.warn(`Failed to parse Jest config at ${configPath}: ${e}`);
+      }
+    }
+  }
+  
+  // Check for Vitest configuration
+  const vitestConfigPaths = [
+    `${projectRoot}/vitest.config.ts`,
+    `${projectRoot}/vitest.config.js`,
+    `${projectRoot}/vite.config.ts` // vitest can be in vite.config
+  ];
+  
+  for (const configPath of vitestConfigPaths) {
+    if (fs.existsSync(configPath)) {
+      try {
+        const content = fs.readFileSync(configPath, 'utf-8');
+        if (content.includes('vitest') || content.includes('test:')) {
+          patterns.framework = 'vitest';
+          
+          // Extract include patterns
+          const includeMatch = content.match(/include:\s*\[([\s\S]*?)\]/);
+          if (includeMatch) {
+            patterns.testMatch = extractArrayValues(includeMatch[1]);
+          } else {
+            patterns.testMatch = ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'];
+          }
+          
+          // Extract exclude patterns
+          const excludeMatch = content.match(/exclude:\s*\[([\s\S]*?)\]/);
+          if (excludeMatch) {
+            patterns.testPathIgnorePatterns = extractArrayValues(excludeMatch[1]);
+          }
+          
+          break;
+        }
+      } catch (e) {
+        console.warn(`Failed to parse Vitest config at ${configPath}: ${e}`);
+      }
+    }
+  }
+  
+  // Default patterns if nothing found
+  if (!patterns.framework) {
+    patterns.framework = 'unknown';
+    patterns.testMatch = [
+      '**/__tests__/**/*.[jt]s?(x)',
+      '**/?(*.)+(spec|test).[jt]s?(x)',
+      '**/tests/**/*.[jt]s?(x)'
+    ];
+  }
+  
+  return patterns;
+};
+
+const extractArrayValues = (arrayContent) => {
+  const matches = arrayContent.match(/['"`](.*?)['"`]/g) || [];
+  return matches.map(m => m.slice(1, -1));
+};
+```
+
+### Usage in Phase 2 Implementation
+
+```javascript
+// At task start, discover test patterns
+const testPatterns = await discoverTestPatterns(projectRoot);
+
+// When running tests, use discovered patterns
+const runTests = async (testFile) => {
+  if (testPatterns.framework === 'jest') {
+    return Bash(`npm test -- --testPathPattern="${testFile}"`);
+  } else if (testPatterns.framework === 'vitest') {
+    return Bash(`npm run test -- ${testFile}`);
+  } else {
+    // Fallback
+    return Bash(`npm test -- ${testFile}`);
+  }
+};
+```
+
+---
+
+## Changelog
+
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+- Use handleError() with ERROR_CATALOG codes
+- Use mapErrorToCode() for error classification
+
+### v4.9.0-pre (2026-01-09)
+- Added context compression between subtasks using context-summary skill
+- Added discoverTestPatterns function for Jest/Vitest configuration detection
+- Added executeSubtask wrapper with automatic context management
+- Improved test file discovery from project configuration

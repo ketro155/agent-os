@@ -131,6 +131,59 @@ AskUserQuestion({
 - **Accept**: any format, length, or detail level
 - **Proceed**: to context gathering
 
+
+### Step 1.5: Template Selection (v4.9)
+
+> **Template-Driven Specs**: Select the appropriate spec template based on the type of work.
+
+**Template Selection Flow (AskUserQuestion):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What type of specification is this?",
+    header: "Spec Type",
+    multiSelect: false,
+    options: [
+      {
+        label: "Feature (Recommended)",
+        description: "New capability or enhancement"
+      },
+      {
+        label: "Bugfix",
+        description: "Fix for existing issue with regression test"
+      },
+      {
+        label: "Refactor",
+        description: "Code quality improvement without behavior change"
+      },
+      {
+        label: "Integration",
+        description: "Third-party service or API integration"
+      }
+    ]
+  }]
+})
+```
+
+**Template Mapping:**
+```javascript
+const TEMPLATE_MAP = {
+  "Feature": ".claude/templates/specs/feature.md",
+  "Bugfix": ".claude/templates/specs/bugfix.md",
+  "Refactor": ".claude/templates/specs/refactor.md",
+  "Integration": ".claude/templates/specs/integration.md"
+};
+
+// Load template and use as base structure for spec.md
+const template = await Read(TEMPLATE_MAP[selectedType]);
+```
+
+**Template Benefits:**
+- Consistent spec structure across types
+- Type-appropriate sections (e.g., "Steps to Reproduce" for bugfix)
+- Reduces time to create well-structured specs
+- Enforces best practices per spec type
+
 ### Step 2: Context Gathering (Conditional)
 
 Use the Explore agent (native) to read @.agent-os/product/mission-lite.md and @.agent-os/product/tech-stack.md only if not already in context to ensure minimal context for spec alignment.
@@ -387,6 +440,120 @@ IF spec_requires_new_external_dependencies:
   INCLUDE "External Dependencies" section
 ELSE:
   OMIT section entirely
+```
+
+
+### Step 8.5: Dependency Detection (v4.9)
+
+> **Automatic Dependency Analysis**: Detect dependencies on other modules or pending specs to identify blocking issues early.
+
+**Dependency Detection Flow:**
+```javascript
+const detectDependencies = async (specContent, techSpec) => {
+  const dependencies = [];
+  
+  // Extract mentioned modules and files
+  const mentionedModules = extractModuleReferences(specContent + techSpec);
+  
+  for (const module of mentionedModules) {
+    // Check if module exists in codebase
+    const exists = await moduleExists(module);
+    
+    if (!exists) {
+      dependencies.push({
+        type: 'missing_module',
+        module,
+        severity: 'blocking',
+        recommendation: `Module "${module}" doesn't exist. Create it first or adjust scope.`
+      });
+    } else {
+      // Check if module has pending changes in other specs
+      const pendingSpecs = await findSpecsAffecting(module);
+      if (pendingSpecs.length > 0) {
+        dependencies.push({
+          type: 'pending_changes',
+          module,
+          severity: 'warning',
+          blocking_specs: pendingSpecs,
+          recommendation: `Module "${module}" has pending changes in: ${pendingSpecs.join(', ')}. Consider ordering.`
+        });
+      }
+    }
+  }
+  
+  return dependencies;
+};
+
+// Helper: Extract module references from spec text
+const extractModuleReferences = (text) => {
+  const patterns = [
+    /from ['"](@?[\w\/\-\.]+)['"]/g,      // import from 'module'
+    /import\s+['"](@?[\w\/\-\.]+)['"]/g,  // import 'module'
+    /src\/[\w\/\-\.]+/g,                   // src/path/to/file
+    /\.agent-os\/[\w\/\-\.]+/g            // .agent-os paths
+  ];
+  
+  const modules = new Set();
+  for (const pattern of patterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      modules.add(match[1] || match[0]);
+    }
+  }
+  return Array.from(modules);
+};
+
+// Helper: Check if module exists
+const moduleExists = async (modulePath) => {
+  const result = await Glob({ pattern: `**/${modulePath}*` });
+  return result.length > 0;
+};
+
+// Helper: Find specs affecting a module
+const findSpecsAffecting = async (modulePath) => {
+  const specsDir = '.agent-os/specs';
+  const allSpecs = await Glob({ pattern: `${specsDir}/*/spec.md` });
+  const affecting = [];
+  
+  for (const specPath of allSpecs) {
+    const specContent = await Read(specPath);
+    if (specContent.includes(modulePath)) {
+      const specName = specPath.split('/').slice(-2, -1)[0];
+      affecting.push(specName);
+    }
+  }
+  
+  return affecting;
+};
+```
+
+**Dependency Report Output:**
+```markdown
+## Dependency Analysis
+
+### Blocking Dependencies
+- **[module]**: Does not exist. Must be created first.
+
+### Pending Changes
+- **[module]**: Affected by pending spec "[spec-name]"
+
+### Recommendation
+[If blocking]: Consider creating [module] before this spec, or adjust scope.
+[If pending]: Consider ordering this spec after [other-spec] completes.
+```
+
+**Integration with Workflow:**
+```
+AFTER creating technical-spec.md:
+  dependencies = await detectDependencies(specContent, techSpecContent)
+  
+  IF dependencies.filter(d => d.severity === 'blocking').length > 0:
+    WARN user about blocking dependencies
+    ASK: "Continue anyway?" or "Adjust scope?"
+  
+  IF dependencies.filter(d => d.severity === 'warning').length > 0:
+    INFORM user about potential conflicts
+    CONTINUE with spec creation
 ```
 
 ### Step 9: Create Database Schema (Conditional)
@@ -688,6 +855,47 @@ IF "Major Revision":
 IF "Cancel":
   CONFIRM: "Are you sure? This will discard all spec files created."
   IF confirmed: DELETE spec folder, END
+```
+
+### Step 11.5: Memory Layer Integration (v4.9.1)
+
+After spec approval, evaluate logging opportunity:
+
+```
+EVALUATE logging opportunity:
+
+IF spec involves significant technical decisions:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Technical approach for [spec-name]"
+    - Context: What the spec aims to achieve
+    - Options: Approaches considered (from brainstorming)
+    - Decision: Chosen approach
+    - Rationale: Why this approach fits the architecture
+    - Consequences: Dependencies, trade-offs, future implications
+
+IF spec introduces new patterns or architectural changes:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "New pattern introduced: [pattern-name]"
+    - What the pattern is
+    - Where it will be used
+    - Why it was chosen over alternatives
+
+IF spec has notable external dependencies:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Dependency decisions for [spec-name]"
+    - New dependencies being introduced
+    - Why these were chosen
+```
+
+**Example prompt to user:**
+```
+This spec introduces a new authentication pattern using JWT with refresh tokens.
+Would you like to log this architectural decision for future reference?
+
+> /log-entry decision
 ```
 
 <!-- END EMBEDDED CONTENT -->

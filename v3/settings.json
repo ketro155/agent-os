@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v4.9.0 - AST verification, parallel waves, three-tier error handling",
+  "_comment": "Agent OS v4.10.0 - Context offloading, token efficiency, FewWord patterns",
 
   "hooks": {
     "SessionStart": [
@@ -89,10 +89,17 @@
       "Write(.agent-os/specs/**)",
       "Write(.agent-os/progress/**)",
       "Write(.agent-os/state/**)",
+      "Write(.agent-os/scratch/**)",
+      "Write(.agent-os/memory/**)",
+      "Write(.agent-os/metrics/**)",
+      "Write(.agent-os/logs/**)",
       "Bash(.claude/scripts/*)",
       "Bash(npm *)",
       "Bash(git *)",
       "Bash(gh *)",
+      "Bash(grep *)",
+      "Bash(jq *)",
+      "Bash(du *)",
       "mcp__claude-in-chrome__*",
       "mcp__ide__*"
     ],
@@ -103,6 +110,11 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "4.9.0"
+    "AGENT_OS_VERSION": "4.10.0",
+    "AGENT_OS_INLINE_MAX": "512",
+    "AGENT_OS_PREVIEW_MIN": "4096",
+    "AGENT_OS_SUCCESS_RETENTION": "24",
+    "AGENT_OS_FAILURE_RETENTION": "48",
+    "AGENT_OS_SCRATCH_MAX_MB": "250"
   }
 }

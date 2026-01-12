@@ -11,11 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.9.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.10.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="4.9.0"
+    AGENT_OS_VERSION="4.10.0"
 fi
-AGENT_OS_RELEASE_DATE="2026-01-10"
+AGENT_OS_RELEASE_DATE="2026-01-12"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -300,6 +300,14 @@ create_tracked_dir "$INSTALL_DIR/state/recovery"
 create_tracked_dir "$INSTALL_DIR/standards"
 create_tracked_dir "$INSTALL_DIR/progress"
 create_tracked_dir "$INSTALL_DIR/progress/archive"
+# v4.10.0: Context offloading directories
+create_tracked_dir "$INSTALL_DIR/scratch"
+create_tracked_dir "$INSTALL_DIR/scratch/tool_outputs"
+create_tracked_dir "$INSTALL_DIR/scratch/subagents"
+create_tracked_dir "$INSTALL_DIR/memory"
+create_tracked_dir "$INSTALL_DIR/memory/pinned"
+create_tracked_dir "$INSTALL_DIR/memory/sessions"
+create_tracked_dir "$INSTALL_DIR/logs"
 
 # Configure tools and project type based on installation type
 if [ "$IS_FROM_BASE" = true ]; then
@@ -420,6 +428,11 @@ if [ "$CLAUDE_CODE" = true ]; then
     create_tracked_dir "./.claude/skills/context-summary"
     create_tracked_dir "./.claude/skills/tdd-helper"
     create_tracked_dir "./.claude/skills/subtask-expansion"
+    create_tracked_dir "./.claude/skills/log-entry"
+    # v4.10.0: Context offloading skills
+    create_tracked_dir "./.claude/skills/context-read"
+    create_tracked_dir "./.claude/skills/context-search"
+    create_tracked_dir "./.claude/skills/context-stats"
     create_tracked_dir "./.claude/templates"
     create_tracked_dir "./.claude/templates/specs"
     create_tracked_dir "./.claude/templates/tasks"
@@ -513,6 +526,11 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/scripts/verification-loop.ts" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/verification-loop.ts" "./.claude/scripts/verification-loop.ts" "$OVERWRITE_CLAUDE" "scripts/verification-loop.ts"
         fi
+        # v4.10.0 Secret redaction utility
+        if [ -f "$BASE_AGENT_OS/v3/scripts/redact-secrets.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/redact-secrets.sh" "./.claude/scripts/redact-secrets.sh" "$OVERWRITE_CLAUDE" "scripts/redact-secrets.sh"
+            chmod +x "./.claude/scripts/redact-secrets.sh"
+        fi
 
         # Install memory/rules
         echo ""
@@ -526,10 +544,10 @@ if [ "$CLAUDE_CODE" = true ]; then
             fi
         done
 
-        # Install skills (v4.9.0 - hot-reloadable patterns)
+        # Install skills (v4.9.0 - hot-reloadable patterns, v4.10.0 - context offloading)
         echo ""
         echo "  📂 Skills:"
-        for skill in artifact-verification context-summary tdd-helper subtask-expansion; do
+        for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats; do
             if [ -f "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" "./.claude/skills/${skill}/SKILL.md" "$OVERWRITE_CLAUDE" "skills/${skill}/SKILL.md"
             fi
@@ -738,6 +756,9 @@ if [ -f .gitignore ]; then
         echo ".agent-os/progress/progress.json" >> .gitignore
         echo ".agent-os/progress/progress.md" >> .gitignore
         echo ".agent-os/progress/archive/" >> .gitignore
+        echo "" >> .gitignore
+        echo "# v4.10.0: Context offloading (ephemeral, auto-cleaned)" >> .gitignore
+        echo ".agent-os/scratch/" >> .gitignore
         echo "  ✓ Updated .gitignore with state exclusions"
     fi
 else
@@ -762,6 +783,9 @@ else
 .agent-os/progress/progress.json
 .agent-os/progress/progress.md
 .agent-os/progress/archive/
+
+# v4.10.0: Context offloading (ephemeral, auto-cleaned)
+.agent-os/scratch/
 EOF
     echo "  ✓ Created .gitignore with state exclusions"
 fi
@@ -839,6 +863,9 @@ echo "   .agent-os/version.json     - Installation version and metadata"
 echo "   .agent-os/standards/       - Development standards"
 echo "   .agent-os/state/           - State management and caching"
 echo "   .agent-os/progress/        - Persistent progress log (cross-session memory)"
+echo "   .agent-os/scratch/         - Context offloading (ephemeral, auto-cleaned)"
+echo "   .agent-os/memory/          - Persistent storage (pinned outputs, sessions)"
+echo "   .agent-os/logs/            - Semantic memory (decisions, insights)"
 
 if [ "$CLAUDE_CODE" = true ]; then
     echo "   .agent-os/schemas/         - JSON schemas"
@@ -860,15 +887,18 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-echo "v4.9 Architecture Features:"
-echo "  • Native hooks (mandatory validation - cannot be skipped)"
-echo "  • AST-based verification (TypeScript compiler API for export/function checks)"
-echo "  • Parallel wave execution (dependency graph analysis for concurrent tasks)"
-echo "  • Three-tier error handling (TRANSIENT → RECOVERABLE → FATAL)"
-echo "  • Test infrastructure (templates, negative tests, parallel execution)"
-echo "  • Hot-reloadable skills (artifact-verification v2.0, subtask-expansion)"
-echo "  • Single-source JSON tasks (tasks.md auto-generated)"
-echo "  • Memory hierarchy (CLAUDE.md + rules/)"
+echo "v4.10 Architecture Features:"
+echo "  • Context offloading (FewWord-inspired, 82% token reduction)"
+echo "  • Tiered output strategy (<512B inline, 512B-4KB pointer, >4KB preview)"
+echo "  • Secret redaction (AWS, GitHub, OpenAI, Anthropic keys auto-redacted)"
+echo "  • Smart retention (failures 48h, successes 24h for debugging)"
+echo "  • LRU eviction (250MB scratch limit with auto-cleanup)"
+echo "  • Context skills (/context-read, /context-search, /context-stats)"
+echo ""
+echo "v4.9 Features (included):"
+echo "  • Native hooks, AST verification, parallel waves"
+echo "  • Three-tier error handling, Ralph Wiggum verification loop"
+echo "  • Single-source JSON tasks, memory hierarchy"
 echo ""
 
 echo "Next steps:"

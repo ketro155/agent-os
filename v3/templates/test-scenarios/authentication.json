@@ -1,0 +1,139 @@
+{
+  "template_name": "authentication",
+  "version": "1.0.0",
+  "description": "Test scenarios for user authentication flows",
+  "positive_scenarios": [
+    {
+      "id": "AUTH-P1",
+      "name": "User can log in with valid credentials",
+      "category": "authentication",
+      "priority": "critical",
+      "is_prerequisite": true,
+      "steps_hint": [
+        "navigate to login page",
+        "enter valid email",
+        "enter valid password",
+        "click login button",
+        "verify dashboard visible"
+      ],
+      "expected_outcome": "User sees dashboard with welcome message",
+      "selectors": {
+        "email_input": "[data-testid='email-input'], input[type='email'], #email",
+        "password_input": "[data-testid='password-input'], input[type='password'], #password",
+        "login_button": "[data-testid='login-button'], button[type='submit'], .login-btn"
+      }
+    },
+    {
+      "id": "AUTH-P2",
+      "name": "User can log out successfully",
+      "category": "authentication",
+      "priority": "high",
+      "depends_on": ["AUTH-P1"],
+      "steps_hint": [
+        "click user menu",
+        "click logout button",
+        "verify login page visible"
+      ],
+      "expected_outcome": "User is redirected to login page"
+    }
+  ],
+  "negative_scenarios": [
+    {
+      "id": "AUTH-N1",
+      "name": "Login fails with invalid email format",
+      "category": "authentication",
+      "priority": "high",
+      "test_type": "invalid_input",
+      "steps_hint": [
+        "navigate to login page",
+        "enter invalid email format",
+        "enter valid password",
+        "click login button",
+        "verify error message displayed"
+      ],
+      "invalid_input": {
+        "field": "email",
+        "value": "invalid-email",
+        "expected_error": "Invalid email format"
+      },
+      "expected_outcome": "Error message shown for invalid email"
+    },
+    {
+      "id": "AUTH-N2",
+      "name": "Login fails with wrong password",
+      "category": "authentication",
+      "priority": "high",
+      "test_type": "invalid_input",
+      "steps_hint": [
+        "navigate to login page",
+        "enter valid email",
+        "enter wrong password",
+        "click login button",
+        "verify error message displayed"
+      ],
+      "invalid_input": {
+        "field": "password",
+        "value": "wrongpassword123",
+        "expected_error": "Invalid credentials"
+      },
+      "expected_outcome": "Error message shown for invalid credentials"
+    },
+    {
+      "id": "AUTH-N3",
+      "name": "Login fails with empty email",
+      "category": "authentication",
+      "priority": "medium",
+      "test_type": "missing_field",
+      "steps_hint": [
+        "navigate to login page",
+        "leave email empty",
+        "enter valid password",
+        "click login button",
+        "verify validation error"
+      ],
+      "missing_field": "email",
+      "expected_outcome": "Validation error for required email field"
+    },
+    {
+      "id": "AUTH-N4",
+      "name": "Login fails with empty password",
+      "category": "authentication",
+      "priority": "medium",
+      "test_type": "missing_field",
+      "steps_hint": [
+        "navigate to login page",
+        "enter valid email",
+        "leave password empty",
+        "click login button",
+        "verify validation error"
+      ],
+      "missing_field": "password",
+      "expected_outcome": "Validation error for required password field"
+    },
+    {
+      "id": "AUTH-N5",
+      "name": "Login rate limited after multiple failures",
+      "category": "authentication",
+      "priority": "medium",
+      "test_type": "rate_limit",
+      "steps_hint": [
+        "navigate to login page",
+        "attempt login with wrong password 5 times",
+        "verify rate limit message"
+      ],
+      "expected_outcome": "Rate limit message displayed after 5 failed attempts"
+    }
+  ],
+  "fixtures": {
+    "valid_user": {
+      "email": "test@example.com",
+      "password": "TestPassword123!"
+    },
+    "invalid_emails": [
+      "invalid-email",
+      "missing@domain",
+      "@nodomain.com",
+      "spaces in@email.com"
+    ]
+  }
+}

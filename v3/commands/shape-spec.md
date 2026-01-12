@@ -93,13 +93,91 @@ PROMPT: "Explore codebase for implementing [CONCEPT]:
         - Reusable components"
 ```
 
-### 5. Technical Feasibility
+### 5. Technical Feasibility (v4.9)
+
+> **Explore-Based Analysis**: Use the Explore agent to perform deep feasibility analysis.
 
 ```
 READ: .agent-os/product/tech-stack.md
 ASSESS: Stack compatibility, new dependencies, complexity
-INCORPORATE: Explore agent results
+ANALYZE: Use Explore agent for thorough feasibility check
 ```
+
+**Feasibility Analysis Function:**
+```javascript
+const analyzeFeasibility = async (concept) => {
+  const analysis = await Task({
+    subagent_type: 'Explore',
+    prompt: `Analyze technical feasibility of: "${concept}"
+             
+             Check:
+             1. Do required APIs/libraries exist?
+             2. Are there blocking technical constraints?
+             3. What's the estimated complexity?
+             4. Are there similar implementations to reference?
+             5. What new dependencies would be needed?
+             6. Does this fit the existing architecture?
+             
+             Return JSON:
+             {
+               "feasible": boolean,
+               "confidence": "HIGH"|"MEDIUM"|"LOW",
+               "blockers": ["list of blocking issues"],
+               "enablers": ["existing code/patterns that help"],
+               "similar_implementations": ["reference implementations"],
+               "new_dependencies": ["required new packages"],
+               "estimated_complexity": "LOW"|"MEDIUM"|"HIGH",
+               "architecture_fit": "natural"|"moderate_effort"|"significant_changes",
+               "recommendation": "Proceed / Needs adjustment / Not recommended",
+               "reasoning": "1-2 sentence explanation"
+             }`
+  });
+  
+  return JSON.parse(analysis);
+};
+```
+
+**Feasibility Report:**
+```markdown
+## Feasibility Analysis
+
+**Status**: [Feasible / Needs Adjustment / Not Recommended]
+**Confidence**: [HIGH / MEDIUM / LOW]
+**Estimated Complexity**: [LOW / MEDIUM / HIGH]
+
+### Blockers
+- [Blocking issue if any]
+
+### Enablers
+- [Existing pattern that helps]
+- [Reference implementation found]
+
+### New Dependencies
+- [Package needed]
+
+### Architecture Fit
+[How well this fits existing architecture]
+
+### Recommendation
+[Final recommendation with reasoning]
+```
+
+**Integration with Workflow:**
+```
+AFTER tech-stack assessment:
+  feasibility = await analyzeFeasibility(concept)
+  
+  IF NOT feasibility.feasible:
+    WARN: "Concept may not be feasible"
+    DISPLAY: blockers and recommendation
+    ASK: "Continue shaping or adjust concept?"
+  
+  IF feasibility.confidence === "LOW":
+    INFORM: "Feasibility uncertain - consider prototyping first"
+  
+  STORE: feasibility results for shaped spec output
+```
+
 
 ### 6. Approach Exploration (USER DECISION POINT)
 
@@ -189,6 +267,39 @@ TEMPLATE:
 ## Technical Notes
 ## Risks
 ## Next Steps
+```
+
+### 8.5 Memory Layer Integration (v4.9.1)
+
+After shaped spec is created, evaluate logging opportunity:
+
+```
+EVALUATE logging opportunity:
+
+IF approach selection involved significant trade-offs:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Approach selection for [concept-name]"
+    - Context: What problem this solves
+    - Options: The approaches considered
+    - Decision: Which approach was chosen
+    - Rationale: Key trade-off that drove the decision
+    - Consequences: What this enables/limits
+
+IF feasibility analysis revealed architectural insights:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Architecture fit analysis for [concept-name]"
+    - What existing patterns enable this
+    - What constraints were discovered
+```
+
+**Example prompt to user:**
+```
+Approach "B: Event-driven" was selected over "A: Polling" due to scalability
+requirements. Would you like to log this decision for future reference?
+
+> /log-entry decision
 ```
 
 ### 9. Exit Planning Mode

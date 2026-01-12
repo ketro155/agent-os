@@ -1,0 +1,96 @@
+{
+  "template_name": "form-validation",
+  "version": "1.0.0",
+  "description": "Test scenarios for form validation patterns",
+  "positive_scenarios": [
+    {
+      "id": "FORM-P1",
+      "name": "Form submits with all valid fields",
+      "category": "form",
+      "priority": "high",
+      "steps_hint": [
+        "navigate to form page",
+        "fill all required fields with valid data",
+        "click submit button",
+        "verify success message"
+      ],
+      "expected_outcome": "Form submission succeeds with confirmation"
+    }
+  ],
+  "negative_scenarios": [
+    {
+      "id": "FORM-N1",
+      "name": "Form shows validation errors for empty required fields",
+      "category": "form",
+      "priority": "high",
+      "test_type": "missing_field",
+      "steps_hint": [
+        "navigate to form page",
+        "leave all fields empty",
+        "click submit button",
+        "verify all validation errors shown"
+      ],
+      "missing_fields": ["all_required"],
+      "expected_outcome": "Validation errors shown for all required fields"
+    },
+    {
+      "id": "FORM-N2",
+      "name": "Form validates email format",
+      "category": "form",
+      "priority": "medium",
+      "test_type": "invalid_input",
+      "invalid_input": {
+        "field": "email",
+        "values": ["invalid", "missing@", "@domain.com"],
+        "expected_error": "Please enter a valid email address"
+      },
+      "expected_outcome": "Email validation error displayed"
+    },
+    {
+      "id": "FORM-N3",
+      "name": "Form validates phone number format",
+      "category": "form",
+      "priority": "medium",
+      "test_type": "invalid_input",
+      "invalid_input": {
+        "field": "phone",
+        "values": ["abc", "123", "1-2-3-4-5"],
+        "expected_error": "Please enter a valid phone number"
+      },
+      "expected_outcome": "Phone validation error displayed"
+    },
+    {
+      "id": "FORM-N4",
+      "name": "Form validates minimum length requirements",
+      "category": "form",
+      "priority": "medium",
+      "test_type": "boundary",
+      "boundary_test": {
+        "field": "password",
+        "min_length": 8,
+        "test_value": "short",
+        "expected_error": "Password must be at least 8 characters"
+      },
+      "expected_outcome": "Minimum length validation error displayed"
+    },
+    {
+      "id": "FORM-N5",
+      "name": "Form validates maximum length requirements",
+      "category": "form",
+      "priority": "low",
+      "test_type": "boundary",
+      "boundary_test": {
+        "field": "username",
+        "max_length": 50,
+        "test_value": "a]repeat:60",
+        "expected_error": "Username must be 50 characters or less"
+      },
+      "expected_outcome": "Maximum length validation error displayed"
+    }
+  ],
+  "selector_patterns": {
+    "required_field_error": ".field-error, .validation-error, [role='alert']",
+    "form_error_summary": ".error-summary, .form-errors, [role='alert']",
+    "submit_button": "button[type='submit'], input[type='submit'], .submit-btn"
+  }
+}
