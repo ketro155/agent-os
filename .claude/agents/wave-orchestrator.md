@@ -108,9 +108,169 @@ IF current_branch != input.git_branch:
   ⛔ HALT: "Wrong branch. Expected ${input.git_branch}, got ${current_branch}"
 ```
 
-### Step 2: Execute Tasks
+### Step 2: Execute Tasks with Verification Loop (Ralph Pattern v4.9.0)
 
-#### Parallel Mode (default for independent tasks)
+> **Ralph Wiggum Pattern**: "Completion must be earned, not declared."
+>
+> Tasks cannot claim completion without verification. If verification fails,
+> the task is re-invoked with feedback until it passes or max attempts reached.
+>
+> @see https://awesomeclaude.ai/ralph-wiggum
+
+#### Configuration
+
+```javascript
+const MAX_VERIFICATION_ATTEMPTS = 3;  // Max re-invocations per task
+```
+
+#### executeWithVerification Function (Core Ralph Loop)
+
+```javascript
+/**
+ * Execute a task with Ralph Wiggum verification loop.
+ * Re-invokes the task with feedback if verification fails.
+ */
+async function executeWithVerification(task, predecessorArtifacts, specFolder) {
+  let attempt = 0;
+  let lastResult = null;
+  let verificationFeedback = null;
+
+  while (attempt < MAX_VERIFICATION_ATTEMPTS) {
+    attempt++;
+
+    // Build prompt with optional verification feedback
+    let prompt = `
+Execute task: ${JSON.stringify(task)}
+
+PREDECESSOR ARTIFACTS (VERIFIED):
+${JSON.stringify(predecessorArtifacts)}
+
+These exports/files are GUARANTEED to exist. Use them directly.
+
+Return structured result with artifacts.
+`;
+
+    // Add verification feedback if this is a retry
+    if (verificationFeedback) {
+      prompt += `
+
+═══════════════════════════════════════════════════════════════════════════
+VERIFICATION FEEDBACK (Attempt ${attempt}/${MAX_VERIFICATION_ATTEMPTS})
+═══════════════════════════════════════════════════════════════════════════
+
+${verificationFeedback.message}
+
+PREVIOUS CLAIMS THAT FAILED VERIFICATION:
+${JSON.stringify(verificationFeedback.previous_claims, null, 2)}
+
+IMPORTANT: Address ALL verification failures before returning "pass" status.
+The same verification will run again after you complete.
+═══════════════════════════════════════════════════════════════════════════
+`;
+    }
+
+    // Invoke phase2-implementation
+    lastResult = Task({
+      subagent_type: "phase2-implementation",
+      prompt: prompt
+    });
+
+    // If agent already returned blocked/fail, don't verify - pass through
+    if (lastResult.status === "blocked" || lastResult.status === "fail") {
+      return lastResult;
+    }
+
+    // VERIFICATION STEP (the Ralph insight)
+    const verification = verifyTaskCompletion(lastResult, {
+      tasksJsonPath: `${specFolder}/tasks.json`,
+      skipTests: false,
+      skipTypeScript: false
+    });
+
+    if (verification.passed) {
+      // Verification passed! Return with verified flag
+      return {
+        ...lastResult,
+        verified: true,
+        verification_attempts: attempt
+      };
+    }
+
+    // Verification failed - generate feedback for next iteration
+    console.warn(`[Wave] Task ${task.id} verification failed (attempt ${attempt}/${MAX_VERIFICATION_ATTEMPTS})`);
+    for (const failure of verification.failures) {
+      console.warn(`  - ${failure.category}: ${failure.claimed} - ${failure.reason}`);
+    }
+
+    // Generate feedback for re-invocation
+    verificationFeedback = generateVerificationFeedback(verification, lastResult, attempt);
+
+    // If max attempts reached, return with verification failure
+    if (attempt >= MAX_VERIFICATION_ATTEMPTS) {
+      return {
+        status: "blocked",
+        task_id: task.id,
+        blocker: `Verification failed after ${MAX_VERIFICATION_ATTEMPTS} attempts`,
+        verification_failures: verification.failures,
+        last_result: lastResult
+      };
+    }
+
+    console.log(`[Wave] Re-invoking task ${task.id} with verification feedback...`);
+  }
+
+  return lastResult;
+}
+
+/**
+ * Verify task completion using verification-loop.ts
+ */
+function verifyTaskCompletion(result, options) {
+  // Use the verification script
+  const resultJson = JSON.stringify(result);
+  const verifyCmd = `npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/verification-loop.ts" verify '${resultJson.replace(/'/g, "'\\''")}' "${options.tasksJsonPath || ''}"`;
+
+  try {
+    const output = Bash(verifyCmd);
+    return JSON.parse(output.stdout);
+  } catch (error) {
+    // If verification script fails, parse the output for verification result
+    try {
+      return JSON.parse(error.stdout || '{"passed": false, "failures": [{"category": "system", "claimed": "verification", "reason": "Verification script error"}]}');
+    } catch {
+      return {
+        passed: false,
+        failures: [{
+          category: 'system',
+          claimed: 'verification',
+          reason: `Verification script error: ${error.message}`
+        }]
+      };
+    }
+  }
+}
+
+/**
+ * Generate feedback for re-invocation
+ */
+function generateVerificationFeedback(verification, result, attempt) {
+  const feedbackCmd = `npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/verification-loop.ts" feedback '${JSON.stringify(verification).replace(/'/g, "'\\''")}' '${JSON.stringify(result).replace(/'/g, "'\\''")}' ${attempt}`;
+
+  try {
+    const output = Bash(feedbackCmd);
+    return JSON.parse(output.stdout);
+  } catch {
+    // Fallback to inline feedback generation
+    let message = `Verification failed. Issues found:\n`;
+    for (const failure of verification.failures) {
+      message += `- ${failure.category}: ${failure.reason}\n`;
+    }
+    return { attempt, message, failures: verification.failures, previous_claims: result };
+  }
+}
+```
+
+#### Parallel Mode (with Verification Loop)
 
 ```javascript
 // Spawn all task agents in parallel
@@ -131,29 +291,35 @@ for (task of input.tasks) {
       Return structured result with artifacts.
     `
   });
-  taskAgents.push({ task_id: task.id, agent_id: agentId });
+  taskAgents.push({ task_id: task.id, agent_id: agentId, task: task });
 }
 
 // Collect ALL results (blocking)
 const results = [];
 for (agent of taskAgents) {
-  const result = TaskOutput({ task_id: agent.agent_id, block: true });
+  let result = TaskOutput({ task_id: agent.agent_id, block: true });
+
+  // Apply Ralph verification loop to each result
+  if (result.status === "pass") {
+    result = await executeWithVerification(agent.task, input.predecessor_artifacts, input.spec_folder);
+  }
+
   results.push({ task_id: agent.task_id, result });
 }
 ```
 
-#### Sequential Mode (for tasks with intra-wave dependencies)
+#### Sequential Mode (with Verification Loop)
 
 ```javascript
 for (task of input.tasks) {
-  const result = Task({
-    subagent_type: "phase2-implementation",
-    prompt: `Execute task: ${JSON.stringify(task)}...`
-  });
+  // Use verification loop instead of direct invocation
+  const result = executeWithVerification(task, predecessor_artifacts, input.spec_folder);
   results.push({ task_id: task.id, result });
 
   // Update predecessor context for next task in wave
-  predecessor_artifacts = mergeArtifacts(predecessor_artifacts, result);
+  if (result.status === "pass" && result.verified) {
+    predecessor_artifacts = mergeArtifacts(predecessor_artifacts, result);
+  }
 }
 ```
 

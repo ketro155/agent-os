@@ -127,7 +127,7 @@ cleanup_legacy_v2_files() {
             if [ -f "./.claude/agents/${agent}" ]; then
                 rm -f "./.claude/agents/${agent}"
                 echo "  ✓ Removed agents/${agent}"
-                ((cleaned_count++))
+                cleaned_count=$((cleaned_count + 1))
             fi
         done
     fi
@@ -141,7 +141,7 @@ cleanup_legacy_v2_files() {
         if [ "$phase_count" -gt 0 ]; then
             rm -rf "./.claude/commands/phases"
             echo "  ✓ Removed commands/phases/ directory (${phase_count} files)"
-            ((cleaned_count++))
+            cleaned_count=$((cleaned_count + 1))
         fi
     fi
 
@@ -151,7 +151,7 @@ cleanup_legacy_v2_files() {
         if [ "$shared_count" -gt 0 ]; then
             rm -rf "./.agent-os/shared"
             echo "  ✓ Removed shared/ directory (${shared_count} files)"
-            ((cleaned_count++))
+            cleaned_count=$((cleaned_count + 1))
         fi
     fi
 
@@ -159,7 +159,7 @@ cleanup_legacy_v2_files() {
     if [ -f "./.claude/commands/index-codebase.md" ]; then
         rm -f "./.claude/commands/index-codebase.md"
         echo "  ✓ Removed commands/index-codebase.md"
-        ((cleaned_count++))
+        cleaned_count=$((cleaned_count + 1))
     fi
 
     if [ $cleaned_count -eq 0 ]; then
@@ -509,6 +509,10 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/scripts/wave-parallel.ts" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/wave-parallel.ts" "./.claude/scripts/wave-parallel.ts" "$OVERWRITE_CLAUDE" "scripts/wave-parallel.ts"
         fi
+        # v4.9.0 Ralph Wiggum verification loop
+        if [ -f "$BASE_AGENT_OS/v3/scripts/verification-loop.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/verification-loop.ts" "./.claude/scripts/verification-loop.ts" "$OVERWRITE_CLAUDE" "scripts/verification-loop.ts"
+        fi
 
         # Install memory/rules
         echo ""
@@ -516,7 +520,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
         fi
-        for rule in tdd-workflow git-conventions execute-tasks error-handling; do
+        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
             fi

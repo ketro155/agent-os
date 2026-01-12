@@ -1,11 +1,11 @@
-# Agent OS v4.8.0 - Core Memory
+# Agent OS v4.9.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 4.8.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 4.9.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)
@@ -34,6 +34,30 @@ Agent OS is a development framework providing structured AI-assisted workflows. 
 2. **TDD is mandatory**: RED → GREEN → REFACTOR
 3. **Validation gates cannot be skipped** (enforced by hooks)
 4. **Artifacts are auto-collected** after task completion
+5. **Verification loops** ensure completion claims are verified (v4.9.0)
+
+### Ralph Wiggum Verification Pattern (v4.9.0)
+
+> **"Completion must be earned, not declared."**
+
+Tasks cannot claim completion without passing verification. If verification fails,
+the task is re-invoked with feedback until it passes or max attempts (3) reached.
+
+```
+Traditional:  Agent says "done" → Trust → Proceed
+Ralph:        Agent says "done" → Verify → If fail → Re-invoke → Loop
+```
+
+**What gets verified:**
+- All claimed files exist
+- All claimed exports found in codebase
+- All claimed functions exist
+- Tests pass (`npm test`)
+- No TypeScript errors (`tsc --noEmit`)
+
+**Reference:** https://awesomeclaude.ai/ralph-wiggum
+
+See `rules/verification-loop.md` for implementation details.
 
 ## Key Conventions
 
@@ -172,3 +196,4 @@ node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json
 
 @import rules/tdd-workflow.md
 @import rules/git-conventions.md
+@import rules/verification-loop.md

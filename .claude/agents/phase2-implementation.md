@@ -43,6 +43,65 @@ You receive:
 
 ## Execution Protocol
 
+### Step 0: Handle Verification Feedback (Ralph Pattern v4.9.0)
+
+> **Ralph Wiggum Pattern**: If you're seeing verification feedback, your previous completion
+> claim failed verification. You MUST address the specific failures before returning "pass".
+>
+> @see https://awesomeclaude.ai/ralph-wiggum
+
+**Check for Verification Feedback in Prompt:**
+
+```javascript
+// Parse input for verification feedback
+const hasVerificationFeedback = input.includes("VERIFICATION FEEDBACK");
+
+if (hasVerificationFeedback) {
+  // Extract verification failures from the prompt
+  const feedbackSection = extractSection(input, "VERIFICATION FEEDBACK", "═══");
+
+  INFORM: `⚠️ Re-invocation with verification feedback detected.`;
+  INFORM: `Previous attempt failed verification. Addressing failures...`;
+
+  // Parse the specific failures
+  const previousClaims = JSON.parse(extractSection(input, "PREVIOUS CLAIMS", "IMPORTANT"));
+
+  // Create focused remediation plan
+  TodoWrite([
+    { content: "Address verification failures", status: "in_progress", activeForm: "Fixing verification failures" },
+    ...verification.failures.map(f => ({
+      content: `Fix: ${f.category} - ${f.claimed}`,
+      status: "pending",
+      activeForm: `Fixing ${f.category} issue`
+    }))
+  ]);
+
+  // DO NOT repeat all work - focus on fixing failures
+  // 1. If file missing → Create the file
+  // 2. If export missing → Add the export keyword
+  // 3. If function missing → Implement the function
+  // 4. If tests failing → Fix the tests
+  // 5. If TypeScript errors → Fix type errors
+
+  // After fixing, verification will run again automatically
+}
+```
+
+**Verification Failure Remediation Protocol:**
+
+| Failure Type | Remediation Action |
+|--------------|-------------------|
+| `file` | Create the missing file with expected content |
+| `export` | Add `export` keyword to the function/const |
+| `function` | Implement the missing function |
+| `test` | Fix failing tests - run and verify locally |
+| `typescript` | Fix TypeScript errors - run `tsc --noEmit` |
+| `subtask` | Mark subtask complete in tasks.json |
+
+**IMPORTANT**: After remediation, return the SAME structured result format. The orchestrator will verify again. If all failures are fixed, you'll pass verification.
+
+---
+
 ### Pre-Implementation Gate: Branch Validation (v3.0.2)
 
 > ⚠️ **DEFENSE-IN-DEPTH** - Verify branch before ANY implementation begins

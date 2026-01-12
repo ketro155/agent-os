@@ -269,12 +269,18 @@ install_v3_from_github() {
         "./.claude/CLAUDE.md" \
         "$overwrite" \
         "CLAUDE.md"
-    for rule in tdd-workflow git-conventions execute-tasks; do
+    for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop; do
         download_file "${BASE_URL}/v3/memory/rules/${rule}.md" \
             "./.claude/rules/${rule}.md" \
             "$overwrite" \
             "rules/${rule}.md"
     done
+
+    # Download verification-loop script (v4.9.0 Ralph Wiggum pattern)
+    download_file "${BASE_URL}/v3/scripts/verification-loop.ts" \
+        "./.claude/scripts/verification-loop.ts" \
+        "$overwrite" \
+        "scripts/verification-loop.ts"
 
     # Download v3 settings
     echo ""
