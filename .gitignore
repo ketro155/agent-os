@@ -33,36 +33,13 @@ node_modules/
 *.tmp
 *.temp
 
-# Agent-OS cache and state files (excludes progress/ which is version controlled)
-.agent-os/state/session-cache.json
-.agent-os/state/command-state.json
-.agent-os/state/recovery/
-.agent-os/state/.lock
-.agent-os/cache/
-.agent-os/debugging/
-.agent-os/**/*.cache
-.agent-os/**/*.tmp
+# ==============================================================================
+# LOCAL TEST INSTALLATION
+# ==============================================================================
+# The source templates live in v3/ (tracked in git).
+# These directories are created when running the installer locally for testing.
+# They should NEVER be tracked - they are duplicates of v3/ content.
+# ==============================================================================
 
-# Source repo test installations (these are installed in TARGET projects, not the source repo)
-# Exclude entire directories created by running installer locally for testing
 .agent-os/
 .claude/
-
-# Agent-OS state and tracking files
-
-# Session state (ephemeral)
-.agent-os/state/session.json
-.agent-os/state/session-cache.json
-.agent-os/state/command-state.json
-.agent-os/state/checkpoints/
-.agent-os/state/recovery/
-.agent-os/state/.lock
-.agent-os/cache/
-.agent-os/debugging/
-.agent-os/**/*.cache
-.agent-os/**/*.tmp
-
-# Progress tracking (session-specific, causes merge conflicts)
-.agent-os/progress/progress.json
-.agent-os/progress/progress.md
-.agent-os/progress/archive/
