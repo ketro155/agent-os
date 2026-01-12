@@ -857,6 +857,47 @@ IF "Cancel":
   IF confirmed: DELETE spec folder, END
 ```
 
+### Step 11.5: Memory Layer Integration (v4.9.1)
+
+After spec approval, evaluate logging opportunity:
+
+```
+EVALUATE logging opportunity:
+
+IF spec involves significant technical decisions:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Technical approach for [spec-name]"
+    - Context: What the spec aims to achieve
+    - Options: Approaches considered (from brainstorming)
+    - Decision: Chosen approach
+    - Rationale: Why this approach fits the architecture
+    - Consequences: Dependencies, trade-offs, future implications
+
+IF spec introduces new patterns or architectural changes:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "New pattern introduced: [pattern-name]"
+    - What the pattern is
+    - Where it will be used
+    - Why it was chosen over alternatives
+
+IF spec has notable external dependencies:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Dependency decisions for [spec-name]"
+    - New dependencies being introduced
+    - Why these were chosen
+```
+
+**Example prompt to user:**
+```
+This spec introduces a new authentication pattern using JWT with refresh tokens.
+Would you like to log this architectural decision for future reference?
+
+> /log-entry decision
+```
+
 <!-- END EMBEDDED CONTENT -->
 
 ---

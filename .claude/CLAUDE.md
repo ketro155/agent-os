@@ -107,7 +107,7 @@ These run automatically - you don't need to invoke them:
 | Hook | Trigger | Purpose |
 |------|---------|---------|
 | SessionStart | Session begins | Load progress context, set up state |
-| SessionEnd | Session ends | Log progress, create checkpoint |
+| SessionEnd | Session ends | Log progress, checkpoint, logging reminder (v4.9.1) |
 | **SubagentStart** | Agent spawned | Initialize agent context, track metrics (v4.8.0) |
 | **SubagentStop** | Agent completes | Capture transcript, log duration (v4.8.0) |
 | PostToolUse (Write/Edit) | File changes | Regenerate tasks.md from JSON |
@@ -139,6 +139,7 @@ Reusable patterns that hot-reload without restarting sessions:
 |-------|------------|---------|
 | artifact-verification | `/artifact-verification` | Verify predecessor task outputs exist |
 | context-summary | `/context-summary` | Compress context for agent handoff |
+| log-entry | `/log-entry` | Add entry to memory logs (v4.9.1) |
 | tdd-helper | `/tdd-helper` | Guide RED-GREEN-REFACTOR cycle |
 
 Skills live in `.claude/skills/[name]/SKILL.md` and are automatically discovered.
@@ -174,6 +175,46 @@ Cross-session memory is maintained in `.agent-os/progress/progress.json`:
 - Automatically updated by hooks
 - Contains: session events, task completions, blockers
 - **Local-only** (gitignored v3.8.0+) to prevent merge conflicts
+
+## Memory Layer (v4.9.1)
+
+Beyond event tracking, Agent OS maintains semantic memory in `.agent-os/logs/`:
+
+| Log | Purpose | When to Update |
+|-----|---------|----------------|
+| `decisions-log.md` | Architectural & product decisions with rationale | After significant choices |
+| `implementation-log.md` | Code changes with context and gotchas | After major implementations |
+| `insights.md` | Patterns, learnings, and future ideas | When discoveries emerge |
+
+**Key Principle**: `progress.json` tracks *what* happened; logs capture *why*.
+
+### Adding Log Entries
+
+Use the `/log-entry` skill:
+```
+/log-entry decision    # Record a decision with rationale
+/log-entry implementation  # Document significant changes
+/log-entry insight     # Capture a learning or pattern
+```
+
+### When to Log
+
+- **Do log**: Architectural decisions, non-obvious choices, gotchas discovered
+- **Don't log**: Routine tasks, obvious changes, things clear from git history
+
+### Integrated Workflows
+
+Logging prompts are built into these workflows:
+
+| Workflow | Trigger | Suggested Log |
+|----------|---------|---------------|
+| `/shape-spec` | After approach selected | Decision (trade-offs) |
+| `/create-spec` | After spec approved | Decision (technical approach) |
+| `/debug` | After root cause found | Insight (pattern) + Implementation (fix) |
+| Phase 2 | After complex task | Implementation (gotchas) |
+| Phase 3 | After backlog graduation | Decision (triage rationale) |
+| `/pr-review-cycle` | After review complete | Insight (conventions) + Decision (triage) |
+| Session End | If tasks completed | Reminder via hook |
 
 ## Quick Reference
 

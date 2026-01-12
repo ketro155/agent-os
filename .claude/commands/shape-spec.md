@@ -269,6 +269,39 @@ TEMPLATE:
 ## Next Steps
 ```
 
+### 8.5 Memory Layer Integration (v4.9.1)
+
+After shaped spec is created, evaluate logging opportunity:
+
+```
+EVALUATE logging opportunity:
+
+IF approach selection involved significant trade-offs:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Approach selection for [concept-name]"
+    - Context: What problem this solves
+    - Options: The approaches considered
+    - Decision: Which approach was chosen
+    - Rationale: Key trade-off that drove the decision
+    - Consequences: What this enables/limits
+
+IF feasibility analysis revealed architectural insights:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Architecture fit analysis for [concept-name]"
+    - What existing patterns enable this
+    - What constraints were discovered
+```
+
+**Example prompt to user:**
+```
+Approach "B: Event-driven" was selected over "A: Polling" due to scalability
+requirements. Would you like to log this decision for future reference?
+
+> /log-entry decision
+```
+
 ### 9. Exit Planning Mode
 
 ```

@@ -705,6 +705,42 @@ for file_path in predecessor_artifacts.files_created:
 // ONLY THEN write the import
 ```
 
+## Memory Layer Integration (v4.9.1)
+
+Before returning, evaluate if this task should trigger a log entry:
+
+```
+EVALUATE logging opportunity:
+
+IF task required non-obvious solutions:
+  SUGGEST: /log-entry implementation
+  CONTENT:
+    - Title: "Task [task_id]: [brief description]"
+    - Files changed
+    - What was implemented
+    - Gotchas: Non-obvious issues encountered
+    - Future work: What this enables
+
+IF verification re-invocation was needed (Ralph Wiggum pattern):
+  SUGGEST: /log-entry implementation
+  CONTENT:
+    - What verification failed
+    - Why it failed
+    - How it was fixed
+    - Pattern to avoid in future
+
+IF new patterns were established:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Pattern name and purpose
+    - When to use it
+    - Example from this implementation
+```
+
+**Note:** Phase 2 is focused on execution, so logging suggestions should be lightweight. Only prompt for truly non-obvious implementations.
+
+---
+
 ## Output Format
 
 Return this JSON when task is complete:

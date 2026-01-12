@@ -157,6 +157,49 @@ ELSE:
 
 ---
 
+### 5.6 Memory Layer Integration (v4.9.1)
+
+After backlog graduation, evaluate logging opportunities:
+
+```
+EVALUATE logging opportunity:
+
+IF backlog triage involved significant decisions:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Backlog triage for [spec-name]"
+    - Context: [count] future items discovered during implementation
+    - What was promoted to roadmap (and why)
+    - What was carried to next spec (and why)
+    - What was dropped (and why)
+
+IF spec implementation revealed architectural insights:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Implementation learnings from [spec-name]"
+    - Patterns that worked well
+    - Challenges encountered
+    - Recommendations for similar features
+
+IF spec required significant deviation from original plan:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Scope changes during [spec-name]"
+    - What changed from original spec
+    - Why changes were needed
+    - Impact on timeline/architecture
+```
+
+**Example prompt to orchestrator:**
+```
+This spec graduated 5 items to roadmap and deferred 2 to next spec.
+Would you like to log the triage rationale for future reference?
+
+> /log-entry decision
+```
+
+---
+
 ### 6. Create Recap Document
 
 Write to `.agent-os/recaps/YYYY-MM-DD-SPEC_NAME.md`:

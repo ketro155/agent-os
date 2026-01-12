@@ -362,6 +362,57 @@ Display completion summary:
 ╚══════════════════════════════════════════════════════════════╝
 ```
 
+### Step 8: Memory Layer Integration (v4.9.1)
+
+After review cycle completes, evaluate logging opportunities:
+
+```
+EVALUATE logging opportunity:
+
+IF review revealed code conventions not previously documented:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Conventions discovered from PR #[number] review"
+    - Pattern name and description
+    - Example code demonstrating the pattern
+    - When to apply this convention
+
+IF significant architectural feedback was addressed:
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "Architectural feedback addressed in PR #[number]"
+    - What the reviewer suggested
+    - How it was implemented
+    - Why this approach was taken
+
+IF future items were triaged (WAVE_TASK or ROADMAP_ITEM):
+  SUGGEST: /log-entry decision
+  CONTENT:
+    - Title: "PR review backlog triage for #[number]"
+    - Items promoted to tasks.json
+    - Items added to roadmap
+    - Rationale for categorization
+
+IF test coverage gaps were discovered and addressed:
+  SUGGEST: /log-entry insight
+  CONTENT:
+    - Title: "Test coverage patterns from PR #[number]"
+    - What gaps were found
+    - How they were addressed
+    - Test patterns to remember
+```
+
+**Example prompt:**
+```
+PR review revealed 2 new code conventions and added 3 items to roadmap.
+Would you like to log these discoveries for future reference?
+
+> /log-entry insight   (for conventions)
+> /log-entry decision  (for triage decisions)
+```
+
+---
+
 ## Automated Re-Review Trigger
 
 After addressing feedback and pushing, the implementation agent posts a PR comment with a review trigger:
@@ -473,6 +524,12 @@ IF reviewer re-request fails:
 ---
 
 ## Changelog
+
+### v4.9.1
+- Added Memory Layer integration (Step 8)
+- Prompts for `/log-entry insight` when conventions discovered
+- Prompts for `/log-entry decision` when backlog triaged
+- Cross-session memory for PR review learnings
 
 ### v4.9.0
 - Added finalizeReviewResponse with gh pr ready integration

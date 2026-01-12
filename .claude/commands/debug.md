@@ -402,6 +402,30 @@ TEMPLATE:
 ## Prevention
 ```
 
+### 10. Memory Layer Integration (v4.9.1)
+
+After fix verification, consider logging to cross-session memory:
+
+```
+EVALUATE logging opportunity:
+
+IF root_cause reveals pattern (recurring bug type, architectural weakness):
+  SUGGEST: /log-entry insight
+  CONTENT: Pattern name, when it occurs, prevention strategy
+
+IF fix was non-obvious (multiple approaches tried, unexpected solution):
+  SUGGEST: /log-entry implementation
+  CONTENT: What was tried, why it failed, why fix worked, gotchas
+
+IF this is 2nd+ occurrence of same bug type:
+  SUGGEST: /log-entry insight
+  CONTENT: "Recurring pattern - consider [linting rule/architectural change/test coverage]"
+```
+
+**Key Distinction:**
+- Debug report (`/debugging/*.md`) = **per-issue** documentation
+- Logs layer (`/logs/*.md`) = **cross-issue patterns** that inform future work
+
 ## Explore Agent Benefits for Debugging
 
 - **Broader context** than manual file reading
@@ -427,6 +451,12 @@ TEMPLATE:
 ---
 
 ## Changelog
+
+### v4.9.1
+- Added Memory Layer integration (step 10)
+- Prompts for `/log-entry insight` when patterns discovered
+- Prompts for `/log-entry implementation` when fix is non-obvious
+- Distinguishes per-issue docs from cross-issue patterns
 
 ### v4.9.0
 - Added generateReproScript function for automatic reproduction script creation
