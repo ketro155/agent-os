@@ -1,11 +1,11 @@
-# Agent OS v4.10.0 - Core Memory
+# Agent OS v4.11.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 4.10.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 4.11.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)
@@ -14,7 +14,8 @@ Agent OS is a development framework providing structured AI-assisted workflows. 
 - **Native subagents** with `disallowedTools` security (v4.8.0)
 - **Single-source tasks** (JSON primary, MD auto-generated)
 - **Wildcard permissions** for simplified configuration (v4.8.0)
-- **Context offloading** for token efficiency (v4.10.0) ✨ NEW
+- **Context offloading** for token efficiency (v4.10.0)
+- **E2E test integration** across spec/task workflow (v4.11.0) ✨ NEW
 
 ## Context Offloading (v4.10.0)
 
@@ -65,6 +66,64 @@ AGENT_OS_FAILURE_RETENTION=48  # Hours to keep failure outputs
 AGENT_OS_SCRATCH_MAX_MB=250    # LRU eviction threshold
 ```
 
+## E2E Test Integration (v4.11.0)
+
+> **"Unit tests verify code works. E2E tests verify users can work."**
+
+E2E tests are now integrated into the spec/task execution workflow at three strategic points:
+
+### Integration Points
+
+| Point | When | What Happens | Blocking? |
+|-------|------|--------------|-----------|
+| `/create-spec` Step 11.75 | After spec approval | Generate E2E test plan | No |
+| `wave-lifecycle-agent` Step 3.5 | Final wave, before merge | Run smoke E2E tests | Yes |
+| `phase3-delivery` Step 3.5 | After build passes | Run full E2E plan | Yes |
+
+### Workflow
+
+```
+/create-spec → E2E plan generated (5-50 scenarios)
+     ↓
+/execute-tasks → TDD implementation (unit/integration tests)
+     ↓
+wave-lifecycle → Smoke E2E (5-10 scenarios, final wave only)
+     ↓
+phase3-delivery → Full E2E validation (all scenarios)
+     ↓
+PR created with E2E results
+```
+
+### E2E Failure Behavior
+
+E2E failures are **hard-blocking** (same as unit tests):
+- Phase 3 E2E failures prevent PR creation
+- Smoke E2E failures in wave-lifecycle prevent merge
+- Failures include screenshots and remediation suggestions
+
+### Skipping E2E
+
+| Flag | Scope | Usage |
+|------|-------|-------|
+| `--no-e2e-plan` | create-spec | Don't generate E2E plan |
+| `--skip-e2e` | execute-tasks | Skip E2E in Phase 3 |
+
+### Directory Structure
+
+```
+.agent-os/
+├── test-plans/           # E2E test plans (per spec)
+│   └── ${SPEC_NAME}/
+│       ├── test-plan.json
+│       └── fixtures/
+├── test-results/         # E2E execution results
+│   └── ${SPEC_NAME}/
+│       ├── results.json
+│       └── evidence/     # Screenshots, GIFs
+```
+
+See `rules/e2e-integration.md` for full documentation.
+
 ## Core Workflows
 
 ### Feature Development Pipeline
@@ -85,6 +144,7 @@ AGENT_OS_SCRATCH_MAX_MB=250    # LRU eviction threshold
 3. **Validation gates cannot be skipped** (enforced by hooks)
 4. **Artifacts are auto-collected** after task completion
 5. **Verification loops** ensure completion claims are verified (v4.9.0)
+6. **E2E validation** ensures features work in browser (v4.11.0)
 
 ### Ralph Wiggum Verification Pattern (v4.9.0)
 
@@ -329,3 +389,4 @@ node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json
 @import rules/tdd-workflow.md
 @import rules/git-conventions.md
 @import rules/verification-loop.md
+@import rules/e2e-integration.md

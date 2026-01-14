@@ -56,6 +56,12 @@ The orchestrator spawns one wave-lifecycle-agent per wave to achieve:
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
+│  SMOKE_E2E (v4.11.0): Final wave only - smoke E2E tests         │
+│                       Quick validation (5-10 scenarios)         │
+│                       If fail → EXIT with failure status        │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
 │  READY_TO_MERGE: Merge PR to target branch                      │
 │                  Final wave → Require user confirmation         │
 │                  Wave PR → Auto-merge to feature branch         │
@@ -300,6 +306,92 @@ Process PR review feedback for the current branch.
 }
 ```
 
+### Step 3.5: Smoke E2E Validation (v4.11.0 - Final Wave Only)
+
+> **Pre-Merge Validation**: Run smoke E2E tests before merging final wave to main.
+> See `rules/e2e-integration.md` for full documentation.
+
+```javascript
+// Only run on final wave
+if (is_final_wave) {
+  const TEST_PLAN = `.agent-os/test-plans/${spec_name}/test-plan.json`
+
+  // Check if test plan exists
+  const plan_exists = bash `test -f "${TEST_PLAN}" && echo "exists" || echo "not_found"`
+
+  if (plan_exists.includes("exists")) {
+    INFORM: `Running smoke E2E tests before final merge...`
+
+    // Run smoke tests only (quick validation)
+    const e2e_result = bash `
+      # Invoke run-tests with smoke scope
+      # This should be a quick 5-10 scenario validation
+    `
+
+    // For now, spawn a general-purpose agent to run the tests
+    const smoke_result = Task({
+      subagent_type: "general-purpose",
+      prompt: `You are a test executor. Run smoke E2E tests for spec "${spec_name}".
+
+## Your Task
+Run smoke-level E2E tests before final merge to main.
+
+## Instructions
+1. Check if test plan exists:
+   \`\`\`bash
+   ls -la .agent-os/test-plans/${spec_name}/
+   \`\`\`
+
+2. If exists, invoke the /run-tests skill with smoke scope:
+   > /run-tests .agent-os/test-plans/${spec_name}/ --scope=smoke
+
+3. Return ONLY this JSON summary:
+
+\`\`\`json
+{
+  "status": "pass" | "fail" | "skipped",
+  "total_scenarios": <number>,
+  "passed": <number>,
+  "failed": <number>,
+  "skip_reason": "<reason if skipped>",
+  "failures": ["<scenario name>", ...]
+}
+\`\`\`
+
+## Important
+- Smoke scope means 5-10 critical path scenarios only
+- This is a quick validation, not full regression
+- Failures should block the merge
+`
+    })
+
+    const smoke = JSON.parse(smoke_result)
+
+    if (smoke.status === "fail") {
+      WARN: `Smoke E2E failed: ${smoke.failed}/${smoke.total_scenarios} scenarios failed`
+
+      RETURN: {
+        status: "failed",
+        wave: wave_number,
+        phase: "SMOKE_E2E",
+        pr_number: pr_number,
+        error: `Smoke E2E validation failed. Failures: ${smoke.failures.join(', ')}`,
+        e2e_summary: smoke
+      }
+    }
+
+    INFORM: `Smoke E2E passed: ${smoke.passed}/${smoke.total_scenarios} scenarios`
+
+  } else {
+    INFORM: `No E2E test plan found - skipping smoke validation`
+    // Log the skip event
+    bash `echo '{"event":"e2e_skipped","reason":"no_test_plan","spec":"${spec_name}","wave":${wave_number}}' >> .agent-os/logs/e2e-events.jsonl`
+  }
+}
+```
+
+---
+
 ### Step 4: Merge PR (READY_TO_MERGE Phase)
 
 :merge_phase
@@ -442,5 +534,62 @@ This is well within safe limits while preserving all wave-related context.
 | PR creation fails | Return failed with phase=EXECUTE |
 | Review timeout (30 min) | Return timeout, orchestrator handles |
 | Review processing fails | Return failed with phase=REVIEW_PROCESSING |
+| Smoke E2E fails (v4.11.0) | Return failed with phase=SMOKE_E2E |
 | Merge conflict | Return failed with phase=READY_TO_MERGE |
 | User cancels merge | Return waiting, orchestrator handles |
+
+---
+
+## Error Handling
+
+This agent uses standardized error handling from `rules/error-handling.md`:
+
+```javascript
+// Error handling for wave lifecycle
+const handleWaveError = (err, phase) => {
+  return handleError({
+    code: mapErrorToCode(err),
+    agent: 'wave-lifecycle-agent',
+    operation: `wave_${phase}`,
+    details: { wave_number: waveNumber, phase: phase }
+  });
+};
+
+// Example: Task execution failure
+if (taskResult.status === 'fail') {
+  return handleError({
+    code: 'E101',
+    agent: 'wave-lifecycle-agent',
+    operation: 'task_execution',
+    details: { task_id: taskId, error: taskResult.error }
+  });
+}
+
+// Example: PR review timeout
+if (reviewResult.status === 'timeout') {
+  return handleError({
+    code: 'E108',
+    agent: 'wave-lifecycle-agent',
+    operation: 'review_polling',
+    details: { pr_number: prNumber, timeout_ms: timeoutMs }
+  });
+}
+```
+
+---
+
+## Changelog
+
+### v4.11.0 (2026-01-14)
+- Added Step 3.5 Smoke E2E Validation (final wave only)
+- Quick validation before merge to main (5-10 scenarios)
+- E2E failures block merge (hard-blocking)
+- Updated flow diagram to show SMOKE_E2E phase
+
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+- Added parallel task execution support
+
+### v4.6.0
+- Initial wave lifecycle agent
+- Context isolation between waves

@@ -13,9 +13,9 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
     AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.10.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="4.10.0"
+    AGENT_OS_VERSION="4.11.0"
 fi
-AGENT_OS_RELEASE_DATE="2026-01-12"
+AGENT_OS_RELEASE_DATE="2026-01-14"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -538,7 +538,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
         fi
-        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop; do
+        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
             fi
@@ -887,18 +887,20 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-echo "v4.10 Architecture Features:"
+echo "v4.11 Architecture Features:"
+echo "  • E2E test integration across spec/task workflow"
+echo "  • Automatic E2E plan generation in /create-spec"
+echo "  • Hard-blocking E2E gates in Phase 3 and wave-lifecycle"
+echo "  • Smoke E2E validation before final merge to main"
+echo ""
+echo "v4.10 Features (included):"
 echo "  • Context offloading (FewWord-inspired, 82% token reduction)"
-echo "  • Tiered output strategy (<512B inline, 512B-4KB pointer, >4KB preview)"
-echo "  • Secret redaction (AWS, GitHub, OpenAI, Anthropic keys auto-redacted)"
-echo "  • Smart retention (failures 48h, successes 24h for debugging)"
-echo "  • LRU eviction (250MB scratch limit with auto-cleanup)"
+echo "  • Tiered output strategy, secret redaction, smart retention"
 echo "  • Context skills (/context-read, /context-search, /context-stats)"
 echo ""
 echo "v4.9 Features (included):"
 echo "  • Native hooks, AST verification, parallel waves"
 echo "  • Three-tier error handling, Ralph Wiggum verification loop"
-echo "  • Single-source JSON tasks, memory hierarchy"
 echo ""
 
 echo "Next steps:"

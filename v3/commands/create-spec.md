@@ -48,7 +48,8 @@ const todos = [
   { content: "Generate database schema if needed", status: "pending", activeForm: "Generating database schema if needed" },
   { content: "Create API specification if needed", status: "pending", activeForm: "Creating API specification if needed" },
   { content: "Create content mapping if needed", status: "pending", activeForm: "Creating content mapping if needed" },
-  { content: "Request user review and approval", status: "pending", activeForm: "Requesting user review and approval" }
+  { content: "Request user review and approval", status: "pending", activeForm: "Requesting user review and approval" },
+  { content: "Generate E2E test plan (v4.11.0)", status: "pending", activeForm: "Generating E2E test plan" }
 ];
 // Update status to "in_progress" when starting each task
 // Mark as "completed" immediately after finishing
@@ -896,6 +897,87 @@ This spec introduces a new authentication pattern using JWT with refresh tokens.
 Would you like to log this architectural decision for future reference?
 
 > /log-entry decision
+```
+
+### Step 11.75: E2E Test Plan Generation (v4.11.0)
+
+> **Shift-Left Testing**: Generate E2E test plans when requirements are freshest.
+> See `rules/e2e-integration.md` for full documentation.
+
+**Default Behavior**: Generate E2E test plan automatically (opt-out available via `--no-e2e-plan` flag).
+
+**Decision Flow:**
+
+```
+IF --no-e2e-plan flag provided:
+  SKIP E2E plan generation
+  LOG: { "event": "e2e_plan_skipped", "reason": "--no-e2e-plan flag", "spec": "${SPEC_NAME}" }
+ELSE:
+  PROCEED with scope selection
+```
+
+**Scope Selection (AskUserQuestion):**
+
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What E2E test coverage level do you want for this spec?",
+    header: "E2E Scope",
+    multiSelect: false,
+    options: [
+      {
+        label: "Smoke (Recommended)",
+        description: "5-10 critical path scenarios - fast validation"
+      },
+      {
+        label: "Regression",
+        description: "20-50 comprehensive scenarios - thorough coverage"
+      },
+      {
+        label: "Full",
+        description: "50+ exhaustive scenarios - complete coverage"
+      },
+      {
+        label: "Skip",
+        description: "No E2E tests - backend-only or utility spec"
+      }
+    ]
+  }]
+})
+```
+
+**Execution Based on Selection:**
+
+```
+IF "Smoke" OR "Regression" OR "Full":
+  INVOKE: /create-test-plan target=".agent-os/specs/${SPEC_FOLDER}/" scope=[selection]
+  WAIT: For test plan generation to complete
+  OUTPUT: Test plan location and scenario count
+
+IF "Skip":
+  LOG: { "event": "e2e_plan_skipped", "reason": "user_opted_out", "spec": "${SPEC_NAME}" }
+  OUTPUT: "E2E test plan skipped. Tests can be added later with /create-test-plan."
+```
+
+**Test Plan Output:**
+
+```markdown
+E2E test plan created:
+- Location: .agent-os/test-plans/${SPEC_NAME}/test-plan.json
+- Scope: [selected scope]
+- Scenarios: [count]
+
+The test plan will be automatically executed in Phase 3 before PR creation.
+```
+
+**Integration with Phase 3:**
+
+```
+Phase 3 Step 3.5 will:
+1. Detect test plan at: .agent-os/test-plans/${SPEC_NAME}/
+2. Execute all scenarios via /run-tests
+3. Block PR creation on E2E failures (hard-blocking)
+4. Include E2E results in PR description
 ```
 
 <!-- END EMBEDDED CONTENT -->
