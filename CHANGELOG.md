@@ -6,7 +6,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased] - v4.9.0 Architecture Refinement
+## [Unreleased]
+
+### Added
+- Centralized environment variable documentation (`.claude/ENV-VARS.md`)
+- Consolidated verification utilities in `verification-loop.ts`
+- E2E utilities module (`e2e-utils.ts`) with `canAutoFix()` function
+- Test pattern discovery utility (`test-patterns.ts`)
+- Subtask execution mode decision tree in phase2-implementation
+
+### Changed
+- Wave-orchestrator now references centralized verification module
+- Updated phase3-delivery to use e2e-utils for auto-fix analysis
+- Standardized tool restriction approach documentation
+
+### Fixed
+- Clarified subtask execution mode selection with decision tree
+- Documented backlog graduation criteria explicitly
+
+---
+
+## [4.11.0] - 2026-01-14 - E2E Test Integration
+
+### Added
+- **E2E Test Integration** at three strategic points: create-spec, wave-lifecycle, phase3-delivery
+- Hard-blocking E2E failures (same treatment as unit tests)
+- Auto-fix for E2E failures < 3 with high confidence patterns
+- E2E test plan generation during spec creation
+- Smoke E2E tests in wave-lifecycle final wave
+- Full E2E validation gate in phase3-delivery
+- `--skip-e2e` flag for backend-only changes
+- `--no-e2e-plan` flag for create-spec
+
+### Changed
+- PR descriptions now include E2E test results summary
+- Phase 3 delivery includes E2E validation step
+
+---
+
+## [4.10.0] - 2026-01-12 - Context Offloading
+
+### Added
+- **FewWord-inspired context offloading** for token efficiency
+- Tiered offloading: inline (< 512B), compact pointer (512B-4KB), preview (> 4KB)
+- Secret redaction in offloaded outputs (AWS keys, GitHub tokens, API keys)
+- Context management skills: `/context-read`, `/context-search`, `/context-stats`
+- LATEST symlinks for quick access to recent outputs
+- Session statistics tracking (`session_stats.json`)
+- LRU eviction at 250MB scratch limit
+
+### Changed
+- SubagentStop hook now offloads large outputs automatically
+- Environment variables for offloading configuration (AGENT_OS_*)
+
+---
+
+## [4.9.1] - 2026-01-11 - Memory Layer Integration
+
+### Added
+- **Memory Layer Logging** prompts integrated across workflows
+- `/log-entry` skill for adding entries to semantic memory
+- Session end hook reminder for logging opportunities
+- Logging prompts in: shape-spec, create-spec, debug, phase2, phase3, pr-review-cycle
+
+### Changed
+- Semantic logs now in `.agent-os/logs/` (decisions-log.md, implementation-log.md, insights.md)
+
+---
+
+## [4.9.0] - 2026-01-10 - Architecture Refinement
 
 ### Added
 

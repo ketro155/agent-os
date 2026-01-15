@@ -1,8 +1,24 @@
-# Agent OS v3 Architecture (Current Release: v4.7.1)
+# Agent OS v3 Architecture
 
-## Overview
+> **DEPRECATION NOTICE (v4.11.0)**
+>
+> This directory is **archived** and no longer the active codebase.
+>
+> | Directory | Status | Use For |
+> |-----------|--------|---------|
+> | `.claude/` | **Active** | Current v4.11.0 code |
+> | `v3/` | **Archived** | Reference only |
+>
+> **What changed**: Starting with v4.0, Agent OS moved from `v3/` template installation to direct `.claude/` usage.
+> The v3 directory is preserved for historical reference but should not be modified.
+>
+> For current documentation, see `.claude/CLAUDE.md`.
 
-This directory contains the **v3 architecture** source templates that get installed to target projects. The "v3" refers to the architectural approach (native hooks, single-source JSON), while the current release version is **v4.7.1**.
+---
+
+## Historical Overview
+
+This directory contains the **v3 architecture** source templates that were used for installation to target projects. The "v3" refers to the architectural approach (native hooks, single-source JSON).
 
 Agent OS v3 architecture is a major refactor that leverages Claude Code's native capabilities to simplify the framework while improving reliability.
 

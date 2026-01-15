@@ -180,18 +180,17 @@ See `rules/verification-loop.md` for implementation details.
 
 ### Agent Security (v4.8.0)
 
-Classification agents use `disallowedTools` for security hardening:
+Agent tool access uses **two complementary mechanisms**:
 
-```yaml
-# Read-only agents cannot modify files
-disallowedTools:
-  - Write
-  - Edit
-  - Bash
-  - NotebookEdit
-```
+| Mechanism | Type | When to Use |
+|-----------|------|-------------|
+| `tools:` | Positive list | **Always** - primary restriction |
+| `disallowedTools:` | Negative list | Security-critical agents only (defense-in-depth) |
 
-Agents with restricted tools: `comment-classifier`, `future-classifier`, `roadmap-integrator`
+**Defense-in-depth agents** (read-only, process untrusted input):
+- `comment-classifier`, `future-classifier`, `roadmap-integrator`
+
+See `rules/agent-tool-restrictions.md` for full decision tree and examples.
 
 ### Git Workflow
 
@@ -390,3 +389,4 @@ node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json
 @import rules/git-conventions.md
 @import rules/verification-loop.md
 @import rules/e2e-integration.md
+@import rules/agent-tool-restrictions.md

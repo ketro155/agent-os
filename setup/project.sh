@@ -531,6 +531,13 @@ if [ "$CLAUDE_CODE" = true ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/redact-secrets.sh" "./.claude/scripts/redact-secrets.sh" "$OVERWRITE_CLAUDE" "scripts/redact-secrets.sh"
             chmod +x "./.claude/scripts/redact-secrets.sh"
         fi
+        # v4.11.0 E2E utilities and test pattern discovery
+        if [ -f "$BASE_AGENT_OS/v3/scripts/e2e-utils.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/e2e-utils.ts" "./.claude/scripts/e2e-utils.ts" "$OVERWRITE_CLAUDE" "scripts/e2e-utils.ts"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/test-patterns.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/test-patterns.ts" "./.claude/scripts/test-patterns.ts" "$OVERWRITE_CLAUDE" "scripts/test-patterns.ts"
+        fi
 
         # Install memory/rules
         echo ""
@@ -538,7 +545,11 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
         fi
-        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration; do
+        # v4.11.0: Environment variables documentation
+        if [ -f "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" "./.claude/ENV-VARS.md" "$OVERWRITE_CLAUDE" "ENV-VARS.md"
+        fi
+        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
             fi
