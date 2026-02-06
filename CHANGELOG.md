@@ -26,6 +26,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.0.0] - 2026-02-06 - Dependency-First Tasks (Phase A)
+
+### Added
+- **tasks.json v4.0 format** — `depends_on` is the single source of truth for task dependencies, replacing triple duplication across `parallelization.blocked_by`, `execution_strategy.dependency_graph`, and wave ordering
+- **Explicit infrastructure tasks** — Branch setup (`W{N}-BRANCH`), verification (`W{N}-VERIFY`), PR creation (`W{N}-PR`), merge (`W{N}-MERGE`), E2E testing (`E2E`), and final delivery (`DELIVER`) are now visible tasks in the graph with proper dependencies
+- **`task_type` field** — Classifies tasks as `implementation`, `git-operation`, `verification`, `e2e-testing`, or `discovery` for role-based assignment
+- **`computed` section** — Waves derived automatically via Kahn's algorithm topological sort from `depends_on` fields
+- **`compute-waves.ts`** (`.claude/scripts/`) — Standalone topological sort script with inline tests, computes wave depth from dependency graph
+- **`migrate-v3-to-v4.js`** (`.claude/scripts/`) — Migration script converting v3.0 tasks.json to v4.0 in-place with automatic backup
+- **tasks-v4.json schema** (`.agent-os/schemas/`) — Full JSON Schema for v4.0 format validation
+- **`AGENT_OS_TASKS_V4` feature flag** — Controls v4.0 format generation (default: `false`)
+- **Steps 8.7 and 8.8 in create-spec** — Implementation Dependencies table and Complexity & Role Hints for better task generation input
+
+### Changed
+- **`json-to-markdown.js`** — Version-routed renderer: v3.0 tasks use existing renderer, v4.0 tasks get dependency graph visualization, task type icons (`[G]`, `[V]`, `[E]`, `[D]`), separate infrastructure/implementation sections
+- **`wave-parallel.ts`** — Accepts both v3.0 (`parallelization.blocked_by`) and v4.0 (`depends_on`) formats via version detection
+- **`task-operations.sh`** — `status` and `update` commands detect version and use format-appropriate jq queries; v4.0 summary splits implementation vs infrastructure counts
+- **`create-tasks.md`** Step 1.5 — Replaced "Analyze Parallel Execution Opportunities" with "Dependency Analysis & Infrastructure Generation" (behind feature flag)
+- **`create-tasks.md`** Step 2 — Readiness check shows dependency graph visualization for v4.0, legacy wave summary for v3.0
+- **`settings.json`** — Version bumped to 5.0.0, added `AGENT_OS_TASKS_V4` env var
+- **`CLAUDE.md`** — Documented v4.0 task format, feature flag, migration path
+
+### Backward Compatibility
+- All scripts support both v3.0 and v4.0 via version detection
+- `AGENT_OS_TASKS_V4=false` (default) preserves existing v3.0 behavior
+- Migration script backs up originals as `tasks.v3-backup.json`
+- No changes to execution agents — format migration is data-layer only (Phase A)
+
+---
+
 ## [4.12.0] - 2026-02-06 - Quick Wins: Native Feature Adoption
 
 ### Added
