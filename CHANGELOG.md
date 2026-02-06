@@ -26,6 +26,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.12.0] - 2026-02-06 - Quick Wins: Native Feature Adoption
+
+### Added
+- **Setup hook** (`.claude/hooks/setup.sh`): One-time project initialization triggered by `claude --init` / `--maintenance`. Creates `.agent-os/` directory structure, initializes `version.json`, `progress.json`, and `session_stats.json` idempotently.
+- **TaskCompleted hook** (`.claude/hooks/task-completed.sh`): Fires when `TaskUpdate` sets status to `"completed"`. Appends `task_completed` entries to `progress.json` and increments `tasks_completed` counter in `session_stats.json`.
+- **`Task(agent_type)` spawn restrictions**: Six orchestrators now declare exactly which agent types they can spawn via `Task(types)` syntax, enforcing principle of least privilege for agent spawning.
+- **`memory: project` frontmatter**: Five learning-capable agents (`phase2-implementation`, `pr-review-discovery`, `test-executor`, `test-discovery`, `wave-lifecycle-agent`) now persist cross-session knowledge scoped to the project.
+
+### Changed
+- `session-start.sh`: Simplified `.agent-os` existence check to lightweight hint suggesting `claude --init` (full init moved to Setup hook)
+- `settings.json`: Bumped version to 4.12.0, added Setup and TaskCompleted hook entries
+- `agent-tool-restrictions.md`: Expanded from two to three complementary mechanisms, added `Task(types)` documentation
+- `CLAUDE.md`: Bumped to v4.12.0, added new feature bullets, expanded hooks table, expanded agent security section, added Agent Memory section
+
+---
+
 ## [4.11.0] - 2026-01-14 - E2E Test Integration
 
 ### Added
