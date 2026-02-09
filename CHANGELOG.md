@@ -26,6 +26,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.0.1] - 2026-02-09 - Hardening: Wrong-Approach Prevention, E2E Resilience, Context Management
+
+### Added
+- **`constraints` field in tasks v4.0 schema** — `do_not`, `prefer`, `require` arrays prevent wrong implementation approaches before code is written
+- **Constraint validation gate** in phase2-implementation (Step 0.1) — enforces constraints at task start with verification at completion
+- **E2E error codes (E300-E304)** in ERROR_CATALOG — E2E_SCENARIO_FAILED, E2E_TIMEOUT, E2E_ELEMENT_NOT_FOUND, E2E_BROWSER_CRASH, E2E_NETWORK_ERROR now resolve correctly
+- **Auth health check** in test-executor (Step -1) — pre-flight check catches server-down/auth-service-down before running any fixtures
+- **E2E batch checkpointing** (`rules/e2e-batch-checkpoint.md`) — checkpoint after each scenario enables resume on interruption with 2-hour staleness threshold
+- **Session workload estimator** in session-start hook — estimates context budget at session start, classifies as LOW/MEDIUM/HIGH
+- **Context pressure detection** in subagent-stop hook — surfaces `[Context Pressure: HIGH/MODERATE]` warnings when bytes offloaded exceed thresholds
+- **Automatic context pressure response** in phase2-implementation — MUST invoke `/context-summary` at HIGH pressure, SHOULD at MODERATE with >2 subtasks remaining
+- **`/test-guardian` skill** (`skills/test-guardian/SKILL.md`) — classifies test failures as FLAKY/BROKEN/NEW based on history, recommends retry vs fix vs quarantine
+
+### Changed
+- **test-executor `findWithRetry`** — replaced fixed 1s delay with exponential backoff (1s → 2s → 4s) using structured E302 error codes
+- **wave-lifecycle-agent review polling** — refactored from blocking 30-minute loop to non-blocking single-check + return `"awaiting_review"` pattern, freeing agent context slots
+- **execute-spec-orchestrator** — handles `awaiting_review` status with 2-minute delay before re-invoking wave agent
+- **json-to-markdown.js** — renders `constraints` field as Do Not / Prefer / Require bullet lists in v4.0 task output
+- **verification-loop.md** — added `Constraints Met` to verification criteria table
+- **phase1-discovery** — surfaces constraint summaries during task discovery
+- **create-tasks.md** — guidance to populate `constraints` from spec + standards during task generation
+
+### Performance Impact
+- Auth health check prevents 4+ cascading E2E scenario failures per session
+- Non-blocking review saves ~30 minutes of blocked agent context per PR review
+- Session workload estimator provides early warning for context overflow
+- Batch checkpointing eliminates re-running completed scenarios on interruption
+
+---
+
 ## [5.0.0] - 2026-02-06 - Dependency-First Tasks (Phase A)
 
 ### Added
