@@ -26,6 +26,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.1.0] - 2026-02-09 - Native Teams Integration
+
+### Added
+- **Wave-level Teams coordination** — parallel tasks within a wave coordinate as teammates via `SendMessage`, sharing artifact discoveries in real-time to prevent duplicate implementations
+- **`AGENT_OS_TEAMS` feature flag** — enables Teams mode (default: `false`); both modes produce identical outputs
+- **`review-watcher` agent** — lightweight Haiku-model teammate that polls for PR reviews every 60 seconds and notifies team lead via message, replacing the sleep-and-re-invoke pattern
+- **Artifact broadcast protocol** — phase2-implementation teammates notify siblings and team lead when creating new exports/files, enabling real-time artifact sharing
+- **Incremental verification pre-check** — wave-orchestrator validates artifacts as teammates produce them, sends fix requests before full Ralph verification runs
+- **`teammate_restrictions` convention** — documents which agent types can be spawned as teammates, mirroring `Task(type)` pattern for team spawning
+- **`rules/teams-integration.md`** — comprehensive documentation: feature flag, artifact protocol schema, team lifecycle, dual-mode routing, Teams vs Task() decision tree
+
+### Changed
+- **wave-orchestrator** — dual-mode execution: TeamCreate flow (`AGENT_OS_TEAMS=true`) or legacy `run_in_background` + `TaskOutput` (`false`); Teams tools added to frontmatter
+- **phase2-implementation** — teammate mode: claims tasks from shared task list, broadcasts artifacts via `SendMessage`; Teams tools added to frontmatter
+- **execute-spec-orchestrator** — spawns `review-watcher` teammate instead of sleep-and-re-invoke for review wait (`AGENT_OS_TEAMS=true`); Teams tools added to frontmatter
+- **agent-tool-restrictions.md** — expanded to four complementary mechanisms; added `teammate_restrictions` convention, review-watcher agent, teammate restrictions table, validation checklist update
+- **CLAUDE.md** — bumped to v5.1.0; added Teams Integration section, Teams feature bullets, `AGENT_OS_TEAMS` env var, `@import rules/teams-integration.md`
+
+---
+
 ## [5.0.1] - 2026-02-09 - Hardening: Wrong-Approach Prevention, E2E Resilience, Context Management
 
 ### Added
