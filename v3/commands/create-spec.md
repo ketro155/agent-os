@@ -557,6 +557,77 @@ AFTER creating technical-spec.md:
     CONTINUE with spec creation
 ```
 
+### Step 8.7: Implementation Dependencies (v5.0)
+
+> **Formalize detected dependencies** from Step 8.5 into a structured format that feeds directly into `/create-tasks` Step 1.5.
+
+**Purpose:** Reduce dependency inference errors during task generation by making component relationships explicit in the technical spec.
+
+**Instructions:**
+```
+AFTER Step 8.5 dependency detection:
+  EXTRACT from technical-spec.md:
+    - Component → Component import/export relationships
+    - Shared resources (files, modules, state)
+    - Exports required by downstream components
+
+  FORMAT as structured dependency table in technical-spec.md:
+```
+
+**Output (appended to technical-spec.md):**
+```markdown
+## Implementation Dependencies
+
+| Component | Depends On | Exports Required |
+|-----------|-----------|-----------------|
+| [COMPONENT_A] | [COMPONENT_B] | `[Export1]`, `[Export2]` |
+| [COMPONENT_C] | [COMPONENT_A], [COMPONENT_B] | `[Export3]`, `[Export4]` |
+
+### Shared Resources
+| Resource | Used By |
+|----------|---------|
+| [FILE_PATH] | [COMPONENT_A], [COMPONENT_C] |
+```
+
+**Integration with create-tasks:** This table is the primary input for Step 1.5 dependency analysis. Each row maps to a `depends_on` relationship in tasks.json v4.0.
+
+### Step 8.8: Complexity & Role Hints (v5.0)
+
+> **Pre-assess complexity and capabilities** needed per component to guide task generation.
+
+**Purpose:** Provide complexity ratings and role assignments that `/create-tasks` uses for `complexity` and `auto_assign` fields in tasks.json v4.0.
+
+**Instructions:**
+```
+FOR each component in technical-spec.md:
+  ASSESS complexity:
+    - LOW: 1-2 files, no external integrations, simple logic
+    - MEDIUM: 3-4 files, integration tests needed, moderate logic
+    - HIGH: 5+ files, external APIs, race conditions, complex state
+
+  IDENTIFY capabilities needed:
+    - File write + test runner + Bash → implementation
+    - Chrome MCP + screenshots → e2e-testing
+    - Read-only + AST analysis → verification
+```
+
+**Output (appended to technical-spec.md):**
+```markdown
+## Complexity Assessment
+
+| Component | Complexity | Reasoning |
+|-----------|-----------|-----------|
+| [COMPONENT_A] | MEDIUM | 3 files, integration tests |
+| [COMPONENT_B] | LOW | 1 file, unit tests only |
+| [COMPONENT_C] | HIGH | 5 files, shared state, race conditions |
+
+### Capabilities Needed
+| Component | Requires |
+|-----------|---------|
+| [COMPONENT_A] | File write, test runner, Bash |
+| E2E validation | Chrome MCP, screenshots |
+```
+
 ### Step 9: Create Database Schema (Conditional)
 
 Create the file: sub-specs/database-schema.md using the Write tool ONLY IF database changes needed for this task.

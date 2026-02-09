@@ -13,7 +13,6 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 
 // ============================================================================
 // Types
@@ -34,6 +33,19 @@ export interface Task {
   subtasks?: string[];
 }
 
+// v4.0 task interface — uses depends_on instead of parallelization block
+export interface TaskV4 {
+  id: string;
+  task_type: string;
+  description: string;
+  status: string;
+  depends_on: string[];
+  parent?: string;
+  subtasks?: string[];
+  isolation_score?: number;
+  shared_files?: string[];
+}
+
 export interface WaveGroup {
   wave_id: number;
   tasks: string[];
@@ -51,8 +63,13 @@ export interface ParallelWaveResult {
 }
 
 export interface TasksJson {
-  tasks: Task[];
+  version?: string;
+  tasks: (Task | TaskV4)[];
   execution_strategy?: {
+    waves: WaveGroup[];
+    dependency_graph: Record<string, string[]>;
+  };
+  computed?: {
     waves: WaveGroup[];
     dependency_graph: Record<string, string[]>;
   };
@@ -144,17 +161,28 @@ export function hasDependencyOnGroup(
 }
 
 /**
- * Build dependency graph from tasks.json structure
+ * Build dependency graph from tasks.json structure.
+ * Supports v3.0 (parallelization.blocked_by) and v4.0 (depends_on).
  */
-export function buildDependencyGraph(tasks: Task[]): Record<string, string[]> {
+export function buildDependencyGraph(tasks: (Task | TaskV4)[], version?: string): Record<string, string[]> {
   const graph: Record<string, string[]> = {};
-  
-  for (const task of tasks) {
-    if (task.type === 'parent') {
-      graph[task.id] = task.parallelization?.blocked_by || [];
+
+  if (version && version.startsWith('4')) {
+    // v4.0: read depends_on directly, filter to top-level tasks
+    for (const task of tasks as TaskV4[]) {
+      if (!task.parent) {
+        graph[task.id] = task.depends_on || [];
+      }
+    }
+  } else {
+    // v3.0: read from parallelization.blocked_by
+    for (const task of tasks as Task[]) {
+      if (task.type === 'parent') {
+        graph[task.id] = task.parallelization?.blocked_by || [];
+      }
     }
   }
-  
+
   return graph;
 }
 
@@ -229,30 +257,59 @@ function estimateWaveDuration(tasks: Task[]): number {
 }
 
 /**
- * Load tasks.json and analyze for parallel execution
+ * Load tasks.json and analyze for parallel execution.
+ * Supports both v3.0 and v4.0 formats.
  */
 export function analyzeTasksForParallelization(tasksJsonPath: string): ParallelWaveResult {
   if (!fs.existsSync(tasksJsonPath)) {
     throw new Error(`Tasks file not found: ${tasksJsonPath}`);
   }
-  
+
   const content = fs.readFileSync(tasksJsonPath, 'utf-8');
   const tasksJson: TasksJson = JSON.parse(content);
-  
+  const version = tasksJson.version;
+
   const tasks = tasksJson.tasks;
-  const dependencyGraph = tasksJson.execution_strategy?.dependency_graph || 
-                          buildDependencyGraph(tasks);
-  
-  const waves = identifyParallelWaves(tasks, dependencyGraph);
-  
+
+  let dependencyGraph: Record<string, string[]>;
+  if (version && version.startsWith('4')) {
+    // v4.0: use computed graph or build from depends_on
+    dependencyGraph = tasksJson.computed?.dependency_graph ||
+                      buildDependencyGraph(tasks, version);
+  } else {
+    // v3.0: use execution_strategy graph or build from parallelization
+    dependencyGraph = tasksJson.execution_strategy?.dependency_graph ||
+                      buildDependencyGraph(tasks, version);
+  }
+
+  // For v4.0, adapt tasks to Task interface for identifyParallelWaves
+  const v3Tasks: Task[] = (version && version.startsWith('4'))
+    ? (tasks as TaskV4[]).filter(t => !t.parent && t.task_type === 'implementation').map(t => ({
+        id: t.id,
+        type: 'parent' as const,
+        description: t.description,
+        status: t.status as Task['status'],
+        parallelization: {
+          wave: 0,
+          blocked_by: t.depends_on || [],
+          can_parallel_with: [],
+          isolation_score: t.isolation_score ?? 1.0,
+          shared_files: t.shared_files || []
+        },
+        subtasks: t.subtasks
+      }))
+    : tasks as Task[];
+
+  const waves = identifyParallelWaves(v3Tasks, dependencyGraph);
+
   // Calculate max concurrent workers
   const maxConcurrent = Math.max(...waves.map(w => w.can_parallel ? w.tasks.length : 1));
-  
+
   // Calculate estimated speedup
   const sequentialTime = waves.reduce((sum, w) => sum + w.estimated_duration_minutes * w.tasks.length / (w.can_parallel ? w.tasks.length : 1), 0);
   const parallelTime = waves.reduce((sum, w) => sum + w.estimated_duration_minutes, 0);
   const speedup = sequentialTime / parallelTime;
-  
+
   return {
     waves,
     dependency_graph: dependencyGraph,

@@ -1,8 +1,21 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v4.11.0 - E2E test integration, context offloading, token efficiency",
+  "_comment": "Agent OS v5.0.0 - Dependency-first tasks v4.0 format, computed waves, infrastructure tasks",
 
   "hooks": {
+    "Setup": [
+      {
+        "_comment": "One-time project initialization and maintenance (v4.12.0)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/setup.sh\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+
     "SessionStart": [
       {
         "hooks": [
@@ -47,6 +60,19 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-stop.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+
+    "TaskCompleted": [
+      {
+        "_comment": "Log task completion to progress and session stats (v4.12.0)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/task-completed.sh\"",
             "timeout": 5
           }
         ]
@@ -110,7 +136,8 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "4.11.0",
+    "AGENT_OS_VERSION": "5.0.0",
+    "AGENT_OS_TASKS_V4": "false",
     "AGENT_OS_INLINE_MAX": "512",
     "AGENT_OS_PREVIEW_MIN": "4096",
     "AGENT_OS_SUCCESS_RETENTION": "24",

@@ -1,16 +1,17 @@
-# Agent Tool Restrictions (v4.11.0)
+# Agent Tool Restrictions (v4.12.0)
 
 > Standardized approach for restricting agent capabilities through tool access control.
 > Ensures consistent security posture across all Agent OS agents.
 
 ## Overview
 
-Agent OS uses **two complementary mechanisms** for tool access control:
+Agent OS uses **three complementary mechanisms** for tool access control:
 
 | Mechanism | Type | Purpose | When to Use |
 |-----------|------|---------|-------------|
 | `tools:` | Positive list | Define available tools | **Always** - primary restriction |
 | `disallowedTools:` | Negative list | Defense-in-depth | Security-critical agents only |
+| `Task(types)` | Spawn restriction | Limit spawnable agent types | Orchestrators with `Task` tool (v4.12.0) |
 
 ## Primary Mechanism: `tools:` (Positive List)
 
@@ -215,6 +216,48 @@ disallowedTools:
 ---
 ```
 
+## Tertiary Mechanism: `Task(agent_type)` Spawn Restrictions (v4.12.0)
+
+The `Task(types)` syntax restricts which agent types an orchestrator can spawn via the `Task` tool. This applies the principle of least privilege to agent spawning.
+
+```yaml
+---
+name: my-orchestrator
+tools: Read, Bash, Task(worker-a, worker-b)  # Can ONLY spawn worker-a and worker-b
+---
+```
+
+### When to Use
+
+Use `Task(types)` when an agent has `Task` in its tools list and only spawns specific agent types.
+
+### Current Spawn Restrictions
+
+| Agent | Allowed Spawns | Rationale |
+|-------|---------------|-----------|
+| `execute-spec-orchestrator` | `Task(wave-lifecycle-agent)` | Only spawns wave agents |
+| `wave-orchestrator` | `Task(phase2-implementation, subtask-group-worker)` | Spawns implementation workers |
+| `wave-lifecycle-agent` | `Task(general-purpose)` | Spawns general-purpose for review processing |
+| `phase1-discovery` | `Task(Explore)` | Read-only codebase exploration |
+| `pr-review-discovery` | `Task(comment-classifier, Explore)` | Classification and exploration |
+| `test-discovery` | `Task(Explore)` | Read-only test pattern exploration |
+
+### Anti-Pattern: Unrestricted Task
+
+```yaml
+# BAD - Can spawn ANY agent type
+---
+name: my-orchestrator
+tools: Read, Task
+---
+
+# GOOD - Restricted to known spawns
+---
+name: my-orchestrator
+tools: Read, Task(specific-worker)
+---
+```
+
 ## Validation Checklist
 
 When creating or reviewing an agent:
@@ -224,10 +267,17 @@ When creating or reviewing an agent:
 - [ ] If agent processes untrusted input AND is read-only → add `disallowedTools:`
 - [ ] `disallowedTools:` includes: Write, Edit, Bash, NotebookEdit
 - [ ] No tool appears in both lists
+- [ ] If agent uses `Task` → restrict with `Task(specific-types)` (v4.12.0)
 
 ---
 
 ## Changelog
+
+### v4.12.0 (2026-02-06)
+- Added `Task(agent_type)` spawn restriction mechanism
+- Documented current spawn restrictions for 6 orchestrators
+- Updated overview to three complementary mechanisms
+- Added validation checklist item for Task restrictions
 
 ### v4.11.0 (2026-01-15)
 - Initial standardized documentation

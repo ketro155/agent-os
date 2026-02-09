@@ -13,9 +13,9 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
     AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.10.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="4.11.0"
+    AGENT_OS_VERSION="5.0.0"
 fi
-AGENT_OS_RELEASE_DATE="2026-01-14"
+AGENT_OS_RELEASE_DATE="2026-02-06"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -475,7 +475,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         # Install hooks (mandatory validation + subagent lifecycle v4.8.0)
         echo ""
         echo "  📂 Hooks:"
-        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop; do
+        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed; do
             if [ -f "$BASE_AGENT_OS/v3/hooks/${hook}.sh" ]; then
                 copy_file "$BASE_AGENT_OS/v3/hooks/${hook}.sh" "./.claude/hooks/${hook}.sh" "$OVERWRITE_CLAUDE" "hooks/${hook}.sh"
                 chmod +x "./.claude/hooks/${hook}.sh"
@@ -537,6 +537,13 @@ if [ "$CLAUDE_CODE" = true ]; then
         fi
         if [ -f "$BASE_AGENT_OS/v3/scripts/test-patterns.ts" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/test-patterns.ts" "./.claude/scripts/test-patterns.ts" "$OVERWRITE_CLAUDE" "scripts/test-patterns.ts"
+        fi
+        # v5.0.0 Dependency-first tasks: topological sort and migration
+        if [ -f "$BASE_AGENT_OS/v3/scripts/compute-waves.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/compute-waves.ts" "./.claude/scripts/compute-waves.ts" "$OVERWRITE_CLAUDE" "scripts/compute-waves.ts"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/migrate-v3-to-v4.js" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/migrate-v3-to-v4.js" "./.claude/scripts/migrate-v3-to-v4.js" "$OVERWRITE_CLAUDE" "scripts/migrate-v3-to-v4.js"
         fi
 
         # Install memory/rules
@@ -602,6 +609,10 @@ if [ "$CLAUDE_CODE" = true ]; then
         fi
         if [ -f "$BASE_AGENT_OS/v3/schemas/execute-spec-v1.json" ]; then
             copy_file "$BASE_AGENT_OS/v3/schemas/execute-spec-v1.json" "./.agent-os/schemas/execute-spec-v1.json" "$OVERWRITE_CLAUDE" "schemas/execute-spec-v1.json"
+        fi
+        # v5.0.0 tasks v4.0 schema
+        if [ -f "$BASE_AGENT_OS/v3/schemas/tasks-v4.json" ]; then
+            copy_file "$BASE_AGENT_OS/v3/schemas/tasks-v4.json" "./.agent-os/schemas/tasks-v4.json" "$OVERWRITE_CLAUDE" "schemas/tasks-v4.json"
         fi
 
     else

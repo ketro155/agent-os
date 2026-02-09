@@ -1,7 +1,8 @@
 #!/bin/bash
-# Agent OS v3.0 - Task Operations Script
+# Agent OS v5.0 - Task Operations Script
 # Replaces MCP server with simple shell commands
 # Called by hooks and agents for task management
+# Supports both v3.0 and v4.0 tasks.json formats
 
 set -e
 
@@ -73,14 +74,32 @@ case "$COMMAND" in
       exit 1
     fi
 
-    jq '{
-      spec: .spec,
-      summary: .summary,
-      execution_strategy: .execution_strategy,
-      next_task: (.tasks | map(select(.type == "subtask" and .status == "pending")) | first),
-      in_progress: (.tasks | map(select(.status == "in_progress")) | first),
-      recent_completed: (.tasks | map(select(.status == "pass")) | .[-3:])
-    }' "$TASKS_FILE"
+    # Detect version and use appropriate query
+    VERSION=$(jq -r '.version // "3.0"' "$TASKS_FILE")
+    if [[ "$VERSION" == 4* ]]; then
+      # v4.0: uses task_type, depends_on, computed
+      jq '{
+        spec: .spec,
+        version: .version,
+        summary: .summary,
+        computed_waves: (.computed.waves // []),
+        next_task: (.tasks | map(select(.task_type == "implementation" and .parent != null and .status == "pending")) | first),
+        next_infra: (.tasks | map(select(.task_type != "implementation" and .status == "pending" and ((.depends_on // []) | length) == 0)) | first),
+        in_progress: (.tasks | map(select(.status == "in_progress")) | first),
+        recent_completed: (.tasks | map(select(.status == "pass")) | .[-3:])
+      }' "$TASKS_FILE"
+    else
+      # v3.0: uses type (parent/subtask), execution_strategy
+      jq '{
+        spec: .spec,
+        version: .version,
+        summary: .summary,
+        execution_strategy: .execution_strategy,
+        next_task: (.tasks | map(select(.type == "subtask" and .status == "pending")) | first),
+        in_progress: (.tasks | map(select(.status == "in_progress")) | first),
+        recent_completed: (.tasks | map(select(.status == "pass")) | .[-3:])
+      }' "$TASKS_FILE"
+    fi
     ;;
 
   # Update task status
@@ -103,47 +122,95 @@ case "$COMMAND" in
 
     TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-    # Update task status
-    jq --arg id "$TASK_ID" --arg status "$STATUS" --arg ts "$TIMESTAMP" '
-      .tasks |= map(
-        if .id == $id then
-          .status = $status |
-          if $status == "in_progress" and .started_at == null then
-            .started_at = $ts |
-            .attempts = ((.attempts // 0) + 1)
-          elif $status == "pass" and .completed_at == null then
-            .completed_at = $ts
+    # Detect version for appropriate summary format
+    VERSION=$(jq -r '.version // "3.0"' "$TASKS_FILE")
+
+    if [[ "$VERSION" == 4* ]]; then
+      # v4.0: uses task_type, depends_on
+      jq --arg id "$TASK_ID" --arg status "$STATUS" --arg ts "$TIMESTAMP" '
+        .tasks |= map(
+          if .id == $id then
+            .status = $status |
+            if $status == "in_progress" and .started_at == null then
+              .started_at = $ts |
+              .attempts = ((.attempts // 0) + 1)
+            elif $status == "pass" and .completed_at == null then
+              .completed_at = $ts
+            else .
+            end
           else .
           end
-        else .
-        end
-      ) |
-      # Recalculate parent progress
-      .tasks |= (
-        group_by(.parent // .id) |
-        map(
-          if .[0].type == "subtask" then
-            . as $subtasks |
-            ($subtasks | map(select(.status == "pass")) | length) as $completed |
-            ($subtasks | length) as $total |
-            $subtasks | map(. + {parent_progress: (($completed / $total) * 100 | floor)})
+        ) |
+        # Recalculate parent progress (for implementation tasks with subtasks)
+        .tasks |= (
+          group_by(.parent // .id) |
+          map(
+            if .[0].parent != null then
+              . as $subtasks |
+              ($subtasks | map(select(.status == "pass")) | length) as $completed |
+              ($subtasks | length) as $total |
+              $subtasks | map(. + {parent_progress: (($completed / $total) * 100 | floor)})
+            else .
+            end
+          ) | flatten
+        ) |
+        # v4.0 summary: split implementation vs infrastructure
+        (.tasks | map(select(.parent == null))) as $top_level |
+        .summary = {
+          total_tasks: ($top_level | length),
+          implementation_tasks: ($top_level | map(select(.task_type == "implementation")) | length),
+          infrastructure_tasks: ($top_level | map(select(.task_type != "implementation")) | length),
+          completed: ($top_level | map(select(.status == "pass")) | length),
+          in_progress: ($top_level | map(select(.status == "in_progress")) | length),
+          blocked: ($top_level | map(select(.status == "blocked")) | length),
+          pending: ($top_level | map(select(.status == "pending")) | length),
+          overall_percent: ((($top_level | map(select(.status == "pass")) | length) / ($top_level | length)) * 100 | floor)
+        } |
+        .updated = $ts
+      ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+    else
+      # v3.0: uses type (parent/subtask)
+      jq --arg id "$TASK_ID" --arg status "$STATUS" --arg ts "$TIMESTAMP" '
+        .tasks |= map(
+          if .id == $id then
+            .status = $status |
+            if $status == "in_progress" and .started_at == null then
+              .started_at = $ts |
+              .attempts = ((.attempts // 0) + 1)
+            elif $status == "pass" and .completed_at == null then
+              .completed_at = $ts
+            else .
+            end
           else .
           end
-        ) | flatten
-      ) |
-      # Update summary
-      .summary = {
-        total_tasks: (.tasks | length),
-        parent_tasks: (.tasks | map(select(.type == "parent")) | length),
-        subtasks: (.tasks | map(select(.type == "subtask")) | length),
-        completed: (.tasks | map(select(.status == "pass")) | length),
-        in_progress: (.tasks | map(select(.status == "in_progress")) | length),
-        blocked: (.tasks | map(select(.status == "blocked")) | length),
-        pending: (.tasks | map(select(.status == "pending")) | length),
-        overall_percent: (((.tasks | map(select(.status == "pass")) | length) / (.tasks | length)) * 100 | floor)
-      } |
-      .updated = $ts
-    ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+        ) |
+        # Recalculate parent progress
+        .tasks |= (
+          group_by(.parent // .id) |
+          map(
+            if .[0].type == "subtask" then
+              . as $subtasks |
+              ($subtasks | map(select(.status == "pass")) | length) as $completed |
+              ($subtasks | length) as $total |
+              $subtasks | map(. + {parent_progress: (($completed / $total) * 100 | floor)})
+            else .
+            end
+          ) | flatten
+        ) |
+        # v3.0 summary
+        .summary = {
+          total_tasks: (.tasks | length),
+          parent_tasks: (.tasks | map(select(.type == "parent")) | length),
+          subtasks: (.tasks | map(select(.type == "subtask")) | length),
+          completed: (.tasks | map(select(.status == "pass")) | length),
+          in_progress: (.tasks | map(select(.status == "in_progress")) | length),
+          blocked: (.tasks | map(select(.status == "blocked")) | length),
+          pending: (.tasks | map(select(.status == "pending")) | length),
+          overall_percent: (((.tasks | map(select(.status == "pass")) | length) / (.tasks | length)) * 100 | floor)
+        } |
+        .updated = $ts
+      ' "$TASKS_FILE" > "${TASKS_FILE}.tmp" && mv "${TASKS_FILE}.tmp" "$TASKS_FILE"
+    fi
 
     echo '{"success": true, "task_id": "'"$TASK_ID"'", "status": "'"$STATUS"'"}'
     ;;

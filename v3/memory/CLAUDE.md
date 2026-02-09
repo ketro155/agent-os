@@ -1,11 +1,11 @@
-# Agent OS v4.11.0 - Core Memory
+# Agent OS v5.0.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 4.11.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 5.0.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)
@@ -15,7 +15,14 @@ Agent OS is a development framework providing structured AI-assisted workflows. 
 - **Single-source tasks** (JSON primary, MD auto-generated)
 - **Wildcard permissions** for simplified configuration (v4.8.0)
 - **Context offloading** for token efficiency (v4.10.0)
-- **E2E test integration** across spec/task workflow (v4.11.0) ✨ NEW
+- **E2E test integration** across spec/task workflow (v4.11.0)
+- **Setup hook** for project initialization (v4.12.0)
+- **TaskCompleted hook** for completion tracking (v4.12.0)
+- **Task(type) spawn restrictions** for agent security (v4.12.0)
+- **Agent memory** for cross-session learning (v4.12.0)
+- **Dependency-first tasks v4.0** with computed waves (v5.0.0)
+- **Explicit infrastructure tasks** visible in task graph (v5.0.0)
+- **Topological sort** for wave computation from `depends_on` (v5.0.0)
 
 ## Context Offloading (v4.10.0)
 
@@ -59,6 +66,7 @@ When you see: `[Output offloaded: 45KB → /context-read phase2_20260112_143022_
 ### Configuration (Environment Variables)
 
 ```bash
+AGENT_OS_TASKS_V4=false        # Enable tasks.json v4.0 format (v5.0)
 AGENT_OS_INLINE_MAX=512        # Inline display threshold
 AGENT_OS_PREVIEW_MIN=4096      # Preview trigger for failures
 AGENT_OS_SUCCESS_RETENTION=24  # Hours to keep success outputs
@@ -171,24 +179,46 @@ See `rules/verification-loop.md` for implementation details.
 
 ## Key Conventions
 
-### Task Format (v4.0)
+### Task Format
 
+**v4.0 (dependency-first, behind `AGENT_OS_TASKS_V4=true` flag):**
+- `depends_on` per task is the **single source of truth** for dependencies
+- `task_type` classifies tasks: `implementation`, `git-operation`, `verification`, `e2e-testing`
+- Infrastructure tasks (branch, verify, PR, merge, deliver) are **explicit** in the graph
+- `computed.waves` derived automatically via topological sort (Kahn's algorithm)
+- `isolation_score` and `shared_files` at top level (moved from `parallelization`)
+- Migration: `node .claude/scripts/migrate-v3-to-v4.js .agent-os/specs/*/tasks.json`
+
+**v3.0 (parallel waves, legacy):**
+- `execution_strategy.waves` and `parallelization.blocked_by` define dependencies
+- `type: parent|subtask` hierarchy
+
+**Common to both:**
 - `tasks.json` is the **source of truth**
 - `tasks.md` is **auto-generated** (read-only)
 - Edit tasks via commands or direct JSON editing
 - Hooks auto-regenerate markdown on JSON changes
 
-### Agent Security (v4.8.0)
+### Agent Security (v4.12.0)
 
-Agent tool access uses **two complementary mechanisms**:
+Agent tool access uses **three complementary mechanisms**:
 
 | Mechanism | Type | When to Use |
 |-----------|------|-------------|
 | `tools:` | Positive list | **Always** - primary restriction |
 | `disallowedTools:` | Negative list | Security-critical agents only (defense-in-depth) |
+| `Task(types)` | Spawn restriction | Orchestrators — limit spawnable agent types (v4.12.0) |
 
 **Defense-in-depth agents** (read-only, process untrusted input):
 - `comment-classifier`, `future-classifier`, `roadmap-integrator`
+
+**Spawn-restricted orchestrators** (v4.12.0):
+- `execute-spec-orchestrator` → `Task(wave-lifecycle-agent)`
+- `wave-orchestrator` → `Task(phase2-implementation, subtask-group-worker)`
+- `wave-lifecycle-agent` → `Task(general-purpose)`
+- `phase1-discovery` → `Task(Explore)`
+- `pr-review-discovery` → `Task(comment-classifier, Explore)`
+- `test-discovery` → `Task(Explore)`
 
 See `rules/agent-tool-restrictions.md` for full decision tree and examples.
 
@@ -215,10 +245,12 @@ These run automatically - you don't need to invoke them:
 
 | Hook | Trigger | Purpose |
 |------|---------|---------|
+| **Setup** | `claude --init` / `--maintenance` | **One-time project initialization, directory creation** (v4.12.0) |
 | SessionStart | Session begins | Load progress context, set up state |
 | SessionEnd | Session ends | Log progress, checkpoint, logging reminder (v4.9.1) |
 | **SubagentStart** | Agent spawned | Initialize agent context, track metrics (v4.8.0) |
 | **SubagentStop** | Agent completes | **Capture transcript, offload large outputs, track tokens** (v4.10.0) |
+| **TaskCompleted** | Task status → completed | **Log completion to progress, increment session stats** (v4.12.0) |
 | PostToolUse (Write/Edit) | File changes | Regenerate tasks.md from JSON |
 | PreToolUse (git commit) | Before commits | Validate build, tests, types |
 
@@ -382,6 +414,20 @@ tail -5 .agent-os/scratch/index.jsonl | jq -r '.id'
 ```bash
 node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json
 ```
+
+## Agent Memory (v4.12.0)
+
+Agents with `memory: project` accumulate cross-session knowledge scoped to the project:
+
+| Agent | Why Memory Helps |
+|-------|-----------------|
+| `phase2-implementation` | Learns test patterns, coding conventions, common verification failures |
+| `pr-review-discovery` | Learns reviewer preferences, convention patterns, common issues |
+| `test-executor` | Learns working selectors, timing, flaky test recovery |
+| `test-discovery` | Learns app routes, form fields, testable patterns |
+| `wave-lifecycle-agent` | Learns review polling, merge patterns per project |
+
+**NOT given memory:** Haiku-model classifiers (token overhead disproportionate), stateless/procedural agents (`git-workflow`, `project-manager`, `subtask-group-worker`, `phase3-delivery`, `pr-review-implementation`).
 
 ---
 
