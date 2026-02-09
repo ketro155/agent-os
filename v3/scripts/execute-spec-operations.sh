@@ -73,19 +73,25 @@ find_tasks_json() {
   find "$base_path" -name "tasks.json" -type f 2>/dev/null | head -1
 }
 
-# Get total waves from tasks.json
+# Get total waves from tasks.json (v3.0 + v4.0 version routing)
 get_total_waves() {
   local tasks_file="$1"
   if [ ! -f "$tasks_file" ]; then
     echo "1"
     return
   fi
+  local version
+  version=$(jq -r '.version // "3.0"' "$tasks_file" 2>/dev/null)
   local total
-  total=$(jq -r '.execution_strategy.waves | length // 1' "$tasks_file" 2>/dev/null)
+  if [[ "$version" == 4* ]]; then
+    total=$(jq -r '.computed.waves | length // 1' "$tasks_file" 2>/dev/null)
+  else
+    total=$(jq -r '.execution_strategy.waves | length // 1' "$tasks_file" 2>/dev/null)
+  fi
   echo "${total:-1}"
 }
 
-# Get current wave (first wave with pending tasks)
+# Get current wave (first wave with pending tasks) — v3.0 + v4.0 version routing
 get_current_wave() {
   local tasks_file="$1"
   if [ ! -f "$tasks_file" ]; then
@@ -93,17 +99,35 @@ get_current_wave() {
     return
   fi
 
+  local version
+  version=$(jq -r '.version // "3.0"' "$tasks_file" 2>/dev/null)
+
   local wave
-  wave=$(jq -r '
-    .execution_strategy.waves as $waves |
-    .tasks as $tasks |
-    ($waves // []) |
-    map(select(
-      .tasks as $wave_tasks |
-      ($tasks | map(select(.id as $id | $wave_tasks | index($id))) | map(select(.status == "pending" or .status == "in_progress")) | length) > 0
-    )) |
-    .[0].wave_id // 1
-  ' "$tasks_file" 2>/dev/null)
+  if [[ "$version" == 4* ]]; then
+    # v4.0: computed.waves uses depth-based structure
+    wave=$(jq -r '
+      .computed.waves as $waves |
+      .tasks as $tasks |
+      ($waves // []) |
+      map(select(
+        .tasks as $wave_tasks |
+        ($tasks | map(select(.id as $id | $wave_tasks | index($id))) | map(select(.status == "pending" or .status == "in_progress")) | length) > 0
+      )) |
+      .[0].depth // 0 | . + 1
+    ' "$tasks_file" 2>/dev/null)
+  else
+    # v3.0: execution_strategy.waves uses wave_id
+    wave=$(jq -r '
+      .execution_strategy.waves as $waves |
+      .tasks as $tasks |
+      ($waves // []) |
+      map(select(
+        .tasks as $wave_tasks |
+        ($tasks | map(select(.id as $id | $wave_tasks | index($id))) | map(select(.status == "pending" or .status == "in_progress")) | length) > 0
+      )) |
+      .[0].wave_id // 1
+    ' "$tasks_file" 2>/dev/null)
+  fi
 
   echo "${wave:-1}"
 }

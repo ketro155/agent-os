@@ -15,6 +15,8 @@ Create a tasks list with sub-tasks to execute a feature based on its spec. This 
 
 **v2.0 Feature**: Automatically analyzes task dependencies and generates execution waves for parallel async agent execution.
 
+**v5.0 Feature** (behind `AGENT_OS_TASKS_V4` flag): Dependency-first task format with explicit infrastructure tasks. Dependencies are primary, waves are computed via topological sort.
+
 ## Parameters
 - `spec_folder_path` (required): Path to the approved specification folder
 - `codebase_aware` (optional): Enable codebase reference integration for task complexity estimation
@@ -132,7 +134,7 @@ Create BOTH files inside of the current feature's spec folder using the Write to
   - [ ] 2.2 Implement [COMPONENT] (TDD GREEN)
 ```
 
-**tasks.json Template (Machine-Readable):**
+**tasks.json Template (Machine-Readable) — v3.0 (default):**
 ```json
 {
   "version": "3.0",
@@ -169,6 +171,74 @@ Create BOTH files inside of the current feature's spec folder using the Write to
 }
 ```
 
+**tasks.json Template (Machine-Readable) — v4.0 (when `AGENT_OS_TASKS_V4=true`):**
+```json
+{
+  "version": "4.0",
+  "spec": "[SPEC_FOLDER_NAME]",
+  "spec_path": ".agent-os/specs/[SPEC_FOLDER]/",
+  "created": "[ISO_TIMESTAMP]",
+  "updated": "[ISO_TIMESTAMP]",
+  "tasks": [
+    {
+      "id": "W1-BRANCH",
+      "task_type": "git-operation",
+      "description": "Create feature branch and wave-1 branch",
+      "status": "pending",
+      "depends_on": [],
+      "auto_assign": "git-ops",
+      "config": { "operation": "branch-setup" }
+    },
+    {
+      "id": "1",
+      "task_type": "implementation",
+      "description": "[MAJOR_TASK_DESCRIPTION]",
+      "status": "pending",
+      "depends_on": ["W1-BRANCH"],
+      "subtasks": ["1.1", "1.2"],
+      "isolation_score": 1.0,
+      "shared_files": [],
+      "complexity": "MEDIUM"
+    },
+    {
+      "id": "1.1",
+      "task_type": "implementation",
+      "parent": "1",
+      "description": "Write failing tests for [COMPONENT] (TDD RED)",
+      "status": "pending",
+      "depends_on": [],
+      "tdd_phase": "red"
+    },
+    {
+      "id": "W1-VERIFY",
+      "task_type": "verification",
+      "description": "Verify wave-1 exports, run tests and type check",
+      "status": "pending",
+      "depends_on": ["1"],
+      "auto_assign": "verifier"
+    },
+    {
+      "id": "DELIVER",
+      "task_type": "git-operation",
+      "description": "Create final PR to main",
+      "status": "pending",
+      "depends_on": ["W1-VERIFY"],
+      "auto_assign": "git-ops"
+    }
+  ],
+  "future_tasks": [],
+  "computed": {},
+  "summary": {
+    "total_tasks": 0,
+    "implementation_tasks": 0,
+    "infrastructure_tasks": 0,
+    "completed": 0,
+    "pending": 0,
+    "overall_percent": 0
+  }
+}
+```
+
 **Ordering Principles:**
 - Consider technical dependencies
 - **Enforce TDD approach** (test before implementation)
@@ -195,64 +265,98 @@ ELSE:
 - Include integration tasks for existing components
 - Consider refactoring needs for legacy code integration
 
-### Step 1.5: Analyze Parallel Execution Opportunities (NEW v2.0)
+### Step 1.5: Dependency Analysis & Infrastructure Generation (v5.0)
 
-After creating tasks, analyze dependencies to identify parallel execution opportunities.
+After creating implementation tasks, analyze dependencies and generate infrastructure tasks.
 
-**Purpose:** Enable async agent execution by pre-computing which tasks can run in parallel.
+**Purpose:** Build a complete dependency graph with explicit infrastructure tasks (branches, verification, PRs, merges). Dependencies are the single source of truth — waves are computed automatically.
+
+**Version Check:**
+```
+IF AGENT_OS_TASKS_V4 == "true":
+  USE v4.0 format (this step)
+ELSE:
+  USE legacy v2.0 parallelization analysis (see v3 archive)
+```
 
 **Instructions:**
 ```
-ACTION: Analyze task dependencies for parallel execution
-USE_PATTERN: ANALYZE_PARALLELIZATION_PATTERN from @shared/task-json.md
+ACTION: Dependency analysis + infrastructure task generation
 
-FOR each parent task:
+FOR each implementation task:
   EXTRACT from technical-spec.md:
-    - Files to be created/modified
-    - Dependencies on other components
-    - Shared state (database tables, config, etc.)
+    - Files to be created/modified → shared_files
+    - Imports from other task outputs → depends_on relationships
+    - Isolation score = 1.0 - (shared_file_overlap / total_files)
 
-  CLASSIFY dependencies:
-    - HARD: Must complete before next (shared file writes)
-    - SOFT: Could parallelize with careful coordination
-    - NONE: Fully independent
+  SET task.depends_on based on:
+    - Import dependencies (task A imports from task B's files)
+    - Shared file ordering (lower complexity first when sharing files)
 
-BUILD dependency graph:
-  FOR each task pair (A, B):
-    IF A modifies files that B reads/modifies:
-      A blocks B (sequential required)
-    ELSE IF A.output IS B.input (logical dependency):
-      A blocks B
-    ELSE:
-      A can_parallel_with B
+GROUP implementation tasks into execution waves:
+  - Wave boundary = where depends_on crosses a verification point
+  - Tasks with no cross-dependencies within a group → same wave
 
-GENERATE execution waves:
-  Wave 1 = tasks with no blocked_by
-  Wave N = tasks whose blocked_by are all in waves < N
+GENERATE infrastructure tasks per wave:
+  - "W{N}-BRANCH" → depends_on: [] (wave 1) or ["W{N-1}-MERGE"] (wave 2+)
+  - All wave-N impl tasks get depends_on: ["W{N}-BRANCH"]
+  - "W{N}-VERIFY" → depends_on: [all wave-N impl task IDs]
+    - config.verify_exports: collected from all wave-N task specs
+    - config.verify_files: collected from all wave-N task file lists
+  - "W{N}-PR" → depends_on: ["W{N}-VERIFY"]
+  - "W{N}-REVIEW" → depends_on: ["W{N}-PR"]
+    - task_type: "pr-review"
+    - description: "Poll for PR review, process feedback, re-review if needed"
+    - config: { operation: "review-cycle", max_poll_minutes: 30 }
+  - "W{N}-MERGE" → depends_on: ["W{N}-REVIEW"]
 
-CALCULATE metrics:
-  - estimated_parallel_speedup = sequential_time / parallel_time
-  - max_concurrent_workers = max(tasks in any wave)
-  - isolation_scores per task
+IF E2E test plan exists for this spec:
+  GENERATE "E2E" task → depends_on: [last wave's merge task]
 
-ADD to tasks.json:
-  - execution_strategy (top-level)
-  - parallelization (per parent task)
+GENERATE "DELIVER" task → depends_on: ["E2E"] or [last merge]
+
+COMPUTE waves via topological sort (Kahn's algorithm):
+  - Assign depth = 0 to tasks with empty depends_on
+  - depth[t] = max(depth[dep] for dep in t.depends_on) + 1
+  - Group by depth → computed.waves
+
+STORE in computed.waves and computed.dependency_graph
 ```
 
-**Output Format:**
+**Output: v4.0 `computed` section (auto-generated, do not edit):**
 ```json
 {
-  "execution_strategy": {
-    "mode": "sequential|parallel_waves|fully_parallel",
+  "computed": {
     "waves": [
-      { "wave_id": 1, "tasks": ["1", "2"], "rationale": "..." }
+      { "depth": 0, "tasks": ["W1-BRANCH"], "label": "Branch setup" },
+      { "depth": 1, "tasks": ["1", "2"], "label": "Implementation", "parallel": true },
+      { "depth": 2, "tasks": ["W1-VERIFY"], "label": "Verification" },
+      { "depth": 3, "tasks": ["W1-PR"], "label": "PR creation" },
+      { "depth": 4, "tasks": ["W1-REVIEW"], "label": "PR review" },
+      { "depth": 5, "tasks": ["W1-MERGE"], "label": "Merge" }
     ],
+    "dependency_graph": {
+      "W1-BRANCH": [], "1": ["W1-BRANCH"], "2": ["W1-BRANCH"],
+      "W1-VERIFY": ["1", "2"], "W1-PR": ["W1-VERIFY"],
+      "W1-REVIEW": ["W1-PR"], "W1-MERGE": ["W1-REVIEW"]
+    },
+    "max_concurrent_workers": 2,
     "estimated_parallel_speedup": 1.5,
-    "max_concurrent_workers": 2
+    "total_implementation_tasks": 2,
+    "total_infrastructure_tasks": 5
   }
 }
 ```
+
+**Task Type Reference:**
+| task_type | auto_assign | Purpose |
+|-----------|-------------|---------|
+| `implementation` | _(claimed by workers)_ | Actual code/test writing |
+| `git-operation` | `git-ops` | Branch, PR, merge |
+| `verification` | `verifier` | Export/test/type verification |
+| `e2e-testing` | `test-runner` | Browser-level validation |
+| `pr-review` | _(wave-lifecycle)_ | PR review polling and feedback processing |
+| `discovery` | _(research)_ | Codebase exploration |
 
 ### Step 1.6: Generate context-summary.json with Parallel Context (UPDATED v2.0)
 
@@ -440,19 +544,46 @@ FOR each parent task with 4+ subtasks:
 | 3 independent groups | 9 subtasks serial | 3 subtasks per worker | ~2.5x |
 | All groups dependent | N subtasks | N subtasks | 1x (no change) |
 
-### Step 2: Execution Readiness Check (UPDATED v2.0)
+### Step 2: Execution Readiness Check (UPDATED v5.0)
 
-Evaluate readiness to begin implementation by presenting task summary with parallel execution strategy.
+Evaluate readiness to begin implementation by presenting task summary with dependency graph.
 
 **Readiness Summary:**
 - **Present to User**:
   - Spec name and description
-  - Total tasks and parallel execution strategy
+  - Total tasks (implementation vs infrastructure) and dependency structure
   - Estimated speedup from parallelization
-  - First wave tasks (if parallel mode)
+  - First wave tasks
   - Key deliverables
 
-**Execution Prompt (Parallel Mode):**
+**Execution Prompt (v4.0 — Dependency-First):**
+```
+PROMPT: "The spec planning is complete with dependency-first task analysis.
+
+**Format:** tasks.json v4.0 (dependency-first)
+**Total Tasks:** [N_IMPL] implementation + [N_INFRA] infrastructure = [N_TOTAL] total
+**Execution Waves:** [W] (computed from dependency depth)
+**Estimated Speedup:** [X]x
+
+**Dependency Graph:**
+W1-BRANCH
+├── 1 (Task 1 description)
+├── 2 (Task 2 description)
+│   └── W1-VERIFY → W1-PR → W1-REVIEW → W1-MERGE → DELIVER
+
+**First Wave Implementation Tasks (can run in parallel):**
+- Task 1: [TITLE] (complexity: MEDIUM)
+- Task 2: [TITLE] (complexity: LOW)
+
+Would you like me to proceed? Options:
+1. **Execute all** — Run via /execute-tasks (recommended)
+2. **Execute Task 1 only** — Single task focus
+3. **Review plan** — Examine dependency graph before proceeding
+
+Type '1', '2', or '3' (or describe your preference)."
+```
+
+**Execution Prompt (v3.0 — Parallel Waves, legacy):**
 ```
 PROMPT: "The spec planning is complete with parallel execution analysis.
 
@@ -464,36 +595,20 @@ PROMPT: "The spec planning is complete with parallel execution analysis.
 - Task 1: [TITLE]
 - Task 2: [TITLE] (if applicable)
 
-**Estimated Time:**
-- Sequential: ~[X] minutes
-- Parallel: ~[Y] minutes
-
 Would you like me to proceed? Options:
-1. **Execute Wave 1** - Run all Wave 1 tasks in parallel (recommended)
-2. **Execute Task 1 only** - Single task focus
-3. **Review plan** - Examine parallel analysis before proceeding
+1. **Execute Wave 1** — Run all Wave 1 tasks in parallel (recommended)
+2. **Execute Task 1 only** — Single task focus
+3. **Review plan** — Examine parallel analysis before proceeding
 
 Type '1', '2', or '3' (or describe your preference)."
 ```
 
-**Execution Prompt (Sequential Mode):**
-```
-PROMPT: "The spec planning is complete.
-
-**Execution Strategy:** Sequential (tasks have dependencies)
-**Total Tasks:** [N] parent tasks
-
-**Task 1:** [FIRST_TASK_TITLE]
-[BRIEF_DESCRIPTION_OF_TASK_1_AND_SUBTASKS]
-
-Would you like me to proceed with implementing Task 1?
-
-Type 'yes' to proceed with Task 1, or let me know if you'd like to review or modify the plan first."
-```
-
 **Execution Flow:**
 ```
-IF parallel_mode AND user_chooses_wave:
+IF v4_mode:
+  REFERENCE: @.agent-os/instructions/core/execute-tasks.md
+  EXECUTE: Dependency-driven execution using task graph
+ELSE IF parallel_mode AND user_chooses_wave:
   REFERENCE: @.agent-os/instructions/core/execute-tasks.md
   MODE: parallel_waves
   EXECUTE: All tasks in Wave 1 using async agents
@@ -533,3 +648,220 @@ See @shared/error-recovery.md for general recovery procedures.
 
 ## File Creation
 Use the native Write tool for creating the tasks.md file with proper formatting and structure.
+---
+
+## SECTION: Complexity Analysis (v4.9.0)
+
+### Step 0.5: Analyze Task Complexity
+
+Before generating subtasks, analyze each task for complexity and set `complexity_override` field.
+
+**Complexity Analysis Function:**
+
+```javascript
+const analyzeComplexity = async (task, techSpec, codebaseRefs) => {
+  // Base complexity from keywords
+  const baseComplexity = detectKeywordComplexity(task.description);
+  
+  // Factor 1: File count from technical spec
+  const filesAffected = extractFilesAffected(techSpec, task.description);
+  const fileCountFactor = filesAffected.length >= 5 ? 2 : filesAffected.length >= 3 ? 1 : 0;
+  
+  // Factor 2: Import dependencies
+  const importCount = await countImportsNeeded(task, codebaseRefs);
+  const importFactor = importCount >= 5 ? 1 : 0;
+  
+  // Factor 3: Test requirements
+  const testRequirements = detectTestRequirements(task.description, techSpec);
+  const testFactor = testRequirements.includes('integration') || testRequirements.includes('e2e') ? 1 : 0;
+  
+  // Calculate final complexity
+  const complexityScore = baseComplexity + fileCountFactor + importFactor + testFactor;
+  
+  return {
+    complexity: scoreToLevel(complexityScore),
+    reasoning: `Base: ${baseComplexity}, Files: +${fileCountFactor}, Imports: +${importFactor}, Tests: +${testFactor}`,
+    filesAffected,
+    importCount,
+    testRequirements
+  };
+};
+
+const detectKeywordComplexity = (description) => {
+  const descLower = description.toLowerCase();
+  
+  const HIGH_KEYWORDS = ['refactor', 'redesign', 'migrate', 'overhaul', 'architect', 'rewrite'];
+  const MEDIUM_KEYWORDS = ['implement', 'create', 'extend', 'integrate', 'build'];
+  const LOW_KEYWORDS = ['fix', 'add', 'update', 'remove', 'rename', 'tweak'];
+  
+  if (HIGH_KEYWORDS.some(k => descLower.includes(k))) return 3;
+  if (MEDIUM_KEYWORDS.some(k => descLower.includes(k))) return 2;
+  return 1;
+};
+
+const scoreToLevel = (score) => {
+  if (score >= 5) return 'HIGH';
+  if (score >= 3) return 'MEDIUM';
+  return 'LOW';
+};
+```
+
+**Apply to Tasks:**
+
+```javascript
+FOR each task in generated_tasks:
+  complexity = await analyzeComplexity(task, technicalSpec, codebaseRefs)
+  
+  task.complexity_override = complexity.complexity
+  task.complexity_reasoning = complexity.reasoning
+  
+  LOG: `Task ${task.id}: ${complexity.complexity} - ${complexity.reasoning}`
+```
+
+### Task Template Selection
+
+When generating tasks, select appropriate templates from `.claude/templates/tasks/`:
+
+```javascript
+const selectTaskTemplate = (task, specType) => {
+  const descLower = task.description.toLowerCase();
+  
+  // Pattern matching for template selection
+  if (descLower.includes('endpoint') || descLower.includes('api') || descLower.includes('route')) {
+    return loadTemplate('api-endpoint.json');
+  }
+  
+  if (descLower.includes('component') || descLower.includes('ui') || descLower.includes('react')) {
+    return loadTemplate('react-component.json');
+  }
+  
+  if (descLower.includes('fix') || descLower.includes('bug') || descLower.includes('error')) {
+    return loadTemplate('bugfix.json');
+  }
+  
+  if (descLower.includes('refactor') || descLower.includes('extract') || descLower.includes('restructure')) {
+    return loadTemplate('refactor.json');
+  }
+  
+  // Default: Use spec-type based template or generic
+  return null; // Use inline generation
+};
+
+const loadTemplate = (templateName) => {
+  const templatePath = `.claude/templates/tasks/${templateName}`;
+  IF file exists templatePath:
+    RETURN JSON.parse(readFile(templatePath))
+  ELSE:
+    RETURN null
+};
+```
+
+---
+
+## SECTION: Spec Validation Gate (v4.9.0)
+
+### Step 0: Validate Spec Completeness
+
+Before generating tasks, validate the spec has required sections.
+
+**Validation Function:**
+
+```javascript
+const validateSpec = async (specContent) => {
+  const errors = [];
+  const warnings = [];
+  
+  // Required sections
+  const REQUIRED_SECTIONS = [
+    { pattern: /##\s*Overview/i, name: 'Overview' },
+    { pattern: /##\s*User Stories/i, name: 'User Stories' },
+    { pattern: /##\s*Expected Deliverable/i, name: 'Expected Deliverable' }
+  ];
+  
+  for (const section of REQUIRED_SECTIONS) {
+    if (!section.pattern.test(specContent)) {
+      errors.push(`Missing required section: ${section.name}`);
+    }
+  }
+  
+  // Recommended sections (warnings only)
+  const RECOMMENDED_SECTIONS = [
+    { pattern: /##\s*Spec Scope/i, name: 'Spec Scope' },
+    { pattern: /##\s*Out of Scope/i, name: 'Out of Scope' },
+    { pattern: /##\s*Technical/i, name: 'Technical Requirements' }
+  ];
+  
+  for (const section of RECOMMENDED_SECTIONS) {
+    if (!section.pattern.test(specContent)) {
+      warnings.push(`Recommended section missing: ${section.name}`);
+    }
+  }
+  
+  // Content quality checks
+  const userStoryMatch = specContent.match(/##\s*User Stories[\s\S]*?(?=##|$)/i);
+  if (userStoryMatch) {
+    const storyCount = (userStoryMatch[0].match(/###\s*Story/gi) || []).length;
+    if (storyCount === 0) {
+      warnings.push('No user stories found in User Stories section');
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    canProceed: errors.length === 0  // Warnings don't block
+  };
+};
+```
+
+**Validation Gate:**
+
+```javascript
+// At start of create-tasks execution
+const specContent = await readFile(specPath);
+const validation = await validateSpec(specContent);
+
+IF !validation.valid:
+  DISPLAY: "Spec validation failed:"
+  FOR error in validation.errors:
+    DISPLAY: "  - " + error
+  
+  PROMPT: "Spec is incomplete. Options:
+    1. Continue anyway (not recommended)
+    2. Return to edit spec
+    3. Show what's missing"
+  
+  IF user_chooses_continue:
+    LOG: "Proceeding with incomplete spec (user override)"
+  ELSE:
+    HALT: Return to spec editing
+ELSE:
+  IF validation.warnings.length > 0:
+    DISPLAY: "Spec validation passed with warnings:"
+    FOR warning in validation.warnings:
+      DISPLAY: "  ⚠ " + warning
+```
+
+---
+
+## Changelog
+
+### v5.0.1 (2026-02-08)
+- **PR review as explicit infrastructure task**: `W{N}-REVIEW` node between PR and MERGE
+- **New task_type `pr-review`**: Tracks review polling, feedback processing, re-review cycles
+- **Dependency chain updated**: `W{N}-PR → W{N}-REVIEW → W{N}-MERGE` (previously PR → MERGE)
+
+### v5.0.0 (2026-02-06)
+- **Dependency-first task format (v4.0)**: `depends_on` is the single source of truth for dependencies
+- **Explicit infrastructure tasks**: Branch, verify, PR, merge, deliver tasks are visible in the graph
+- **Computed waves**: Topological sort (Kahn's algorithm) replaces manual wave assignment
+- **Feature flag**: `AGENT_OS_TASKS_V4=true` enables v4.0 format (default: false)
+- **Updated Step 1.5**: Dependency analysis + infrastructure generation replaces parallelization analysis
+- **Updated Step 2**: Readiness check shows dependency graph visualization
+
+### v4.9.0 (2026-01-09)
+- Added complexity analysis with multi-factor scoring
+- Added task template selection from `.claude/templates/tasks/`
+- Added spec validation gate with required/recommended sections
+- Added `complexity_override` field generation for tasks

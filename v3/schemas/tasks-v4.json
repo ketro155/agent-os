@@ -1,0 +1,334 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agent-os.dev/schemas/tasks-v4.json",
+  "title": "Agent OS Tasks Schema v4.0",
+  "description": "Dependency-first task format with explicit infrastructure tasks. Dependencies are primary, waves are computed.",
+  "type": "object",
+  "required": ["version", "spec", "tasks"],
+  "properties": {
+    "version": {
+      "const": "4.0",
+      "description": "Schema version — must be 4.0"
+    },
+    "spec": {
+      "type": "string",
+      "description": "Specification name/identifier"
+    },
+    "spec_path": {
+      "type": "string",
+      "description": "Path to specification directory"
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When tasks.json was created"
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last modification timestamp"
+    },
+    "markdown_generated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When tasks.md was last regenerated (auto-managed by hooks)"
+    },
+    "tasks": {
+      "type": "array",
+      "description": "All tasks — implementation and infrastructure — in a flat list",
+      "items": {
+        "$ref": "#/definitions/task"
+      }
+    },
+    "future_tasks": {
+      "type": "array",
+      "description": "Tasks identified for future consideration (backlog)",
+      "items": {
+        "$ref": "#/definitions/future_task"
+      }
+    },
+    "computed": {
+      "type": "object",
+      "description": "Derived data — auto-generated from depends_on via topological sort. Do not edit manually.",
+      "properties": {
+        "waves": {
+          "type": "array",
+          "description": "Execution waves computed from dependency depth (Kahn's algorithm)",
+          "items": {
+            "type": "object",
+            "required": ["depth", "tasks"],
+            "properties": {
+              "depth": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Topological depth (0 = no dependencies)"
+              },
+              "tasks": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Task IDs at this depth"
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable wave description"
+              },
+              "parallel": {
+                "type": "boolean",
+                "description": "Whether tasks at this depth can run in parallel"
+              }
+            }
+          }
+        },
+        "dependency_graph": {
+          "type": "object",
+          "description": "Adjacency list: task_id → [dependency_ids]. Auto-generated from task.depends_on.",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "max_concurrent_workers": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum tasks that can run in parallel at any depth"
+        },
+        "estimated_parallel_speedup": {
+          "type": "number",
+          "description": "Estimated speedup from parallel execution"
+        },
+        "total_implementation_tasks": {
+          "type": "integer",
+          "description": "Count of implementation tasks"
+        },
+        "total_infrastructure_tasks": {
+          "type": "integer",
+          "description": "Count of infrastructure tasks (git-operation, verification, e2e-testing, pr-review)"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Aggregated statistics",
+      "properties": {
+        "total_tasks": { "type": "integer" },
+        "implementation_tasks": { "type": "integer" },
+        "infrastructure_tasks": { "type": "integer" },
+        "completed": { "type": "integer" },
+        "in_progress": { "type": "integer" },
+        "blocked": { "type": "integer" },
+        "pending": { "type": "integer" },
+        "overall_percent": { "type": "integer" }
+      }
+    }
+  },
+  "definitions": {
+    "task_type": {
+      "enum": ["implementation", "git-operation", "verification", "e2e-testing", "discovery", "pr-review"],
+      "description": "Task classification for role-based assignment"
+    },
+    "task_status": {
+      "enum": ["pending", "in_progress", "pass", "blocked", "skipped"],
+      "description": "Current task status"
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "task_type", "description", "status", "depends_on"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Task identifier. Implementation tasks: numeric (e.g., '1', '1.1'). Infrastructure: prefixed (e.g., 'W1-BRANCH', 'W1-VERIFY', 'W1-REVIEW', 'W1-PR', 'E2E', 'DELIVER')"
+        },
+        "task_type": {
+          "$ref": "#/definitions/task_type"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable task description"
+        },
+        "status": {
+          "$ref": "#/definitions/task_status"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Task IDs that must complete before this task can start. Single source of truth for dependencies."
+        },
+        "parent": {
+          "type": "string",
+          "description": "Parent task ID (for subtasks only)"
+        },
+        "subtasks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Child task IDs (for parent implementation tasks)"
+        },
+        "auto_assign": {
+          "type": "string",
+          "description": "Role hint for automatic task assignment (e.g., 'git-ops', 'verifier', 'test-runner')"
+        },
+        "config": {
+          "type": "object",
+          "description": "Task-type-specific configuration",
+          "properties": {
+            "operation": {
+              "type": "string",
+              "description": "For git-operation: branch-setup, create-pr, merge-pr. For pr-review: review-cycle"
+            },
+            "base_branch": { "type": "string" },
+            "feature_branch": { "type": "string" },
+            "wave_branch": { "type": "string" },
+            "source": { "type": "string" },
+            "target": { "type": "string" },
+            "requires_approval": { "type": "boolean" },
+            "verify_exports": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "For verification: exports to verify exist"
+            },
+            "verify_files": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "For verification: files to verify exist"
+            },
+            "run_tests": { "type": "boolean" },
+            "run_tsc": { "type": "boolean" },
+            "scope": {
+              "type": "string",
+              "description": "For e2e-testing: smoke or full"
+            },
+            "test_plan": {
+              "type": "string",
+              "description": "For e2e-testing: path to test-plan.json"
+            }
+          }
+        },
+        "isolation_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How independent this task is from other tasks at the same depth (1.0 = fully independent)"
+        },
+        "shared_files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files shared with other tasks (affects isolation_score)"
+        },
+        "complexity": {
+          "enum": ["LOW", "MEDIUM", "HIGH"],
+          "description": "Task complexity rating (implementation tasks only)"
+        },
+        "complexity_reasoning": {
+          "type": "string",
+          "description": "Why this complexity was assigned"
+        },
+        "predecessor_artifacts": {
+          "type": "object",
+          "description": "Expected outputs from predecessor tasks that this task depends on",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "exports": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "files": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "subtask_execution": {
+          "type": "object",
+          "description": "Subtask parallelization config (kept from v3.0)",
+          "properties": {
+            "mode": {
+              "enum": ["sequential", "parallel_groups"],
+              "default": "sequential"
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["group_id", "subtasks"],
+                "properties": {
+                  "group_id": { "type": "integer", "minimum": 1 },
+                  "subtasks": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "files_affected": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "tdd_unit": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "tdd_phase": {
+          "enum": ["red", "green", "refactor", "verify"],
+          "description": "TDD phase (for subtasks only)"
+        },
+        "progress_percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "started_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "duration_minutes": {
+          "type": ["integer", "null"]
+        },
+        "notes": {
+          "type": ["string", "null"]
+        },
+        "blocker": {
+          "type": ["string", "null"]
+        },
+        "artifacts": {
+          "type": "object",
+          "description": "Task outputs for cross-task verification",
+          "properties": {
+            "files_modified": { "type": "array", "items": { "type": "string" } },
+            "files_created": { "type": "array", "items": { "type": "string" } },
+            "functions_created": { "type": "array", "items": { "type": "string" } },
+            "exports_added": { "type": "array", "items": { "type": "string" } },
+            "test_files": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "checkpoint": {
+          "type": "object",
+          "description": "Recovery checkpoint data",
+          "properties": {
+            "git_commit": { "type": "string" },
+            "last_successful_step": { "type": "string" },
+            "state_snapshot": { "type": "object" }
+          }
+        }
+      }
+    },
+    "future_task": {
+      "type": "object",
+      "required": ["id", "description", "source"],
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "source": { "type": "string" },
+        "priority": { "enum": ["low", "medium", "high"] },
+        "rationale": { "type": "string" }
+      }
+    }
+  }
+}

@@ -44,6 +44,11 @@ The orchestrator spawns one wave-lifecycle-agent per wave to achieve:
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
+│  VERSION_DETECT (v5.0.1): If v4.0 → find W{N}-REVIEW task      │
+│                           Mark REVIEW as in_progress            │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
 │  AWAITING_REVIEW: Poll for bot review (internal loop)           │
 │                   Max 15 polls (~30 minutes)                    │
 │                   If timeout → EXIT with timeout status         │
@@ -52,7 +57,7 @@ The orchestrator spawns one wave-lifecycle-agent per wave to achieve:
 ┌─────────────────────────────────────────────────────────────────┐
 │  REVIEW_PROCESSING: Spawn review executor                       │
 │                     If commits made → back to AWAITING_REVIEW   │
-│                     If approved/no changes → continue           │
+│                     If approved → mark W{N}-REVIEW pass (v4.0)  │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -170,6 +175,40 @@ bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh set-pr ${
 INFORM: `PR #${pr_number} created. Waiting for bot review...`
 ```
 
+### Step 1.5: Version Detection & REVIEW Task Management (v5.0.1)
+
+Detect tasks.json version and manage the `W{N}-REVIEW` infrastructure task for v4.0 specs.
+
+```javascript
+// Detect tasks.json version for REVIEW task management
+const tasks_file = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh status ${spec_name}`
+const tasks_status = JSON.parse(tasks_file)
+const spec_version = tasks_status.version || "3.0"
+
+let review_task_id = null
+
+if (spec_version.startsWith("4")) {
+  // v4.0: Look for W{N}-REVIEW task in current wave
+  review_task_id = `W${wave_number}-REVIEW`
+
+  // Verify the REVIEW task exists
+  const tasks_json_path = bash `find ${CLAUDE_PROJECT_DIR}/.agent-os/specs -name "tasks.json" -path "*${spec_name}*" | head -1`
+  const review_exists = bash `jq --arg rid "${review_task_id}" '.tasks[] | select(.id == $rid) | .id' "${tasks_json_path.trim()}" 2>/dev/null`
+
+  if (review_exists.trim()) {
+    // Mark REVIEW task as in_progress
+    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh update "${review_task_id}" "in_progress" "${spec_name}"`
+    INFORM: `v4.0 spec: Managing ${review_task_id} task`
+  } else {
+    // No REVIEW task — v4.0 spec created before this feature (backward compat)
+    review_task_id = null
+    INFORM: `v4.0 spec without REVIEW task — proceeding with implicit review`
+  }
+} else {
+  INFORM: `v3.0 spec: Using hardcoded review phases`
+}
+```
+
 ### Step 2: Wait for Review (AWAITING_REVIEW Phase)
 
 :await_review_phase
@@ -285,6 +324,13 @@ Process PR review feedback for the current branch.
   // Decision point: continue to merge or loop for re-review?
   if (review.pr_approved) {
     INFORM: `PR #${pr_number} approved! Ready to merge.`
+
+    // v4.0: Mark W{N}-REVIEW task as pass
+    if (review_task_id) {
+      bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh update "${review_task_id}" "pass" "${spec_name}"`
+      INFORM: `Marked ${review_task_id} as pass`
+    }
+
     break REVIEW_LOOP  // Exit to merge phase
 
   } else if ((review.commits_made || 0) > 0) {
@@ -301,6 +347,13 @@ Process PR review feedback for the current branch.
   } else {
     // No code changes - ready to merge
     INFORM: `No blocking issues. Ready to merge.`
+
+    // v4.0: Mark W{N}-REVIEW task as pass
+    if (review_task_id) {
+      bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh update "${review_task_id}" "pass" "${spec_name}"`
+      INFORM: `Marked ${review_task_id} as pass`
+    }
+
     break REVIEW_LOOP  // Exit to merge phase
   }
 }
@@ -399,6 +452,22 @@ Run smoke-level E2E tests before final merge to main.
 Merge the PR to the appropriate target branch.
 
 ```javascript
+// v4.0 defense-in-depth: Verify REVIEW task is pass before merging
+if (review_task_id) {
+  const tasks_json_path = bash `find ${CLAUDE_PROJECT_DIR}/.agent-os/specs -name "tasks.json" -path "*${spec_name}*" | head -1`
+  const review_status = bash `jq -r --arg rid "${review_task_id}" '.tasks[] | select(.id == $rid) | .status' "${tasks_json_path.trim()}" 2>/dev/null`
+
+  if (review_status.trim() !== "pass") {
+    RETURN: {
+      status: "failed",
+      wave: wave_number,
+      phase: "READY_TO_MERGE",
+      pr_number: pr_number,
+      error: `Cannot merge: ${review_task_id} status is "${review_status.trim()}" (expected "pass"). Review must complete before merge.`
+    }
+  }
+}
+
 // Determine merge target
 const pr_target = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh pr-target`
 const target_info = JSON.parse(pr_target)
@@ -535,6 +604,7 @@ This is well within safe limits while preserving all wave-related context.
 | Review timeout (30 min) | Return timeout, orchestrator handles |
 | Review processing fails | Return failed with phase=REVIEW_PROCESSING |
 | Smoke E2E fails (v4.11.0) | Return failed with phase=SMOKE_E2E |
+| REVIEW task not pass (v5.0.1) | Return failed with phase=READY_TO_MERGE |
 | Merge conflict | Return failed with phase=READY_TO_MERGE |
 | User cancels merge | Return waiting, orchestrator handles |
 
@@ -579,6 +649,12 @@ if (reviewResult.status === 'timeout') {
 ---
 
 ## Changelog
+
+### v5.0.1 (2026-02-08)
+- Added Step 1.5: Version detection and `W{N}-REVIEW` task management for v4.0 specs
+- REVIEW task marked `in_progress` at review start, `pass` on approval or no blocking issues
+- Defense-in-depth merge guard: verifies REVIEW task status before merge (Step 4)
+- Backward compatible: v3.0 specs use hardcoded phases, v4.0 without REVIEW task skips gracefully
 
 ### v4.11.0 (2026-01-14)
 - Added Step 3.5 Smoke E2E Validation (final wave only)
