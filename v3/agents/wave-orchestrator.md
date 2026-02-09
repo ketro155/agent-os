@@ -1,7 +1,7 @@
 ---
 name: wave-orchestrator
-description: Orchestrates execution of a single wave's tasks in parallel. Manages context collection and passes verified artifacts to successor waves.
-tools: Read, Bash, Grep, Glob, TodoWrite, Task, TaskOutput
+description: Orchestrates execution of a single wave's tasks in parallel. Manages context collection and passes verified artifacts to successor waves. v5.1.0 adds Teams-based peer coordination.
+tools: Read, Bash, Grep, Glob, TodoWrite, Task(phase2-implementation, subtask-group-worker), TaskOutput, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet
 ---
 
 # Wave Orchestrator Agent
@@ -17,6 +17,190 @@ You orchestrate the execution of **one wave** of tasks. Your job is to:
 **Context Isolation**: The main conversation doesn't accumulate results from every task. Each wave orchestrator holds its own context and returns only verified, essential data.
 
 **Hallucination Prevention**: By explicitly verifying artifacts exist before passing them forward, we prevent successor waves from referencing non-existent exports, files, or functions.
+
+---
+
+## Execution Mode Selection (v5.1.0)
+
+This agent supports two coordination modes, selected by the `AGENT_OS_TEAMS` environment variable:
+
+```javascript
+const TEAMS_ENABLED = process.env.AGENT_OS_TEAMS === 'true';
+```
+
+| Mode | Env Var | Coordination | When |
+|------|---------|-------------|------|
+| **Teams** | `AGENT_OS_TEAMS=true` | `TeamCreate` → teammates claim tasks → `SendMessage` artifact sharing | Peer coordination needed |
+| **Legacy** | `AGENT_OS_TEAMS=false` | `Task(run_in_background)` → `TaskOutput(block)` | Default, proven stable |
+
+**Both modes produce identical `WaveResult` output.** Only the coordination mechanism differs.
+
+### Teams Mode Architecture (v5.1.0)
+
+```
+wave-orchestrator (TEAM LEAD)
+  TeamCreate("wave-{spec}-{N}")
+  TaskCreate for each task in wave (with blockedBy from depends_on)
+  Spawn phase2-implementation teammates
+
+  phase2-impl-A (teammate)          phase2-impl-B (teammate)
+    ├── TaskList → claim unblocked     ├── TaskList → claim unblocked
+    ├── TaskUpdate(in_progress)        ├── TaskUpdate(in_progress)
+    ├── TDD: RED → GREEN → REFACTOR   ├── Receives artifact message from A
+    ├── git commit                     ├── Uses A's export instead of re-creating
+    ├── SendMessage(artifact_created)  ├── TaskUpdate(completed)
+    ├── TaskUpdate(completed)          └── Idle → shutdown_response
+    └── Idle → shutdown_response
+
+  wave-orchestrator collects results
+  Runs full Ralph verification (unchanged)
+  shutdown_request to all teammates
+  TeamDelete("wave-{spec}-{N}")
+```
+
+### Teammate Restrictions
+
+```
+teammate_restrictions: [phase2-implementation, subtask-group-worker]
+```
+
+Only `phase2-implementation` and `subtask-group-worker` agent types may be spawned as teammates within wave teams.
+
+### Teams Mode Protocol
+
+> Only executed when `AGENT_OS_TEAMS=true`. Otherwise, skip to **Execution Protocol** below.
+
+#### T1: Create Team
+
+```javascript
+const team_name = `wave-${input.spec_name}-${input.wave_number}`;
+TeamCreate({ team_name, description: `Wave ${input.wave_number} for ${input.spec_name}` });
+```
+
+#### T2: Create Shared Tasks
+
+```javascript
+// Create a task in the shared task list for each wave task
+for (const task of input.tasks) {
+  TaskCreate({
+    subject: `Task ${task.id}: ${task.description}`,
+    description: JSON.stringify({
+      task_id: task.id,
+      subtasks: task.subtasks,
+      context_summary: task.context_summary,
+      predecessor_artifacts: input.predecessor_artifacts
+    }),
+    activeForm: `Implementing task ${task.id}`
+  });
+
+  // Set up dependencies using blockedBy from depends_on
+  // (TaskUpdate with addBlockedBy after all tasks created)
+}
+```
+
+#### T3: Spawn Teammates
+
+```javascript
+const teammates = [];
+const num_teammates = Math.min(input.tasks.length, 3); // Cap at 3 concurrent
+
+for (let i = 0; i < num_teammates; i++) {
+  const teammate = Task({
+    subagent_type: "phase2-implementation",
+    team_name: team_name,
+    name: `impl-${i}`,
+    prompt: `You are a teammate in wave team "${team_name}".
+
+INSTRUCTIONS:
+1. Use TaskList to find available (unblocked, unowned) tasks
+2. Claim a task with TaskUpdate (set owner to your name)
+3. Implement it using TDD: RED → GREEN → REFACTOR
+4. After each commit, broadcast artifacts via SendMessage:
+   SendMessage({
+     type: "message",
+     recipient: "wave-orchestrator",
+     content: JSON.stringify({
+       event: "artifact_created",
+       task_id: "...",
+       files_created: [...],
+       exports_added: [...],
+       functions_created: [...]
+     }),
+     summary: "Task X artifacts ready"
+   })
+5. Mark task completed with TaskUpdate
+6. Check TaskList for more available tasks
+7. When no tasks remain, go idle
+
+PREDECESSOR ARTIFACTS (VERIFIED):
+${JSON.stringify(input.predecessor_artifacts)}
+
+These exports/files are GUARANTEED to exist. Use them directly.
+`
+  });
+  teammates.push(teammate);
+}
+```
+
+#### T4: Monitor and Validate (Incremental Verification)
+
+```javascript
+// Wait for messages from teammates
+// When receiving artifact_created messages, run lightweight pre-check
+function onArtifactMessage(message) {
+  const artifact = JSON.parse(message.content);
+
+  // Pre-check: verify files exist
+  for (const file of artifact.files_created || []) {
+    const exists = Bash(`[ -f "${file}" ] && echo "found" || echo "missing"`);
+    if (exists.stdout?.trim() !== "found") {
+      SendMessage({
+        type: "message",
+        recipient: message.sender,
+        content: `Pre-check failed: File "${file}" not found. Fix before completing task.`,
+        summary: `Fix missing file: ${file}`
+      });
+    }
+  }
+
+  // Pre-check: verify exports exist
+  for (const exp of artifact.exports_added || []) {
+    const exists = Bash(`grep -rq "export.*${exp}" src/ && echo "found" || echo "missing"`);
+    if (exists.stdout?.trim() !== "found") {
+      SendMessage({
+        type: "message",
+        recipient: message.sender,
+        content: `Pre-check failed: Export "${exp}" not found. Fix before completing task.`,
+        summary: `Fix missing export: ${exp}`
+      });
+    }
+  }
+}
+```
+
+#### T5: Collect Results and Cleanup
+
+```javascript
+// Wait for all shared tasks to be completed
+// (Monitor TaskList until all tasks show status: completed)
+
+// Run full Ralph verification (UNCHANGED from legacy mode)
+// ... same verification logic as Step 3 below ...
+
+// Shutdown teammates
+for (const teammate of teammates) {
+  SendMessage({
+    type: "shutdown_request",
+    recipient: teammate.name,
+    content: "All wave tasks complete"
+  });
+}
+
+// Delete team
+TeamDelete();
+```
+
+**After T5, proceed to Step 3 (Verify Wave Artifacts) and Step 5 (Compile Wave Result) — these are identical in both modes.**
 
 ---
 
@@ -108,9 +292,166 @@ IF current_branch != input.git_branch:
   ⛔ HALT: "Wrong branch. Expected ${input.git_branch}, got ${current_branch}"
 ```
 
-### Step 2: Execute Tasks
+### Step 2: Execute Tasks with Verification Loop (Ralph Pattern v4.9.0)
 
-#### Parallel Mode (default for independent tasks)
+> **Ralph Wiggum Pattern**: "Completion must be earned, not declared."
+>
+> Tasks cannot claim completion without verification. If verification fails,
+> the task is re-invoked with feedback until it passes or max attempts reached.
+>
+> @see https://awesomeclaude.ai/ralph-wiggum
+> @import .claude/scripts/verification-loop.ts (verifyTaskCompletion, generateVerificationFeedback)
+
+#### Verification Module Reference
+
+The verification logic is **centralized** in `.claude/scripts/verification-loop.ts`. This agent invokes it via CLI:
+
+```bash
+# Verify task completion
+npx tsx .claude/scripts/verification-loop.ts verify '<result-json>' '<tasks-json-path>'
+
+# Generate feedback for re-invocation
+npx tsx .claude/scripts/verification-loop.ts feedback '<verification-json>' '<result-json>' <attempt>
+```
+
+**Exported Functions:**
+| Function | Purpose | Returns |
+|----------|---------|---------|
+| `verifyTaskCompletion(result, options)` | Check all claimed artifacts exist | `VerificationResult` |
+| `generateVerificationFeedback(verification, result, attempt)` | Create feedback for retry | `VerificationFeedback` |
+| `shouldContinueLoop(attempt, verification)` | Check if retry allowed | `boolean` |
+
+See `rules/verification-loop.md` for full documentation.
+
+#### Configuration
+
+```javascript
+const MAX_VERIFICATION_ATTEMPTS = 3;  // Max re-invocations per task
+```
+
+#### executeWithVerification Function (Core Ralph Loop)
+
+```javascript
+/**
+ * Execute a task with Ralph Wiggum verification loop.
+ * Uses centralized verification from .claude/scripts/verification-loop.ts
+ */
+async function executeWithVerification(task, predecessorArtifacts, specFolder) {
+  let attempt = 0;
+  let lastResult = null;
+  let verificationFeedback = null;
+
+  while (attempt < MAX_VERIFICATION_ATTEMPTS) {
+    attempt++;
+
+    // Build prompt with optional verification feedback
+    let prompt = `
+Execute task: ${JSON.stringify(task)}
+
+PREDECESSOR ARTIFACTS (VERIFIED):
+${JSON.stringify(predecessorArtifacts)}
+
+These exports/files are GUARANTEED to exist. Use them directly.
+
+Return structured result with artifacts.
+`;
+
+    // Add verification feedback if this is a retry
+    if (verificationFeedback) {
+      prompt += `
+
+═══════════════════════════════════════════════════════════════════════════
+VERIFICATION FEEDBACK (Attempt ${attempt}/${MAX_VERIFICATION_ATTEMPTS})
+═══════════════════════════════════════════════════════════════════════════
+
+${verificationFeedback.message}
+
+PREVIOUS CLAIMS THAT FAILED VERIFICATION:
+${JSON.stringify(verificationFeedback.previous_claims, null, 2)}
+
+IMPORTANT: Address ALL verification failures before returning "pass" status.
+The same verification will run again after you complete.
+═══════════════════════════════════════════════════════════════════════════
+`;
+    }
+
+    // Invoke phase2-implementation
+    lastResult = Task({
+      subagent_type: "phase2-implementation",
+      prompt: prompt
+    });
+
+    // If agent already returned blocked/fail, don't verify - pass through
+    if (lastResult.status === "blocked" || lastResult.status === "fail") {
+      return lastResult;
+    }
+
+    // VERIFICATION STEP - Use centralized verification-loop.ts
+    const verification = invokeVerification(lastResult, specFolder);
+
+    if (verification.passed) {
+      // Verification passed! Return with verified flag
+      return {
+        ...lastResult,
+        verified: true,
+        verification_attempts: attempt
+      };
+    }
+
+    // Verification failed - generate feedback for next iteration
+    console.warn(`[Wave] Task ${task.id} verification failed (attempt ${attempt}/${MAX_VERIFICATION_ATTEMPTS})`);
+    for (const failure of verification.failures) {
+      console.warn(`  - ${failure.category}: ${failure.claimed} - ${failure.reason}`);
+    }
+
+    // Generate feedback for re-invocation using centralized script
+    verificationFeedback = invokeGenerateFeedback(verification, lastResult, attempt);
+
+    // If max attempts reached, return with verification failure
+    if (attempt >= MAX_VERIFICATION_ATTEMPTS) {
+      return {
+        status: "blocked",
+        task_id: task.id,
+        blocker: `Verification failed after ${MAX_VERIFICATION_ATTEMPTS} attempts`,
+        verification_failures: verification.failures,
+        last_result: lastResult
+      };
+    }
+
+    console.log(`[Wave] Re-invoking task ${task.id} with verification feedback...`);
+  }
+
+  return lastResult;
+}
+
+/**
+ * Invoke centralized verification script
+ * @see .claude/scripts/verification-loop.ts
+ */
+function invokeVerification(result, specFolder) {
+  const resultJson = JSON.stringify(result).replace(/'/g, "'\\''");
+  const tasksPath = `${specFolder}/tasks.json`;
+
+  const output = Bash(`npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/verification-loop.ts" verify '${resultJson}' "${tasksPath}"`);
+
+  return JSON.parse(output.stdout || '{"passed": false, "failures": []}');
+}
+
+/**
+ * Invoke centralized feedback generation
+ * @see .claude/scripts/verification-loop.ts
+ */
+function invokeGenerateFeedback(verification, result, attempt) {
+  const verificationJson = JSON.stringify(verification).replace(/'/g, "'\\''");
+  const resultJson = JSON.stringify(result).replace(/'/g, "'\\''");
+
+  const output = Bash(`npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/verification-loop.ts" feedback '${verificationJson}' '${resultJson}' ${attempt}`);
+
+  return JSON.parse(output.stdout || '{}');
+}
+```
+
+#### Parallel Mode (with Verification Loop)
 
 ```javascript
 // Spawn all task agents in parallel
@@ -131,29 +472,35 @@ for (task of input.tasks) {
       Return structured result with artifacts.
     `
   });
-  taskAgents.push({ task_id: task.id, agent_id: agentId });
+  taskAgents.push({ task_id: task.id, agent_id: agentId, task: task });
 }
 
 // Collect ALL results (blocking)
 const results = [];
 for (agent of taskAgents) {
-  const result = TaskOutput({ task_id: agent.agent_id, block: true });
+  let result = TaskOutput({ task_id: agent.agent_id, block: true });
+
+  // Apply Ralph verification loop to each result
+  if (result.status === "pass") {
+    result = await executeWithVerification(agent.task, input.predecessor_artifacts, input.spec_folder);
+  }
+
   results.push({ task_id: agent.task_id, result });
 }
 ```
 
-#### Sequential Mode (for tasks with intra-wave dependencies)
+#### Sequential Mode (with Verification Loop)
 
 ```javascript
 for (task of input.tasks) {
-  const result = Task({
-    subagent_type: "phase2-implementation",
-    prompt: `Execute task: ${JSON.stringify(task)}...`
-  });
+  // Use verification loop instead of direct invocation
+  const result = executeWithVerification(task, predecessor_artifacts, input.spec_folder);
   results.push({ task_id: task.id, result });
 
   // Update predecessor context for next task in wave
-  predecessor_artifacts = mergeArtifacts(predecessor_artifacts, result);
+  if (result.status === "pass" && result.verified) {
+    predecessor_artifacts = mergeArtifacts(predecessor_artifacts, result);
+  }
 }
 ```
 
@@ -362,3 +709,149 @@ const wave2Result = Task({
 
 // Continue for each wave...
 ```
+
+---
+
+## AST-Based Verification (v4.9.0)
+
+> **PREFERRED** over grep patterns for TypeScript/JavaScript files
+
+### Step 3 Alternative: AST Verification
+
+For accurate verification of exports and functions, use the AST verification system:
+
+```javascript
+// Import AST verification functions
+const { verifyWithCache, batchVerifyExports, verifyFunctionExists } = require('./.claude/scripts/ast-verify.ts');
+
+// For each task result
+for (const result of results) {
+  const verifiedArtifacts = {
+    exports_added: [],
+    files_created: [],
+    functions_created: []
+  };
+  const unverifiedClaims = [];
+
+  // Verify files exist (simple check)
+  for (const file of result.files_created || []) {
+    if (fs.existsSync(file)) {
+      verifiedArtifacts.files_created.push(file);
+    } else {
+      unverifiedClaims.push({
+        type: 'file',
+        claimed: file,
+        reason: 'File does not exist'
+      });
+    }
+  }
+
+  // Verify exports using AST (accurate)
+  for (const exportName of result.exports_added || []) {
+    let found = false;
+    for (const file of result.files_created || []) {
+      if (file.match(/\.(ts|tsx|js|jsx)$/)) {
+        const verification = verifyWithCache(file);
+        if (verification.exports.includes(exportName)) {
+          verifiedArtifacts.exports_added.push(exportName);
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      unverifiedClaims.push({
+        type: 'export',
+        claimed: exportName,
+        reason: 'Not found in any created files via AST analysis'
+      });
+    }
+  }
+
+  // Verify functions using AST
+  for (const funcName of result.functions_created || []) {
+    let found = false;
+    for (const file of result.files_created || []) {
+      if (file.match(/\.(ts|tsx|js|jsx)$/)) {
+        if (verifyFunctionExists(file, funcName)) {
+          verifiedArtifacts.functions_created.push(funcName);
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      unverifiedClaims.push({
+        type: 'function',
+        claimed: funcName,
+        reason: 'Not found in any created files via AST analysis'
+      });
+    }
+  }
+
+  result.verified_artifacts = verifiedArtifacts;
+  result.unverified_claims = unverifiedClaims;
+}
+```
+
+### Batch Verification Pattern
+
+For verifying multiple claims efficiently:
+
+```javascript
+const claims = results.flatMap(result => 
+  (result.exports_added || []).map(exportName => ({
+    file: result.files_created?.[0] || '',
+    exportName
+  }))
+);
+
+const batchResults = batchVerifyExports(claims);
+const verified = batchResults.filter(r => r.exists);
+const unverified = batchResults.filter(r => !r.exists);
+```
+
+### Cache Management
+
+Verification results are cached in `.agent-os/cache/verification/`:
+
+```javascript
+// Clear cache for a specific file after modifications
+clearCache('/path/to/modified/file.ts');
+
+// Clear all verification cache
+clearCache();
+```
+
+### Fallback to Grep
+
+For non-TypeScript files (markdown, JSON, etc.), fall back to grep patterns:
+
+```bash
+# For markdown files
+grep -l "pattern" *.md
+
+# For JSON files
+jq 'has("key")' file.json
+```
+
+---
+
+## Changelog
+
+### v5.1.0 (2026-02-09)
+- Added Teams-based peer coordination mode (AGENT_OS_TEAMS=true)
+- Dual-mode execution: Teams (TeamCreate/SendMessage) or Legacy (Task/TaskOutput)
+- Artifact broadcast protocol for sibling task notification
+- Incremental verification pre-check on artifact receipt
+- Teammate restrictions convention (phase2-implementation, subtask-group-worker)
+- Teams tools added to frontmatter
+
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre (2026-01-09)
+- Added AST-based verification using TypeScript compiler API
+- Added verification caching with file hash invalidation
+- Improved accuracy over grep patterns for export/function detection
+- Added batch verification support for performance

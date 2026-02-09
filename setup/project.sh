@@ -466,7 +466,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         # Install agents (phase subagents + utility agents)
         echo ""
         echo "  📂 Agents:"
-        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter; do
+        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher; do
             if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             fi
@@ -556,7 +556,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" "./.claude/ENV-VARS.md" "$OVERWRITE_CLAUDE" "ENV-VARS.md"
         fi
-        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures; do
+        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
             fi

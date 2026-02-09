@@ -1,11 +1,11 @@
-# Agent OS v5.0.0 - Core Memory
+# Agent OS v5.1.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 5.0.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 5.1.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)
@@ -23,6 +23,9 @@ Agent OS is a development framework providing structured AI-assisted workflows. 
 - **Dependency-first tasks v4.0** with computed waves (v5.0.0)
 - **Explicit infrastructure tasks** visible in task graph (v5.0.0)
 - **Topological sort** for wave computation from `depends_on` (v5.0.0)
+- **Native Teams integration** for wave-level peer coordination (v5.1.0)
+- **Review-watcher agent** for message-based PR review notification (v5.1.0)
+- **Artifact broadcast protocol** for sibling task sharing (v5.1.0)
 
 ## Context Offloading (v4.10.0)
 
@@ -66,7 +69,8 @@ When you see: `[Output offloaded: 45KB → /context-read phase2_20260112_143022_
 ### Configuration (Environment Variables)
 
 ```bash
-AGENT_OS_TASKS_V4=false        # Enable tasks.json v4.0 format (v5.0)
+AGENT_OS_TASKS_V4=true         # Dependency-first tasks v4.0 format (v5.0, default true since v5.1)
+AGENT_OS_TEAMS=true            # Teams-based wave coordination (v5.1, default true since v5.1)
 AGENT_OS_INLINE_MAX=512        # Inline display threshold
 AGENT_OS_PREVIEW_MIN=4096      # Preview trigger for failures
 AGENT_OS_SUCCESS_RETENTION=24  # Hours to keep success outputs
@@ -221,6 +225,27 @@ Agent tool access uses **three complementary mechanisms**:
 - `test-discovery` → `Task(Explore)`
 
 See `rules/agent-tool-restrictions.md` for full decision tree and examples.
+
+### Teams Integration (v5.1.0)
+
+Agent OS uses Claude Code's native Teams API for peer coordination where it adds clear value:
+
+| Scenario | Mode | Mechanism |
+|----------|------|-----------|
+| Within-wave task coordination | Teams | `TeamCreate` + `SendMessage` artifact sharing |
+| PR review waiting | Teams | `review-watcher` teammate with message notification |
+| Cross-wave orchestration | Task() | Hierarchical spawning for context isolation |
+| PR review cycle | Task() | Sequential discovery + implementation |
+
+**Feature flag**: `AGENT_OS_TEAMS` (default: `false`). Set to `true` in `settings.json` to enable.
+
+**Key agents affected:**
+- `wave-orchestrator` — team lead, spawns phase2 teammates for parallel tasks
+- `phase2-implementation` — teammate mode: claims tasks, broadcasts artifacts
+- `execute-spec-orchestrator` — spawns `review-watcher` teammate for PR polling
+- `review-watcher` — lightweight Haiku-model teammate that notifies on review arrival
+
+See `rules/teams-integration.md` for full documentation.
 
 ### Git Workflow
 
@@ -436,3 +461,4 @@ Agents with `memory: project` accumulate cross-session knowledge scoped to the p
 @import rules/verification-loop.md
 @import rules/e2e-integration.md
 @import rules/agent-tool-restrictions.md
+@import rules/teams-integration.md

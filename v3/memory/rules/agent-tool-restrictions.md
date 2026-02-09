@@ -1,17 +1,18 @@
-# Agent Tool Restrictions (v4.12.0)
+# Agent Tool Restrictions (v5.1.0)
 
 > Standardized approach for restricting agent capabilities through tool access control.
 > Ensures consistent security posture across all Agent OS agents.
 
 ## Overview
 
-Agent OS uses **three complementary mechanisms** for tool access control:
+Agent OS uses **four complementary mechanisms** for tool access control:
 
 | Mechanism | Type | Purpose | When to Use |
 |-----------|------|---------|-------------|
 | `tools:` | Positive list | Define available tools | **Always** - primary restriction |
 | `disallowedTools:` | Negative list | Defense-in-depth | Security-critical agents only |
 | `Task(types)` | Spawn restriction | Limit spawnable agent types | Orchestrators with `Task` tool (v4.12.0) |
+| `teammate_restrictions` | Team restriction | Limit spawnable teammate types | Team leads with `TeamCreate` tool (v5.1.0) |
 
 ## Primary Mechanism: `tools:` (Positive List)
 
@@ -37,6 +38,8 @@ tools: Read, Grep, Glob  # Only these three tools are available
 | Read-only analysis | `Read, Grep, Glob` | Cannot modify filesystem |
 | Implementation | `Read, Edit, Write, Bash, Grep, Glob` | Full development access |
 | Orchestration | `Read, Bash, Grep, Glob, Task` | Spawns subagents |
+| Team lead | `Read, Bash, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList` | Coordinates teammates |
+| Lightweight teammate | `Read, Bash, SendMessage` | Minimal tools for single purpose |
 | Browser automation | `Read, Write, mcp__claude-in-chrome__*` | Chrome MCP tools |
 
 ## Secondary Mechanism: `disallowedTools:` (Defense-in-Depth)
@@ -242,6 +245,13 @@ Use `Task(types)` when an agent has `Task` in its tools list and only spawns spe
 | `pr-review-discovery` | `Task(comment-classifier, Explore)` | Classification and exploration |
 | `test-discovery` | `Task(Explore)` | Read-only test pattern exploration |
 
+### Current Teammate Restrictions (v5.1.0)
+
+| Agent (Team Lead) | Allowed Teammates | Rationale |
+|-------------------|-------------------|-----------|
+| `wave-orchestrator` | `phase2-implementation`, `subtask-group-worker` | Wave task execution |
+| `execute-spec-orchestrator` | `review-watcher` | PR review polling |
+
 ### Anti-Pattern: Unrestricted Task
 
 ```yaml
@@ -258,6 +268,32 @@ tools: Read, Task(specific-worker)
 ---
 ```
 
+## Quaternary Mechanism: `teammate_restrictions` Convention (v5.1.0)
+
+The `teammate_restrictions` convention documents which agent types a team lead may spawn as teammates. This mirrors `Task(types)` but applies to `TeamCreate` + teammate spawning.
+
+```markdown
+## Teammate Restrictions
+teammate_restrictions: [phase2-implementation, subtask-group-worker]
+```
+
+### When to Use
+
+Use `teammate_restrictions` when an agent uses `TeamCreate` and spawns teammates. Document this in the agent body (not frontmatter — it's advisory, not enforced by tooling).
+
+### Example: Review Watcher Teammate
+
+```yaml
+---
+name: review-watcher
+description: Lightweight PR review poll agent
+tools: Read, Bash, SendMessage
+model: haiku
+---
+```
+
+**Rationale**: Minimal tool set — only needs to read PR status (Bash for script execution), and notify the team lead (SendMessage). Cannot modify files, cannot spawn subagents. The `haiku` model keeps token cost low for this polling-only task.
+
 ## Validation Checklist
 
 When creating or reviewing an agent:
@@ -268,10 +304,19 @@ When creating or reviewing an agent:
 - [ ] `disallowedTools:` includes: Write, Edit, Bash, NotebookEdit
 - [ ] No tool appears in both lists
 - [ ] If agent uses `Task` → restrict with `Task(specific-types)` (v4.12.0)
+- [ ] If agent spawns teammates → document `teammate_restrictions` in body (v5.1.0)
 
 ---
 
 ## Changelog
+
+### v5.1.0 (2026-02-09)
+- Added `teammate_restrictions` convention for team lead agents
+- Added review-watcher agent example (tools: Read, Bash, SendMessage; model: haiku)
+- Added teammate restrictions table for wave-orchestrator and execute-spec-orchestrator
+- Updated overview to four complementary mechanisms
+- Updated common tool sets table with team lead and lightweight teammate types
+- Updated validation checklist with teammate_restrictions check
 
 ### v4.12.0 (2026-02-06)
 - Added `Task(agent_type)` spawn restriction mechanism

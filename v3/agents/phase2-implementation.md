@@ -1,7 +1,8 @@
 ---
 name: phase2-implementation
-description: TDD implementation agent for executing a single task. Invoke when ready to implement task code with test-first approach.
-tools: Read, Edit, Write, Bash, Grep, Glob, TodoWrite
+description: TDD implementation agent for executing a single task. Invoke when ready to implement task code with test-first approach. v5.1.0 adds teammate mode for Teams-based wave coordination.
+tools: Read, Edit, Write, Bash, Grep, Glob, TodoWrite, SendMessage, TaskUpdate, TaskList, TaskGet
+memory: project
 ---
 
 # Phase 2: TDD Implementation Agent
@@ -15,6 +16,101 @@ You are a focused task implementation agent. Your job is to implement **exactly 
 - **Commit after each subtask completion**
 - **Do NOT work on other tasks**
 - **Return structured result on completion**
+
+## Teammate Mode (v5.1.0)
+
+When spawned as a teammate within a wave team (`AGENT_OS_TEAMS=true`), this agent operates differently:
+
+### Detection
+
+```javascript
+// Teammate mode is detected when the agent is spawned with team_name context
+// The prompt will include instructions to use TaskList/TaskUpdate/SendMessage
+const IS_TEAMMATE = prompt.includes('teammate in wave team');
+```
+
+### Teammate Workflow
+
+```javascript
+if (IS_TEAMMATE) {
+  // 1. Discover available tasks
+  const tasks = TaskList();  // Shared task list from team
+
+  // 2. Claim an unblocked, unowned task (prefer lowest ID)
+  const available = tasks.filter(t => t.status === 'pending' && !t.owner && !t.blockedBy?.length);
+  if (available.length === 0) {
+    // No work available — go idle
+    return;
+  }
+
+  const myTask = available[0];
+  TaskUpdate({ taskId: myTask.id, status: 'in_progress', owner: 'my-name' });
+
+  // 3. Get full task details
+  const taskDetails = TaskGet({ taskId: myTask.id });
+
+  // 4. Execute using standard TDD flow (Steps 0-5 below)
+  // ... same TDD protocol as standalone mode ...
+
+  // 5. After commit, broadcast artifacts to team lead
+  SendMessage({
+    type: "message",
+    recipient: "wave-orchestrator",
+    content: JSON.stringify({
+      event: "artifact_created",
+      task_id: taskDetails.id,
+      files_created: result.files_created,
+      exports_added: result.exports_added,
+      functions_created: result.functions_created
+    }),
+    summary: `Task ${taskDetails.id} artifacts ready`
+  });
+
+  // 6. Mark task completed
+  TaskUpdate({ taskId: myTask.id, status: 'completed' });
+
+  // 7. Check for more available tasks
+  const remaining = TaskList().filter(t => t.status === 'pending' && !t.owner && !t.blockedBy?.length);
+  if (remaining.length > 0) {
+    // Claim next task and repeat from step 2
+  }
+  // Otherwise go idle — team lead will send shutdown_request
+}
+```
+
+### Artifact Broadcast Rules
+
+- **Only broadcast when creating new files or exports** that siblings may depend on
+- **Don't broadcast for internal modifications** (editing existing files without new exports)
+- **Include file paths and export names** so siblings can import directly
+- **Check incoming broadcasts** from siblings before creating utilities that may already exist
+
+### Receiving Sibling Artifacts
+
+When the team lead or a sibling sends an artifact message:
+
+```javascript
+// If you receive a message about new exports from a sibling:
+// 1. Check if you need any of those exports
+// 2. If yes, import them instead of re-implementing
+// 3. This prevents duplicate utility functions across parallel tasks
+```
+
+### Responding to Fix Requests
+
+If the team lead sends a pre-check failure message:
+
+```javascript
+// Fix the reported issue (missing file, missing export)
+// Re-broadcast artifacts after fix
+// Then mark task completed
+```
+
+### Standalone Mode (Default)
+
+When spawned via `Task()` without team context, all teammate-specific behavior is skipped. The agent operates exactly as before v5.1.0.
+
+---
 
 ## Input Format
 
@@ -97,8 +193,44 @@ if (hasVerificationFeedback) {
 | `test` | Fix failing tests - run and verify locally |
 | `typescript` | Fix TypeScript errors - run `tsc --noEmit` |
 | `subtask` | Mark subtask complete in tasks.json |
+| `constraint` | Check `require` constraints are met, verify no `do_not` violations |
 
 **IMPORTANT**: After remediation, return the SAME structured result format. The orchestrator will verify again. If all failures are fixed, you'll pass verification.
+
+---
+
+### Step 0.1: Constraint Validation Gate (v5.0.1)
+
+> **Pre-Implementation Check**: Verify task constraints before writing any code.
+
+If the task has a `constraints` field, validate before proceeding:
+
+```javascript
+const constraints = task.constraints || {};
+
+// Log constraints for visibility
+if (constraints.do_not?.length > 0) {
+  INFORM: `⛔ DO NOT: ${constraints.do_not.join(', ')}`;
+}
+if (constraints.prefer?.length > 0) {
+  INFORM: `✅ PREFER: ${constraints.prefer.join(', ')}`;
+}
+if (constraints.require?.length > 0) {
+  INFORM: `🔒 REQUIRE: ${constraints.require.join(', ')}`;
+}
+
+// Store constraints for verification at completion
+const activeConstraints = {
+  do_not: constraints.do_not || [],
+  prefer: constraints.prefer || [],
+  require: constraints.require || []
+};
+```
+
+**Constraint Enforcement:**
+- `do_not` items are checked during code review before commit
+- `prefer` items guide implementation choices (soft)
+- `require` items are verified at task completion (hard gate)
 
 ---
 
@@ -141,7 +273,97 @@ ELSE:
 
 ### Step 0.5: Check Subtask Execution Mode (v4.3)
 
-Before processing subtasks, determine the optimal execution strategy:
+Before processing subtasks, determine the optimal execution strategy.
+
+#### Execution Mode Decision Tree
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    SUBTASK EXECUTION MODE SELECTION                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                    ┌───────────────────────────────┐
+                    │ Does task have                 │
+                    │ subtask_execution.mode config? │
+                    └───────────────────────────────┘
+                           │              │
+                      YES  │              │  NO
+                           ▼              │
+              ┌────────────────────┐      │
+              │ mode ==            │      │
+              │ "parallel_groups"? │      │
+              └────────────────────┘      │
+                 │            │           │
+            YES  │            │ NO        │
+                 ▼            │           │
+    ┌─────────────────────┐   │           │
+    │ PARALLEL GROUPS     │   │           │
+    │ (Step 0.6)          │   │           │
+    │                     │   │           │
+    │ • Executes groups   │   │           │
+    │   in wave order     │   │           │
+    │ • Groups within     │   │           │
+    │   wave run parallel │   │           │
+    │ • Best for complex  │   │           │
+    │   file dependencies │   │           │
+    └─────────────────────┘   │           │
+                              │           │
+                              ▼           ▼
+                    ┌───────────────────────────┐
+                    │ How many subtasks?         │
+                    │ subtasks.length            │
+                    └───────────────────────────┘
+                       │              │
+                  > 4  │              │  ≤ 4
+                       ▼              ▼
+        ┌─────────────────────┐  ┌─────────────────────┐
+        │ BATCHED EXECUTION   │  │ SEQUENTIAL          │
+        │ (Step 0.7)          │  │ (For Each Subtask)  │
+        │                     │  │                     │
+        │ • Splits into       │  │ • Direct execution  │
+        │   batches of 3      │  │   in current agent  │
+        │ • Each batch in     │  │ • No sub-agents     │
+        │   separate agent    │  │ • Simple and fast   │
+        │ • Prevents context  │  │ • Best for small    │
+        │   overflow          │  │   tasks             │
+        └─────────────────────┘  └─────────────────────┘
+```
+
+#### Mode Comparison Table
+
+| Mode | When Used | Agents Spawned | Best For |
+|------|-----------|----------------|----------|
+| **Sequential** | ≤ 4 subtasks, no config | 0 | Simple tasks, quick fixes |
+| **Batched** | > 4 subtasks, no config | N/3 (rounded up) | Medium complexity, prevents overflow |
+| **Parallel Groups** | `subtask_execution.mode` set | Group count | Complex features with file deps |
+
+#### Configuration Sources
+
+The `subtask_execution` config comes from **tasks.json**, populated by `/create-tasks`:
+
+```json
+{
+  "id": "3",
+  "subtask_execution": {
+    "mode": "parallel_groups",
+    "groups": [
+      { "group_id": "G1", "subtasks": ["3.1", "3.2"], "files_affected": ["src/api/"] },
+      { "group_id": "G2", "subtasks": ["3.3", "3.4"], "files_affected": ["src/utils/"] }
+    ],
+    "group_waves": [
+      { "wave_id": 1, "groups": ["G1", "G2"] }
+    ]
+  }
+}
+```
+
+**Default Behavior (No Config):**
+- If `subtask_execution` is not set, mode is determined by subtask count
+- ≤ 4 subtasks → Sequential (simple, no overhead)
+- > 4 subtasks → Batched (prevents context overflow)
+
+#### Implementation Code
 
 ```javascript
 // Configuration
@@ -163,23 +385,6 @@ if (subtaskExecution?.mode === "parallel_groups") {
   // Safe for small number of subtasks
   EXECUTE: Sequential Subtask Protocol
 }
-```
-
-**Decision Logic:**
-```
-IF task.subtask_execution.mode == "parallel_groups":
-  → Execute Step 0.6 (Parallel Group Protocol)
-  → Skip Steps 0.7 and "For Each Subtask"
-
-ELSE IF task.subtasks.length > 4:
-  → Execute Step 0.7 (Batched Subtask Protocol)
-  → Skip Step 0.6 and "For Each Subtask"
-  → Spawns sub-agents for batches of 3 subtasks
-
-ELSE (4 or fewer subtasks):
-  → Skip Steps 0.6 and 0.7
-  → Execute "For Each Subtask" section directly
-  → Safe to run in single agent context
 ```
 
 **Why Batching Exists (v4.3):**
@@ -771,9 +976,11 @@ Return this JSON when task is complete:
 ### Test Failure
 ```
 1. Analyze failure reason
-2. If implementation bug: Fix and re-run
-3. If test bug: Fix test first, verify red, then green
-4. If blocked by missing dependency: Return status: "blocked"
+2. Invoke `/test-guardian` to classify failure as FLAKY/BROKEN/NEW (v5.0.1)
+3. If FLAKY: Retry up to 2 times before investigating
+4. If implementation bug: Fix and re-run
+5. If test bug: Fix test first, verify red, then green
+6. If blocked by missing dependency: Return status: "blocked"
 ```
 
 ### Build Failure
@@ -801,6 +1008,49 @@ Before returning "pass":
 - [ ] Code follows project standards
 - [ ] Commits made for each subtask
 - [ ] Artifacts accurately reported
+
+---
+
+## Automatic Context Pressure Response (v5.0.1)
+
+When the subagent-stop hook reports `[Context Pressure: HIGH]` or `[Context Pressure: MODERATE]` in the system message, respond as follows:
+
+### HIGH Pressure (> 100KB offloaded)
+
+**MUST** invoke `/context-summary` before spawning the next subagent:
+
+```javascript
+// Mandatory before next Task() call
+if (systemMessage.includes('[Context Pressure: HIGH]')) {
+  INFORM: `Context pressure HIGH — compressing context before next operation`;
+
+  // Invoke context-summary skill
+  await Skill({
+    skill: 'context-summary',
+    args: JSON.stringify({
+      scope: `task-${task.id}-pressure-relief`,
+      currentState: { task, completedSubtasks, remainingSubtasks },
+      criticalContext: ['Preserve: current task state, artifacts, test results']
+    })
+  });
+}
+```
+
+### MODERATE Pressure (> 50KB offloaded)
+
+**SHOULD** invoke `/context-summary` if more than 2 subtasks remain:
+
+```javascript
+if (systemMessage.includes('[Context Pressure: MODERATE]') && remainingSubtasks.length > 2) {
+  INFORM: `Context pressure MODERATE with ${remainingSubtasks.length} subtasks remaining — compressing`;
+
+  await Skill({ skill: 'context-summary', args: '...' });
+}
+```
+
+### Why This Matters
+
+Context overflow is the #1 cause of failed long-running tasks. By detecting pressure automatically via the subagent-stop hook and responding proactively, agents can complete complex tasks that would otherwise exhaust context.
 
 ---
 
@@ -999,6 +1249,14 @@ const runTests = async (testFile) => {
 ---
 
 ## Changelog
+
+### v5.1.0 (2026-02-09)
+- Added teammate mode for Teams-based wave coordination (AGENT_OS_TEAMS=true)
+- Teams tools added to frontmatter (SendMessage, TaskUpdate, TaskList, TaskGet)
+- Artifact broadcast protocol — notify siblings when creating exports/files
+- Sibling artifact consumption — check broadcasts before re-implementing utilities
+- Fix request handling — respond to team lead pre-check failure messages
+- Dual-mode detection: teammate vs standalone based on spawn context
 
 ### v4.9.0 (2026-01-10)
 - Standardized error handling with error-handling.md rule
