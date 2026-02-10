@@ -1,8 +1,9 @@
 ---
 name: wave-lifecycle-agent
 description: Executes complete lifecycle for a single wave. Preserves context within wave, returns when wave is merged or failed.
-tools: Read, Bash, Grep, Glob, TodoWrite, Task, AskUserQuestion
+tools: Read, Bash, Grep, Glob, TodoWrite, Task(general-purpose), AskUserQuestion
 model: sonnet
+memory: project
 ---
 
 # Wave Lifecycle Agent
@@ -44,20 +45,15 @@ The orchestrator spawns one wave-lifecycle-agent per wave to achieve:
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  VERSION_DETECT (v5.0.1): If v4.0 → find W{N}-REVIEW task      │
-│                           Mark REVIEW as in_progress            │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  AWAITING_REVIEW: Poll for bot review (internal loop)           │
-│                   Max 15 polls (~30 minutes)                    │
-│                   If timeout → EXIT with timeout status         │
+│  AWAITING_REVIEW: Single check for bot review (v5.0.1)          │
+│                   If no review → EXIT with awaiting_review      │
+│                   Orchestrator re-invokes after delay            │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  REVIEW_PROCESSING: Spawn review executor                       │
 │                     If commits made → back to AWAITING_REVIEW   │
-│                     If approved → mark W{N}-REVIEW pass (v4.0)  │
+│                     If approved/no changes → continue           │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -175,105 +171,48 @@ bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh set-pr ${
 INFORM: `PR #${pr_number} created. Waiting for bot review...`
 ```
 
-### Step 1.5: Version Detection & REVIEW Task Management (v5.0.1)
-
-Detect tasks.json version and manage the `W{N}-REVIEW` infrastructure task for v4.0 specs.
-
-```javascript
-// Detect tasks.json version for REVIEW task management
-const tasks_file = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh status ${spec_name}`
-const tasks_status = JSON.parse(tasks_file)
-const spec_version = tasks_status.version || "3.0"
-
-let review_task_id = null
-
-if (spec_version.startsWith("4")) {
-  // v4.0: Look for W{N}-REVIEW task in current wave
-  review_task_id = `W${wave_number}-REVIEW`
-
-  // Verify the REVIEW task exists
-  const tasks_json_path = bash `find ${CLAUDE_PROJECT_DIR}/.agent-os/specs -name "tasks.json" -path "*${spec_name}*" | head -1`
-  const review_exists = bash `jq --arg rid "${review_task_id}" '.tasks[] | select(.id == $rid) | .id' "${tasks_json_path.trim()}" 2>/dev/null`
-
-  if (review_exists.trim()) {
-    // Mark REVIEW task as in_progress
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh update "${review_task_id}" "in_progress" "${spec_name}"`
-    INFORM: `v4.0 spec: Managing ${review_task_id} task`
-  } else {
-    // No REVIEW task — v4.0 spec created before this feature (backward compat)
-    review_task_id = null
-    INFORM: `v4.0 spec without REVIEW task — proceeding with implicit review`
-  }
-} else {
-  INFORM: `v3.0 spec: Using hardcoded review phases`
-}
-```
-
-### Step 2: Wait for Review (AWAITING_REVIEW Phase)
+### Step 2: Check for Review (AWAITING_REVIEW Phase — v5.0.1 Non-Blocking)
 
 :await_review_phase
 
-Poll for Claude Code bot review. This is an internal loop within this agent.
-
-> **IMPORTANT**: This step may be executed multiple times if re-review is needed after code fixes.
-> The `review_cycle` variable tracks which review iteration we're on.
+> **Non-blocking pattern (v5.0.1)**: Instead of polling in a loop for up to 30 minutes,
+> perform a single check. If no review yet, return `"awaiting_review"` status so the
+> orchestrator can re-invoke later. This frees the agent context slot.
 
 ```javascript
 // Review cycle tracking (for re-review after fixes)
-let review_cycle = 1
+let review_cycle = input.review_cycle || 1
 
-// Main review loop - repeats if commits require re-review
-REVIEW_LOOP: while (true) {
+INFORM: `Review cycle ${review_cycle}: Checking for bot review...`
 
-  INFORM: `Review cycle ${review_cycle}: Polling for bot review...`
+// Single check — no polling loop
+const bot_status = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh bot-reviewed ${pr_number}`
+const status = JSON.parse(bot_status)
 
-  // Poll configuration
-  const MAX_POLLS = 15
-  const POLL_INTERVAL = 120  // 2 minutes
-  let poll_count = 0
-  let bot_reviewed = false
-  let review_decision = null
+if (status.reviewed !== true) {
+  // No review yet — return to orchestrator for later re-invocation
+  INFORM: `No review found for PR #${pr_number}. Returning to orchestrator for later retry.`
 
-  // Polling loop
-  while (poll_count < MAX_POLLS) {
-    poll_count++
+  // Save state for resume
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"review_cycle": ${review_cycle}}'`
 
-    // Sync poll count to state for crash recovery
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"poll_count": ${poll_count}}'`
-
-    // Check if bot has reviewed
-    const bot_status = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/pr-review-operations.sh bot-reviewed ${pr_number}`
-    const status = JSON.parse(bot_status)
-
-    if (status.reviewed === true) {
-      bot_reviewed = true
-      review_decision = status.review_decision
-      break
-    }
-
-    INFORM: `Poll ${poll_count}/${MAX_POLLS}: No review yet. Waiting ${POLL_INTERVAL}s...`
-
-    // Sleep (bash command)
-    bash `sleep ${POLL_INTERVAL}`
+  RETURN: {
+    status: "awaiting_review",
+    wave: wave_number,
+    phase: "AWAITING_REVIEW",
+    pr_number: pr_number,
+    review_cycle: review_cycle,
+    message: `PR #${pr_number} awaiting bot review. Re-invoke when review is available.`
   }
+}
 
-  // Check for timeout
-  if (!bot_reviewed) {
-    RETURN: {
-      status: "timeout",
-      wave: wave_number,
-      phase: "AWAITING_REVIEW",
-      pr_number: pr_number,
-      message: `Review polling timeout (${MAX_POLLS * POLL_INTERVAL / 60} minutes). Check PR manually.`
-    }
-  }
+INFORM: `Bot reviewed PR #${pr_number} (cycle ${review_cycle}). Processing feedback...`
 
-  INFORM: `Bot reviewed PR #${pr_number} (cycle ${review_cycle}). Processing feedback...`
-
-  // Step 3: Process Review (REVIEW_PROCESSING Phase)
-  const review_result = Task({
-    subagent_type: "general-purpose",
-    prompt: `You are an executor agent. Read and execute the /pr-review-cycle command.
+// Step 3: Process Review (REVIEW_PROCESSING Phase)
+const review_result = Task({
+  subagent_type: "general-purpose",
+  prompt: `You are an executor agent. Read and execute the /pr-review-cycle command.
 
 ## Your Task
 Process PR review feedback for the current branch.
@@ -303,58 +242,105 @@ Process PR review feedback for the current branch.
 }
 \`\`\`
 
+## How to Derive Each Field
+
+- **status**: "success" if review cycle completed, "failed" if blocked/errored
+- **blocking_issues_found**: From discovery output \`actionable_comments\` count (SECURITY + BUG + LOGIC + HIGH + MISSING + PERF categories). If the review cycle exited early (PR approved with no actionable items), set to 0.
+- **blocking_issues_fixed**: From implementation output \`comments_addressed.total\` (count of comments that were actually addressed with code changes or replies). If no implementation was needed, set equal to blocking_issues_found.
+- **future_items_captured**: From implementation output \`future_captured.total\` or 0 if none
+- **commits_made**: Count of git commits made during the review cycle. Check \`changes_made.files_modified\` — if non-empty, at least 1 commit was made. If no code changes were needed (only replies/questions), set to 0.
+- **pr_approved**: true if \`reviewDecision\` was "APPROVED" AND no actionable items remained, false otherwise
+
 ## Important
 - Only return the JSON summary above
 - commits_made determines if re-review is needed
+- blocking_issues_found and blocking_issues_fixed MUST be accurate — they gate whether merge proceeds
 `
-  })
+})
 
-  const review = JSON.parse(review_result)
+const review = JSON.parse(review_result)
 
-  if (review.status !== "success") {
+if (review.status !== "success") {
+  RETURN: {
+    status: "failed",
+    wave: wave_number,
+    phase: "REVIEW_PROCESSING",
+    pr_number: pr_number,
+    error: review.error
+  }
+}
+
+// Validate that critical fields exist in the review result
+// Missing fields indicate the executor didn't follow the schema — treat as suspicious
+const has_blocking_data = (typeof review.blocking_issues_found === 'number')
+const has_commit_data = (typeof review.commits_made === 'number')
+
+if (!has_blocking_data || !has_commit_data) {
+  WARN: `Review result missing expected fields (blocking_issues_found: ${review.blocking_issues_found}, commits_made: ${review.commits_made}). Cannot safely determine merge readiness.`
+
+  // Fall back to conservative behavior: if NOT approved, don't merge
+  if (!review.pr_approved) {
     RETURN: {
       status: "failed",
       wave: wave_number,
       phase: "REVIEW_PROCESSING",
       pr_number: pr_number,
-      error: review.error
+      error: "Review result incomplete — missing blocking_issues_found or commits_made fields. Cannot verify merge safety."
     }
   }
+  // If pr_approved is true but fields are missing, proceed cautiously
+  INFORM: `PR #${pr_number} reported as approved but review data incomplete. Proceeding with caution.`
+}
 
-  // Decision point: continue to merge or loop for re-review?
-  if (review.pr_approved) {
-    INFORM: `PR #${pr_number} approved! Ready to merge.`
+// Decision point: continue to merge or need re-review?
+if (review.pr_approved && (review.blocking_issues_found || 0) === 0) {
+  INFORM: `PR #${pr_number} approved with no blocking issues. Ready to merge.`
+  // Fall through to Step 3.5 / Step 4
 
-    // v4.0: Mark W{N}-REVIEW task as pass
-    if (review_task_id) {
-      bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh update "${review_task_id}" "pass" "${spec_name}"`
-      INFORM: `Marked ${review_task_id} as pass`
-    }
+} else if ((review.commits_made || 0) > 0) {
+  // Code changes made — need re-review, return to orchestrator
+  INFORM: `Made ${review.commits_made} commit(s). Returning for re-review...`
 
-    break REVIEW_LOOP  // Exit to merge phase
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh transition ${spec_name} AWAITING_REVIEW`
+  bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"review_cycle": ${review_cycle + 1}, "bot_reviewed": false}'`
 
-  } else if ((review.commits_made || 0) > 0) {
-    // Code changes made - need re-review
-    INFORM: `Made ${review.commits_made} commit(s). Starting re-review cycle...`
-    review_cycle++
+  RETURN: {
+    status: "awaiting_review",
+    wave: wave_number,
+    phase: "AWAITING_REVIEW",
+    pr_number: pr_number,
+    review_cycle: review_cycle + 1,
+    message: `Made ${review.commits_made} commit(s). PR needs re-review.`
+  }
 
-    // Reset state for new review cycle
-    bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh update-review ${spec_name} '{"poll_count": 0, "bot_reviewed": false}'`
+} else if ((review.blocking_issues_found || 0) > (review.blocking_issues_fixed || 0)) {
+  // Blocking issues found but not all fixed — this should NOT proceed to merge
+  WARN: `Found ${review.blocking_issues_found} blocking issues but only ${review.blocking_issues_fixed} were fixed.`
 
-    // Continue REVIEW_LOOP - will poll again for new review
-    continue REVIEW_LOOP
+  RETURN: {
+    status: "failed",
+    wave: wave_number,
+    phase: "REVIEW_PROCESSING",
+    pr_number: pr_number,
+    error: `Unresolved blocking issues: ${review.blocking_issues_found - review.blocking_issues_fixed} remaining`
+  }
 
-  } else {
-    // No code changes - ready to merge
-    INFORM: `No blocking issues. Ready to merge.`
+} else if (review.pr_approved) {
+  // Approved and all blocking issues resolved — ready to merge
+  INFORM: `PR #${pr_number} approved. All blocking issues resolved. Ready to merge.`
+  // Fall through to Step 3.5 / Step 4
 
-    // v4.0: Mark W{N}-REVIEW task as pass
-    if (review_task_id) {
-      bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/task-operations.sh update "${review_task_id}" "pass" "${spec_name}"`
-      INFORM: `Marked ${review_task_id} as pass`
-    }
+} else {
+  // Not approved, no commits made, no blocking issues — but also not approved
+  // This is ambiguous — don't auto-merge
+  WARN: `PR #${pr_number} not approved and review state unclear. Blocking merge for safety.`
 
-    break REVIEW_LOOP  // Exit to merge phase
+  RETURN: {
+    status: "failed",
+    wave: wave_number,
+    phase: "REVIEW_PROCESSING",
+    pr_number: pr_number,
+    error: "PR not approved and review state ambiguous. Manual review required."
   }
 }
 ```
@@ -373,6 +359,28 @@ if (is_final_wave) {
   const plan_exists = bash `test -f "${TEST_PLAN}" && echo "exists" || echo "not_found"`
 
   if (plan_exists.includes("exists")) {
+    // Check for existing checkpoint (v5.0.1)
+    const CHECKPOINT_PATH = `.agent-os/test-results/${spec_name}/checkpoint.json`
+    const checkpoint_exists = bash `test -f "${CHECKPOINT_PATH}" && echo "exists" || echo "not_found"`
+
+    if (checkpoint_exists.includes("exists")) {
+      // Validate checkpoint freshness (2h threshold)
+      const checkpoint_age = bash `
+        UPDATED=$(jq -r '.updated_at' "${CHECKPOINT_PATH}")
+        UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || date -d "$UPDATED" +%s 2>/dev/null || echo "0")
+        NOW_EPOCH=$(date +%s)
+        echo $(( (NOW_EPOCH - UPDATED_EPOCH) / 3600 ))
+      `
+
+      if (parseInt(checkpoint_age) < 2) {
+        const cp_data = bash `jq '.summary' "${CHECKPOINT_PATH}"`
+        INFORM: `Resuming from checkpoint: ${cp_data}`
+      } else {
+        INFORM: `Stale checkpoint found (${checkpoint_age}h old) — starting fresh`
+        bash `rm -f "${CHECKPOINT_PATH}"`
+      }
+    }
+
     INFORM: `Running smoke E2E tests before final merge...`
 
     // Run smoke tests only (quick validation)
@@ -452,22 +460,6 @@ Run smoke-level E2E tests before final merge to main.
 Merge the PR to the appropriate target branch.
 
 ```javascript
-// v4.0 defense-in-depth: Verify REVIEW task is pass before merging
-if (review_task_id) {
-  const tasks_json_path = bash `find ${CLAUDE_PROJECT_DIR}/.agent-os/specs -name "tasks.json" -path "*${spec_name}*" | head -1`
-  const review_status = bash `jq -r --arg rid "${review_task_id}" '.tasks[] | select(.id == $rid) | .status' "${tasks_json_path.trim()}" 2>/dev/null`
-
-  if (review_status.trim() !== "pass") {
-    RETURN: {
-      status: "failed",
-      wave: wave_number,
-      phase: "READY_TO_MERGE",
-      pr_number: pr_number,
-      error: `Cannot merge: ${review_task_id} status is "${review_status.trim()}" (expected "pass"). Review must complete before merge.`
-    }
-  }
-}
-
 // Determine merge target
 const pr_target = bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/branch-setup.sh pr-target`
 const target_info = JSON.parse(pr_target)
@@ -557,7 +549,17 @@ Return one of these statuses to the orchestrator:
   error: "Description of what failed"
 }
 
-// Timeout - review polling timed out
+// Awaiting review - non-blocking return (v5.0.1)
+{
+  status: "awaiting_review",
+  wave: 2,
+  phase: "AWAITING_REVIEW",
+  pr_number: 125,
+  review_cycle: 1,
+  message: "PR #125 awaiting bot review. Re-invoke when review is available."
+}
+
+// Timeout - review polling timed out (legacy, kept for backward compatibility)
 {
   status: "timeout",
   wave: 2,
@@ -601,10 +603,9 @@ This is well within safe limits while preserving all wave-related context.
 |-------|--------|
 | Task execution fails | Return failed with phase=EXECUTE |
 | PR creation fails | Return failed with phase=EXECUTE |
-| Review timeout (30 min) | Return timeout, orchestrator handles |
+| No review available | Return awaiting_review, orchestrator re-invokes (v5.0.1) |
 | Review processing fails | Return failed with phase=REVIEW_PROCESSING |
 | Smoke E2E fails (v4.11.0) | Return failed with phase=SMOKE_E2E |
-| REVIEW task not pass (v5.0.1) | Return failed with phase=READY_TO_MERGE |
 | Merge conflict | Return failed with phase=READY_TO_MERGE |
 | User cancels merge | Return waiting, orchestrator handles |
 
@@ -650,11 +651,19 @@ if (reviewResult.status === 'timeout') {
 
 ## Changelog
 
-### v5.0.1 (2026-02-08)
-- Added Step 1.5: Version detection and `W{N}-REVIEW` task management for v4.0 specs
-- REVIEW task marked `in_progress` at review start, `pass` on approval or no blocking issues
-- Defense-in-depth merge guard: verifies REVIEW task status before merge (Step 4)
-- Backward compatible: v3.0 specs use hardcoded phases, v4.0 without REVIEW task skips gracefully
+### v5.1.1 (2026-02-10)
+- **BUGFIX**: Review processing decision logic completely rewritten for safety
+- Added field existence validation — missing `blocking_issues_found` or `commits_made` now fails safely instead of silently passing
+- Added explicit derivation guide in executor prompt so general-purpose agent returns correct fields
+- `pr_approved` alone no longer gates merge — must also have `blocking_issues_found === 0`
+- Ambiguous states (not approved, no commits, no blocking data) now fail with explicit error instead of proceeding to merge
+- Previously, `commits_made: 0` + `pr_approved: false` incorrectly concluded "No blocking issues"
+
+### v5.0.1 (2026-02-09)
+- Refactored review polling to non-blocking single-check pattern
+- New `awaiting_review` return status replaces blocking 30-min poll loop
+- Frees agent context slot during review wait
+- Supports `review_cycle` tracking for re-review iterations
 
 ### v4.11.0 (2026-01-14)
 - Added Step 3.5 Smoke E2E Validation (final wave only)

@@ -26,6 +26,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.1.1] - 2026-02-10 - PR Review Safety: Compound Detection & Field Validation
+
+### Fixed
+- **Critical: PR review comments misclassified as "good"** — Step 2.5 in `pr-review-cycle` now scans for ALL actionable items (SECURITY, BUG, HIGH, etc.), not just FUTURE items; approved PRs with critical bot comments no longer exit early as "Ready to merge"
+- **Critical: review result field mismatch** — `wave-lifecycle-agent` expected `blocking_issues_found` and `commits_made` but `pr-review-implementation` returned `comments_addressed` and `changes_made`; `|| 0` fallback silently made all safety checks pass; executor prompt now includes explicit derivation guide for each field
+- **Ambiguous review states auto-merged** — `pr_approved: false` + `commits_made: 0` previously concluded "No blocking issues. Ready to merge"; now rejects ambiguous states with explicit error; `pr_approved` alone no longer gates merge (must also have zero blocking issues)
+- **Compound reviews misclassified** — "Good code, but critical issue..." was classified as PRAISE; PRAISE now requires entire comment to be positive with no actionable items
+- **FUTURE overrode critical content** — regex fallback compound detection now covers FUTURE and SUGGESTION categories (not just PRAISE); a comment under "Future Improvements" containing "Must Fix" or "Critical" signals gets overridden to HIGH
+- **PRAISE priority inconsistency** — keyword fallback assigned PRAISE priority 6 instead of 7 (matching section detector and comment-classifier)
+- **Overly broad APPROVE regex** — bare `APPROVE` matched "NOT APPROVED" and "DISAPPROVED"; changed to `\bAPPROVED\b` word boundary
+- **Bare "Phase 2" in FUTURE patterns** — any comment mentioning "Phase 2" was classified as FUTURE; changed to `Defer to Phase \d` to only match explicit deferral language
+
+### Changed
+- **comment-classifier** — processing rule #5 reversed: when ambiguous between actionable and FUTURE, prefer actionable category (safer to flag than to defer)
+- **pr-review-discovery** — explicit definition of `actionable_comments` calculation: SECURITY + BUG + LOGIC + HIGH + COVERAGE + MISSING + PERF + STYLE + DOCS; QUESTION, SUGGESTION, FUTURE, PRAISE excluded and tracked separately
+- **wave-lifecycle-agent** — field existence validation: missing `blocking_issues_found` or `commits_made` fails safely instead of silently passing; decision logic rewritten with defense-in-depth
+- **setup/base.sh** — version bumped from 4.9.0 to 5.1.1 (was outdated)
+
+---
+
 ## [5.1.0] - 2026-02-09 - Native Teams Integration
 
 ### Added

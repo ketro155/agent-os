@@ -96,6 +96,7 @@ Assign exactly ONE category per comment:
 **PRAISE signals:**
 - Mentions: great, nice, good, excellent, LGTM, well done, clean, solid
 - No action requested
+- **IMPORTANT**: PRAISE applies ONLY when the ENTIRE comment is positive with NO actionable items. Compound statements like "Good implementation, but there's a critical issue..." are NOT PRAISE — classify by the actionable part (BUG, SECURITY, HIGH, etc.). The presence of a positive word does NOT make a comment PRAISE if it also contains issues to fix.
 
 ### Distinguishing Similar Categories
 
@@ -187,7 +188,7 @@ For LOW confidence items, provide `alternative_category` field.
 2. **Parse markdown structure** - Understand section headers and apply to items underneath
 3. **Consider context** - File path, PR title, surrounding comments provide hints
 4. **Preserve original** - Always include `original_body` for traceability
-5. **Be conservative with FUTURE** - When in doubt between MISSING and FUTURE, prefer FUTURE (safe to capture vs. miss)
+5. **Be conservative with actionable items** - When in doubt between an actionable category (MISSING, HIGH, BUG) and FUTURE, prefer the actionable category. It is safer to flag an item for review than to accidentally defer a critical fix. Only classify as FUTURE when deferral language is unambiguous and no actionable signals are present.
 
 ## Section Header Inheritance
 
@@ -239,3 +240,154 @@ If unable to classify:
 - This agent uses Haiku for fast classification
 - Process comments in batches when possible
 - Typical latency: < 2 seconds for batch of 10 comments
+
+## Batch Processing (v4.9)
+
+> **Performance Optimization**: For large PR reviews with 20+ comments, use batch processing to improve throughput and prevent context overflow.
+
+### Batch Configuration
+
+```javascript
+const BATCH_SIZE = 10;           // Comments per batch
+const BATCH_THRESHOLD = 20;      // Trigger batching when comments exceed this
+const MAX_PARALLEL_BATCHES = 3;  // Concurrent batch limit
+```
+
+### Batch Processing Flow
+
+```javascript
+const classifyComments = async (comments, prContext) => {
+  // Small batches: process directly
+  if (comments.length <= BATCH_SIZE) {
+    return await classifyBatch(comments, prContext);
+  }
+
+  // Large sets: split into batches
+  if (comments.length > BATCH_THRESHOLD) {
+    console.log(`Processing ${comments.length} comments in batches of ${BATCH_SIZE}`);
+  }
+
+  // Create batches
+  const batches = [];
+  for (let i = 0; i < comments.length; i += BATCH_SIZE) {
+    batches.push({
+      batch_id: Math.floor(i / BATCH_SIZE) + 1,
+      comments: comments.slice(i, i + BATCH_SIZE)
+    });
+  }
+
+  // Process batches in parallel (respecting MAX_PARALLEL_BATCHES)
+  const results = [];
+  for (let i = 0; i < batches.length; i += MAX_PARALLEL_BATCHES) {
+    const parallelBatches = batches.slice(i, i + MAX_PARALLEL_BATCHES);
+
+    const batchResults = await Promise.all(
+      parallelBatches.map(batch => classifyBatch(batch.comments, prContext))
+    );
+
+    results.push(...batchResults.flat());
+  }
+
+  return results;
+};
+
+const classifyBatch = async (comments, prContext) => {
+  // This function processes a single batch of <= BATCH_SIZE comments
+  // Use the classification logic defined in sections above
+  // Return array of ClassificationResult objects
+};
+```
+
+### Batch-Aware Input Format
+
+When invoking this agent for large comment sets, callers can pre-batch:
+
+```json
+{
+  "batch_mode": true,
+  "batch_id": 1,
+  "total_batches": 5,
+  "comments": [/* max 10 comments */],
+  "pr_context": { ... }
+}
+```
+
+### Batch Output Aggregation
+
+When processing multiple batches, aggregate results:
+
+```json
+{
+  "batch_summary": {
+    "total_comments": 47,
+    "batches_processed": 5,
+    "processing_time_ms": 8500
+  },
+  "classifications": [/* all classified comments */],
+  "category_counts": {
+    "SECURITY": 2,
+    "BUG": 5,
+    "SUGGESTION": 15,
+    "FUTURE": 10,
+    "PRAISE": 15
+  }
+}
+```
+
+### Performance Metrics
+
+| Comment Count | Batching | Expected Time |
+|---------------|----------|---------------|
+| 1-10 | None | < 2 seconds |
+| 11-20 | Optional | < 4 seconds |
+| 21-50 | Required | 5-10 seconds |
+| 50+ | Required + Parallel | 10-15 seconds |
+
+### Error Handling in Batches
+
+```javascript
+// If one batch fails, continue with others
+const processBatchWithRetry = async (batch, maxRetries = 2) => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await classifyBatch(batch.comments);
+    } catch (error) {
+      if (attempt === maxRetries) {
+        console.warn(`Batch ${batch.batch_id} failed after ${maxRetries + 1} attempts`);
+        return batch.comments.map(c => ({
+          id: c.id,
+          category: "OTHER",
+          priority: 5,
+          confidence: "LOW",
+          reasoning: "Batch processing failed - manual review required",
+          needs_human_review: true
+        }));
+      }
+      await delay(1000 * (attempt + 1));  // Exponential backoff
+    }
+  }
+};
+```
+
+---
+
+## Changelog
+
+### v5.1.1 (2026-02-10)
+- **BUGFIX**: PRAISE classification now requires ENTIRE comment to be positive with no actionable items
+- Compound statements ("Good code, but critical issue...") are classified by the actionable part
+- Processing rule #5 changed: when ambiguous, prefer actionable category over FUTURE (safer to flag than to defer)
+
+### v4.9.0 (2026-01-10)
+- Standardized error handling with error-handling.md rule
+
+### v4.9.0-pre (2026-01-09)
+- Added batch processing for 20+ comments
+- Parallel batch execution (up to 3 concurrent)
+- Batch-aware input/output formats
+- Performance metrics tracking
+
+### v4.8.0
+- Initial LLM-based classification
+- Section header inheritance
+- HIGH overrides FUTURE rule

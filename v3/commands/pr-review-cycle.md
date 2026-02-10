@@ -116,38 +116,58 @@ IF no comments across all endpoints:
 # Don't short-circuit here - proceed to discovery to capture future enhancements
 ```
 
-### Step 2.5: Check for FUTURE Items (Even on Approved PRs)
+### Step 2.5: Quick Scan for Actionable and Future Items (Even on Approved PRs)
 
-> **CRITICAL**: FUTURE items must be captured even when PR is approved. Reviews often include "Future Enhancements" sections that should be saved to `tasks.json` or `roadmap.md`.
+> **CRITICAL**: ALL comments must be scanned for actionable items, even when the PR's aggregate
+> `reviewDecision` is "APPROVED". The bot may have left critical comments while the overall PR
+> state shows approved (e.g., from a human reviewer's approval). FUTURE items must also be
+> captured even when PR is approved.
 
 ```javascript
-// Quick classification check for FUTURE items
+// Quick classification check for ALL comment types (not just FUTURE)
 Task({
   subagent_type: "comment-classifier",
   model: "haiku",
-  prompt: `Quickly scan these PR comments for FUTURE items:
+  prompt: `Quickly scan these PR comments for actionable items AND future items:
            ${JSON.stringify(comments)}
 
-           Look for sections like:
-           - "Future Enhancements"
-           - "Nice to Have"
-           - "Follow-up PRs"
-           - "Wave X Enhancements"
-           - "Should Address Soon"
-           - "Low Priority"
+           Classify each comment section. Return counts by type:
 
-           Return: { has_future_items: boolean, count: number }`
+           ACTIONABLE items (MUST be addressed before merge):
+           - "Critical Issues", "Must Fix", "Blocking", "Security Issues"
+           - "Should Fix Before Merge", "High Priority", "Bug"
+           - Any section with [HIGH], [BLOCKING], [CRITICAL] markers
+
+           FUTURE items (capture for later):
+           - "Future Enhancements", "Nice to Have", "Follow-up PRs"
+           - "Wave X Enhancements", "Should Address Soon", "Low Priority"
+
+           Return: {
+             has_actionable_items: boolean,
+             actionable_count: number,
+             actionable_categories: ["SECURITY", "BUG", ...],
+             has_future_items: boolean,
+             future_count: number
+           }`
 })
 ```
 
 ```
-IF reviewDecision == "APPROVED" AND has_future_items == false:
-  INFORM: "PR is approved! Ready to merge: gh pr merge [NUMBER]"
+# IMPORTANT: Actionable items ALWAYS trigger full discovery, regardless of reviewDecision
+IF has_actionable_items == true:
+  INFORM: "Found ${actionable_count} actionable items (${actionable_categories.join(', ')}). Processing..."
+  CONTINUE to Step 3 (Discovery)
+
+IF reviewDecision == "APPROVED" AND has_actionable_items == false AND has_future_items == false:
+  INFORM: "PR is approved with no actionable feedback. Ready to merge: gh pr merge [NUMBER]"
   EXIT
 
-IF reviewDecision == "APPROVED" AND has_future_items == true:
-  INFORM: "PR is approved. Capturing ${count} future enhancement items before merge..."
+IF reviewDecision == "APPROVED" AND has_actionable_items == false AND has_future_items == true:
+  INFORM: "PR is approved. Capturing ${future_count} future enhancement items before merge..."
   CONTINUE to Step 3 (Discovery)
+
+# For non-APPROVED PRs: always proceed to full discovery
+CONTINUE to Step 3 (Discovery)
 ```
 
 ### Step 3: Invoke Discovery Agent
@@ -524,6 +544,13 @@ IF reviewer re-request fails:
 ---
 
 ## Changelog
+
+### v5.1.1 (2026-02-10)
+- **BUGFIX**: Step 2.5 now scans for ALL actionable items (SECURITY, BUG, HIGH, etc.), not just FUTURE items
+- Previously, approved PRs with critical bot comments would exit early as "Ready to merge"
+- Quick scan now returns `has_actionable_items` + `actionable_count` + `actionable_categories`
+- Actionable items always trigger full discovery, regardless of `reviewDecision`
+- Non-APPROVED PRs always proceed to full discovery
 
 ### v4.9.1
 - Added Memory Layer integration (Step 8)

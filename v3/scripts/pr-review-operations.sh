@@ -152,7 +152,7 @@ case "$COMMAND" in
         elif ($body | test("Should Fix Before Merge|Recommended.*Fix|Fix Before Merge|Important Issues|High Priority|\\*\\*HIGH\\*\\*|🟠\\s*High"; "i")) then
           { category: "HIGH", priority: 2, source: "claude_section" }
         # Future waves / deferred items - CAPTURE these (comprehensive)
-        elif ($body | test("Can Be Addressed in Future|Future Waves|Address Later|Future Considerations|Backlog|Tech Debt|Out of Scope|Future Improvements|Potential Enhancements|Beyond Scope|For Future|Consider for v2|Post-MVP|Phase 2|Nice-to-Have|Deferred|Low Priority Items"; "i")) then
+        elif ($body | test("Can Be Addressed in Future|Future Waves|Address Later|Future Considerations|Backlog|Tech Debt|Out of Scope|Future Improvements|Potential Enhancements|Beyond Scope|For Future|Consider for v2|Post-MVP|Defer to Phase \\d|Nice-to-Have|Deferred|Low Priority Items"; "i")) then
           { category: "FUTURE", priority: 6, source: "claude_section" }
         # Nice to have / optional / suggestions
         elif ($body | test("Nice to Have|Optional|Consider for Future|Low Priority|Minor Issues|Minor Suggestions|Nitpicks|Style Suggestions|\\*\\*LOW\\*\\*|🟡\\s*Low|⚪\\s*Info"; "i")) then
@@ -161,7 +161,7 @@ case "$COMMAND" in
         elif ($body | test("Medium Priority|\\*\\*MEDIUM\\*\\*|🟡\\s*Medium"; "i")) then
           { category: "MISSING", priority: 3, source: "claude_section" }
         # Approved with notes
-        elif ($body | test("APPROVE|LGTM|Looks Good|Ship It|Ready to Merge|✅|👍"; "i")) then
+        elif ($body | test("^APPROVED$|\\bAPPROVED\\b|LGTM|Looks Good|Ship It|Ready to Merge|✅|👍"; "im")) then
           { category: "PRAISE", priority: 7, source: "claude_section" }
         # Code quality sections
         elif ($body | test("Code Quality|Testing|Documentation|Test Coverage"; "i")) then
@@ -192,19 +192,36 @@ case "$COMMAND" in
         elif ($body | test("consider|might|could|optional|alternative"; "i")) then
           { category: "SUGGESTION", priority: 5, source: "keyword" }
         elif ($body | test("great|nice|good|excellent|well done|lgtm"; "i")) then
-          { category: "PRAISE", priority: 6, source: "keyword" }
+          { category: "PRAISE", priority: 7, source: "keyword" }
         else
           { category: "OTHER", priority: 5, source: "keyword" }
         end;
 
-      # Main categorization: section headers take precedence over keywords
+      # Check if body contains BOTH praise and critical content (compound review)
+      def has_critical_content:
+        . as $body |
+        ($body | test("Critical Issues|Must Fix|Blocking|Security Issues|Should Fix Before Merge|High Priority|\\*\\*CRITICAL\\*\\*|\\*\\*HIGH\\*\\*|🔴"; "i"));
+
+      # Main categorization: section headers take precedence, with compound check
       def categorize_body:
         . as $body |
         (detect_section_category) as $section_cat |
         if $section_cat != null then
-          $section_cat
+          # If section detected as PRAISE or FUTURE but body also has critical content,
+          # override to the critical category (compound review protection)
+          if (($section_cat.category == "PRAISE") or ($section_cat.category == "FUTURE") or ($section_cat.category == "SUGGESTION")) and ($body | has_critical_content) then
+            { category: "HIGH", priority: 2, source: "compound_override" }
+          else
+            $section_cat
+          end
         else
-          categorize_by_keywords
+          # Keyword fallback: check for compound low-priority+critical before defaulting
+          (categorize_by_keywords) as $kw_cat |
+          if (($kw_cat.category == "PRAISE") or ($kw_cat.category == "FUTURE") or ($kw_cat.category == "SUGGESTION")) and ($body | has_critical_content) then
+            { category: "HIGH", priority: 2, source: "compound_override" }
+          else
+            $kw_cat
+          end
         end;
 
       . | map(. + ((.body // "") | categorize_body)) | sort_by(.priority)
