@@ -11,11 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "4.10.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.2.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="5.0.0"
+    AGENT_OS_VERSION="5.2.0"
 fi
-AGENT_OS_RELEASE_DATE="2026-02-06"
+AGENT_OS_RELEASE_DATE="2026-02-12"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -230,8 +230,8 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help                  Show this help message"
             echo ""
             echo "Architecture:"
-            echo "  Agent OS v4+ uses native Claude Code hooks, single-source JSON tasks,"
-            echo "  and simplified commands with mandatory validation."
+            echo "  Agent OS v5+ uses native Claude Code hooks, Teams integration,"
+            echo "  single-source JSON tasks, and mandatory validation."
             echo ""
             exit 0
             ;;
@@ -909,20 +909,24 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-echo "v4.11 Architecture Features:"
-echo "  • E2E test integration across spec/task workflow"
-echo "  • Automatic E2E plan generation in /create-spec"
-echo "  • Hard-blocking E2E gates in Phase 3 and wave-lifecycle"
-echo "  • Smoke E2E validation before final merge to main"
+echo "v5.2 Architecture Features:"
+echo "  • Atomic Teammates: group-level parallelism with subtask-group-worker"
+echo "  • Dynamic teammate cap based on isolation_score"
+echo "  • Artifact relay protocol for cross-teammate sharing"
 echo ""
-echo "v4.10 Features (included):"
-echo "  • Context offloading (FewWord-inspired, 82% token reduction)"
-echo "  • Tiered output strategy, secret redaction, smart retention"
-echo "  • Context skills (/context-read, /context-search, /context-stats)"
+echo "v5.1 Features (included):"
+echo "  • Native Teams integration for wave-level peer coordination"
+echo "  • Review-watcher agent for message-based PR review notification"
+echo "  • Artifact broadcast protocol for sibling task sharing"
 echo ""
-echo "v4.9 Features (included):"
-echo "  • Native hooks, AST verification, parallel waves"
-echo "  • Three-tier error handling, Ralph Wiggum verification loop"
+echo "v5.0 Features (included):"
+echo "  • Dependency-first tasks v4.0 with topological sort"
+echo "  • Constraint validation, E2E resilience, non-blocking review"
+echo ""
+echo "v4.9-4.12 Features (included):"
+echo "  • E2E test integration, context offloading, agent memory"
+echo "  • AST verification, Ralph Wiggum verification loop"
+echo "  • Setup hook, TaskCompleted hook, Task(type) spawn restrictions"
 echo ""
 
 echo "Next steps:"

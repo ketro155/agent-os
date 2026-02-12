@@ -2,7 +2,7 @@
 
 # Agent OS Shared Functions
 # Used by both base.sh and project.sh
-# Updated for v3.0.4 architecture
+# Updated for v5.2.0 architecture
 
 # Base URL for raw GitHub content
 BASE_URL="https://raw.githubusercontent.com/buildermethods/agent-os/main"
@@ -105,7 +105,7 @@ EOF
     fi
 }
 
-# Function to install from GitHub (v3.0.4 structure)
+# Function to install from GitHub (standards + commands)
 # This function downloads the core Agent OS files from the GitHub repository
 install_from_github() {
     local target_dir="$1"
@@ -197,51 +197,66 @@ install_from_github() {
 }
 
 # Function to install v3 files from GitHub
-# This downloads the native v3 architecture files (hooks, scripts, agents, etc.)
+# This downloads the native v5 architecture files (hooks, scripts, agents, etc.)
 install_v3_from_github() {
     local overwrite="$1"
 
     echo ""
-    echo "📥 Downloading v3 architecture files from GitHub..."
+    echo "📥 Downloading v5 architecture files from GitHub..."
 
-    # Create v3 directories
+    # Create directories
     mkdir -p "./.claude/commands"
     mkdir -p "./.claude/agents"
     mkdir -p "./.claude/hooks"
     mkdir -p "./.claude/scripts"
     mkdir -p "./.claude/rules"
+    mkdir -p "./.claude/skills/artifact-verification"
+    mkdir -p "./.claude/skills/context-summary"
+    mkdir -p "./.claude/skills/tdd-helper"
+    mkdir -p "./.claude/skills/subtask-expansion"
+    mkdir -p "./.claude/skills/log-entry"
+    mkdir -p "./.claude/skills/context-read"
+    mkdir -p "./.claude/skills/context-search"
+    mkdir -p "./.claude/skills/context-stats"
+    mkdir -p "./.claude/templates/specs"
+    mkdir -p "./.claude/templates/tasks"
+    mkdir -p "./.claude/templates/test-scenarios"
     mkdir -p "./.agent-os/schemas"
 
-    # Download v3 commands (simplified versions)
+    # Download commands
     echo ""
-    echo "  📂 Commands (v3 - simplified):"
-    # Most commands use the standard versions
+    echo "  📂 Commands:"
     for cmd in plan-product shape-spec create-spec create-tasks analyze-product debug pr-review-cycle; do
-        download_file "${BASE_URL}/commands/${cmd}.md" \
+        download_file "${BASE_URL}/v3/commands/${cmd}.md" \
             "./.claude/commands/${cmd}.md" \
             "$overwrite" \
             "commands/${cmd}.md"
     done
-    # v3-specific execute-tasks
     download_file "${BASE_URL}/v3/commands/execute-tasks.md" \
         "./.claude/commands/execute-tasks.md" \
         "$overwrite" \
-        "commands/execute-tasks.md (v3)"
+        "commands/execute-tasks.md"
+    for cmd in execute-spec create-test-plan run-tests; do
+        download_file "${BASE_URL}/v3/commands/${cmd}.md" \
+            "./.claude/commands/${cmd}.md" \
+            "$overwrite" \
+            "commands/${cmd}.md"
+    done
 
-    # Download agents (phase subagents + utility agents)
+    # Download agents (18 agents)
     echo ""
     echo "  📂 Agents:"
-    for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator; do
+    for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher; do
         download_file "${BASE_URL}/v3/agents/${agent}.md" \
             "./.claude/agents/${agent}.md" \
             "$overwrite" \
             "agents/${agent}.md"
     done
 
-    # Download v3 hooks
+    # Download hooks (8 hooks)
     echo ""
-    echo "  📂 Hooks (v3 - mandatory validation):"
-    for hook in session-start session-end post-file-change pre-commit-gate; do
+    echo "  📂 Hooks:"
+    for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed; do
         download_file "${BASE_URL}/v3/hooks/${hook}.sh" \
             "./.claude/hooks/${hook}.sh" \
             "$overwrite" \
@@ -249,53 +264,89 @@ install_v3_from_github() {
         chmod +x "./.claude/hooks/${hook}.sh" 2>/dev/null || true
     done
 
-    # Download v3 scripts
+    # Download scripts
     echo ""
-    echo "  📂 Scripts (v3 - task operations):"
-    download_file "${BASE_URL}/v3/scripts/task-operations.sh" \
-        "./.claude/scripts/task-operations.sh" \
-        "$overwrite" \
-        "scripts/task-operations.sh"
-    chmod +x "./.claude/scripts/task-operations.sh" 2>/dev/null || true
-    download_file "${BASE_URL}/v3/scripts/json-to-markdown.js" \
-        "./.claude/scripts/json-to-markdown.js" \
-        "$overwrite" \
-        "scripts/json-to-markdown.js"
+    echo "  📂 Scripts:"
+    for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh; do
+        download_file "${BASE_URL}/v3/scripts/${script}" \
+            "./.claude/scripts/${script}" \
+            "$overwrite" \
+            "scripts/${script}"
+        chmod +x "./.claude/scripts/${script}" 2>/dev/null || true
+    done
+    for script in json-to-markdown.js test-plan-to-markdown.js test-report-to-markdown.js ast-verify.ts wave-parallel.ts verification-loop.ts e2e-utils.ts test-patterns.ts compute-waves.ts migrate-v3-to-v4.js; do
+        download_file "${BASE_URL}/v3/scripts/${script}" \
+            "./.claude/scripts/${script}" \
+            "$overwrite" \
+            "scripts/${script}"
+    done
 
-    # Download v3 memory/rules
+    # Download memory/rules
     echo ""
-    echo "  📂 Memory (v3 - native memory hierarchy):"
+    echo "  📂 Memory:"
     download_file "${BASE_URL}/v3/memory/CLAUDE.md" \
         "./.claude/CLAUDE.md" \
         "$overwrite" \
         "CLAUDE.md"
-    for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop; do
+    download_file "${BASE_URL}/v3/memory/ENV-VARS.md" \
+        "./.claude/ENV-VARS.md" \
+        "$overwrite" \
+        "ENV-VARS.md"
+    for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration; do
         download_file "${BASE_URL}/v3/memory/rules/${rule}.md" \
             "./.claude/rules/${rule}.md" \
             "$overwrite" \
             "rules/${rule}.md"
     done
 
-    # Download verification-loop script (v4.9.0 Ralph Wiggum pattern)
-    download_file "${BASE_URL}/v3/scripts/verification-loop.ts" \
-        "./.claude/scripts/verification-loop.ts" \
-        "$overwrite" \
-        "scripts/verification-loop.ts"
-
-    # Download v3 settings
+    # Download skills
     echo ""
-    echo "  📂 Settings (v3 - hooks configuration):"
+    echo "  📂 Skills:"
+    for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats; do
+        download_file "${BASE_URL}/v3/skills/${skill}/SKILL.md" \
+            "./.claude/skills/${skill}/SKILL.md" \
+            "$overwrite" \
+            "skills/${skill}/SKILL.md"
+    done
+
+    # Download templates
+    echo ""
+    echo "  📂 Templates:"
+    for template in feature bugfix refactor integration; do
+        download_file "${BASE_URL}/v3/templates/specs/${template}.md" \
+            "./.claude/templates/specs/${template}.md" \
+            "$overwrite" \
+            "templates/specs/${template}.md"
+    done
+    for template in api-endpoint react-component bugfix refactor; do
+        download_file "${BASE_URL}/v3/templates/tasks/${template}.json" \
+            "./.claude/templates/tasks/${template}.json" \
+            "$overwrite" \
+            "templates/tasks/${template}.json"
+    done
+    for template in authentication form-validation crud-operations; do
+        download_file "${BASE_URL}/v3/templates/test-scenarios/${template}.json" \
+            "./.claude/templates/test-scenarios/${template}.json" \
+            "$overwrite" \
+            "templates/test-scenarios/${template}.json"
+    done
+
+    # Download settings
+    echo ""
+    echo "  📂 Settings:"
     download_file "${BASE_URL}/v3/settings.json" \
         "./.claude/settings.json" \
         "$overwrite" \
         "settings.json"
 
-    # Download v3 schema
+    # Download schemas
     echo ""
     echo "  📂 Schemas:"
-    download_file "${BASE_URL}/v3/schemas/tasks-v3.json" \
-        "./.agent-os/schemas/tasks-v3.json" \
-        "$overwrite" \
-        "schemas/tasks-v3.json"
+    for schema in tasks-v3.json tasks-v4.json execute-spec-v1.json; do
+        download_file "${BASE_URL}/v3/schemas/${schema}" \
+            "./.agent-os/schemas/${schema}" \
+            "$overwrite" \
+            "schemas/${schema}"
+    done
 }
 

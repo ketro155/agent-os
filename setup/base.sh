@@ -3,13 +3,13 @@
 # Agent OS Base Installation Script
 # This script installs Agent OS to the current directory as a central repository
 # Other projects can then install from this base using project.sh
-# Updated for v3.8.1 architecture
+# Updated for v5.2.0 architecture
 
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="5.1.1"
-AGENT_OS_RELEASE_DATE="2026-02-10"
+AGENT_OS_VERSION="5.2.0"
+AGENT_OS_RELEASE_DATE="2026-02-12"
 
 # Initialize flags
 OVERWRITE_COMMANDS=false
@@ -95,6 +95,17 @@ mkdir -p "$INSTALL_DIR/v3/hooks"
 mkdir -p "$INSTALL_DIR/v3/scripts"
 mkdir -p "$INSTALL_DIR/v3/memory/rules"
 mkdir -p "$INSTALL_DIR/v3/schemas"
+mkdir -p "$INSTALL_DIR/v3/skills/artifact-verification"
+mkdir -p "$INSTALL_DIR/v3/skills/context-summary"
+mkdir -p "$INSTALL_DIR/v3/skills/tdd-helper"
+mkdir -p "$INSTALL_DIR/v3/skills/subtask-expansion"
+mkdir -p "$INSTALL_DIR/v3/skills/log-entry"
+mkdir -p "$INSTALL_DIR/v3/skills/context-read"
+mkdir -p "$INSTALL_DIR/v3/skills/context-search"
+mkdir -p "$INSTALL_DIR/v3/skills/context-stats"
+mkdir -p "$INSTALL_DIR/v3/templates/specs"
+mkdir -p "$INSTALL_DIR/v3/templates/tasks"
+mkdir -p "$INSTALL_DIR/v3/templates/test-scenarios"
 
 # Download functions.sh first and source it
 echo ""
@@ -179,7 +190,7 @@ done
 
 echo ""
 echo "  📂 Agents:"
-for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator; do
+for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher; do
     download_file "${BASE_URL}/v3/agents/${agent}.md" \
         "$INSTALL_DIR/v3/agents/${agent}.md" \
         "$OVERWRITE_COMMANDS" \
@@ -188,7 +199,7 @@ done
 
 echo ""
 echo "  📂 v3 Hooks:"
-for hook in session-start session-end post-file-change pre-commit-gate; do
+for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed; do
     download_file "${BASE_URL}/v3/hooks/${hook}.sh" \
         "$INSTALL_DIR/v3/hooks/${hook}.sh" \
         "$OVERWRITE_COMMANDS" \
@@ -198,15 +209,19 @@ done
 
 echo ""
 echo "  📂 v3 Scripts:"
-download_file "${BASE_URL}/v3/scripts/task-operations.sh" \
-    "$INSTALL_DIR/v3/scripts/task-operations.sh" \
-    "$OVERWRITE_COMMANDS" \
-    "v3/scripts/task-operations.sh"
-chmod +x "$INSTALL_DIR/v3/scripts/task-operations.sh" 2>/dev/null || true
-download_file "${BASE_URL}/v3/scripts/json-to-markdown.js" \
-    "$INSTALL_DIR/v3/scripts/json-to-markdown.js" \
-    "$OVERWRITE_COMMANDS" \
-    "v3/scripts/json-to-markdown.js"
+for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh; do
+    download_file "${BASE_URL}/v3/scripts/${script}" \
+        "$INSTALL_DIR/v3/scripts/${script}" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/scripts/${script}"
+    chmod +x "$INSTALL_DIR/v3/scripts/${script}" 2>/dev/null || true
+done
+for script in json-to-markdown.js test-plan-to-markdown.js test-report-to-markdown.js ast-verify.ts wave-parallel.ts verification-loop.ts e2e-utils.ts test-patterns.ts compute-waves.ts migrate-v3-to-v4.js; do
+    download_file "${BASE_URL}/v3/scripts/${script}" \
+        "$INSTALL_DIR/v3/scripts/${script}" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/scripts/${script}"
+done
 
 echo ""
 echo "  📂 v3 Memory:"
@@ -214,11 +229,45 @@ download_file "${BASE_URL}/v3/memory/CLAUDE.md" \
     "$INSTALL_DIR/v3/memory/CLAUDE.md" \
     "$OVERWRITE_COMMANDS" \
     "v3/memory/CLAUDE.md"
-for rule in tdd-workflow git-conventions execute-tasks; do
+download_file "${BASE_URL}/v3/memory/ENV-VARS.md" \
+    "$INSTALL_DIR/v3/memory/ENV-VARS.md" \
+    "$OVERWRITE_COMMANDS" \
+    "v3/memory/ENV-VARS.md"
+for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration; do
     download_file "${BASE_URL}/v3/memory/rules/${rule}.md" \
         "$INSTALL_DIR/v3/memory/rules/${rule}.md" \
         "$OVERWRITE_COMMANDS" \
         "v3/memory/rules/${rule}.md"
+done
+
+echo ""
+echo "  📂 v3 Skills:"
+for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats; do
+    download_file "${BASE_URL}/v3/skills/${skill}/SKILL.md" \
+        "$INSTALL_DIR/v3/skills/${skill}/SKILL.md" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/skills/${skill}/SKILL.md"
+done
+
+echo ""
+echo "  📂 v3 Templates:"
+for template in feature bugfix refactor integration; do
+    download_file "${BASE_URL}/v3/templates/specs/${template}.md" \
+        "$INSTALL_DIR/v3/templates/specs/${template}.md" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/templates/specs/${template}.md"
+done
+for template in api-endpoint react-component bugfix refactor; do
+    download_file "${BASE_URL}/v3/templates/tasks/${template}.json" \
+        "$INSTALL_DIR/v3/templates/tasks/${template}.json" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/templates/tasks/${template}.json"
+done
+for template in authentication form-validation crud-operations; do
+    download_file "${BASE_URL}/v3/templates/test-scenarios/${template}.json" \
+        "$INSTALL_DIR/v3/templates/test-scenarios/${template}.json" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/templates/test-scenarios/${template}.json"
 done
 
 echo ""
@@ -231,6 +280,14 @@ download_file "${BASE_URL}/v3/schemas/tasks-v3.json" \
     "$INSTALL_DIR/v3/schemas/tasks-v3.json" \
     "$OVERWRITE_COMMANDS" \
     "v3/schemas/tasks-v3.json"
+download_file "${BASE_URL}/v3/schemas/tasks-v4.json" \
+    "$INSTALL_DIR/v3/schemas/tasks-v4.json" \
+    "$OVERWRITE_COMMANDS" \
+    "v3/schemas/tasks-v4.json"
+download_file "${BASE_URL}/v3/schemas/execute-spec-v1.json" \
+    "$INSTALL_DIR/v3/schemas/execute-spec-v1.json" \
+    "$OVERWRITE_COMMANDS" \
+    "v3/schemas/execute-spec-v1.json"
 
 # Download config.yml
 echo ""
@@ -274,10 +331,12 @@ echo "--------------------------------"
 echo ""
 echo "📍 Base installation structure:"
 echo "   $INSTALL_DIR/v3/commands/           - Command templates (8 commands)"
-echo "   $INSTALL_DIR/v3/agents/             - Agent templates (13 agents)"
-echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (4 hooks)"
-echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts"
-echo "   $INSTALL_DIR/v3/memory/             - Memory templates"
+echo "   $INSTALL_DIR/v3/agents/             - Agent templates (18 agents)"
+echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (8 hooks)"
+echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (17 scripts)"
+echo "   $INSTALL_DIR/v3/memory/             - Memory templates + rules (12 files)"
+echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (8 skills)"
+echo "   $INSTALL_DIR/v3/templates/          - Spec, task, test templates"
 echo "   $INSTALL_DIR/standards/             - Development standards"
 echo "   $INSTALL_DIR/config.yml             - Configuration"
 echo "   $INSTALL_DIR/setup/project.sh       - Project installation script"
