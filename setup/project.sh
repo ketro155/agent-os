@@ -404,7 +404,7 @@ if [ "$CLAUDE_CODE" = true ]; then
 
     # Determine overwrite setting for Claude Code files
     OVERWRITE_CLAUDE="false"
-    if [ "$UPGRADE" = true ]; then
+    if [ "$UPGRADE" = true ] || [ "$OVERWRITE_INSTRUCTIONS" = true ]; then
         OVERWRITE_CLAUDE="true"
     fi
 
