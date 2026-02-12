@@ -8,7 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [5.2.0] - 2026-02-12 - Atomic Teammates: Group-Level Parallelism
+
 ### Added
+- **Group-level teammate spawning** — `wave-orchestrator` can now spawn `subtask-group-worker` agents as lightweight teammates, each handling a single subtask group scoped to specific files (lower context pressure per agent)
+- **Dynamic teammate cap** — teammate count computed from `isolation_score` instead of static `Math.min(tasks.length, 3)`; higher isolation enables more parallelism, low isolation falls back to sequential
+- **Artifact relay protocol** — team lead relays verified artifacts from one teammate to all active siblings, preventing duplicate utility functions across parallel groups
+- **`AGENT_OS_MAX_TEAMMATES` env var** — configurable upper bound for concurrent teammates per wave team (default: `5`)
+- **Teammate mode for `subtask-group-worker`** — claims group tasks from shared task list, parses SubtaskGroupContext from description, broadcasts artifacts via SendMessage
+- **Granularity decision tree** in `wave-orchestrator` (T1.5) — selects `task_level`, `group_level`, or `hybrid` based on `subtask_execution.mode` and `groups.length`
 - Centralized environment variable documentation (`.claude/ENV-VARS.md`)
 - Consolidated verification utilities in `verification-loop.ts`
 - E2E utilities module (`e2e-utils.ts`) with `canAutoFix()` function
@@ -16,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Subtask execution mode decision tree in phase2-implementation
 
 ### Changed
+- **wave-orchestrator** — T1.5 granularity selection, dynamic cap formula, group-level TaskCreate, agent type routing in T3, artifact relay in T4.5
+- **subtask-group-worker** — added team tools (SendMessage, TaskUpdate, TaskList, TaskGet) to frontmatter; teammate workflow with claim-execute-broadcast-loop
+- **teams-integration.md** — expanded with Atomic Teammates section, granularity decision tree, relay protocol, backward compatibility notes
+- **agent-tool-restrictions.md** — added "Implementation teammate" tool set, validation checklist note for subtask-group-worker
+- **ENV-VARS.md** — added Teams section with `AGENT_OS_MAX_TEAMMATES`
+- **CLAUDE.md** — bumped to v5.2.0; added Atomic Teammates and artifact relay feature bullets; updated Teams Integration section; added `AGENT_OS_MAX_TEAMMATES` to config
 - Wave-orchestrator now references centralized verification module
 - Updated phase3-delivery to use e2e-utils for auto-fix analysis
 - Standardized tool restriction approach documentation
@@ -23,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Clarified subtask execution mode selection with decision tree
 - Documented backlog graduation criteria explicitly
+
+### Backward Compatibility
+- `AGENT_OS_TEAMS=false` → entirely unchanged flow (legacy Task() mode)
+- `AGENT_OS_TEAMS=true` + no `parallel_groups` → `task_level` granularity (v5.1 behavior)
+- `AGENT_OS_TEAMS=true` + `isolation_score < 0.6` → `cap = 1` (sequential, safe fallback)
 
 ---
 
