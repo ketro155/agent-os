@@ -1,11 +1,11 @@
-# Agent OS v5.1.0 - Core Memory
+# Agent OS v5.3.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 5.1.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 5.3.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)
@@ -26,6 +26,11 @@ Agent OS is a development framework providing structured AI-assisted workflows. 
 - **Native Teams integration** for wave-level peer coordination (v5.1.0)
 - **Review-watcher agent** for message-based PR review notification (v5.1.0)
 - **Artifact broadcast protocol** for sibling task sharing (v5.1.0)
+- **Atomic Teammates** with group-level parallelism and dynamic cap (v5.2.0)
+- **Artifact relay protocol** for cross-teammate sibling sharing (v5.2.0)
+- **TeammateIdle hook** for teammate lifecycle tracking (v5.3.0)
+- **Opus 4.6 model strategy** with two-tier agent model assignment (v5.3.0)
+- **PreToolUse additionalContext** for smarter pre-commit context (v5.3.0)
 
 ## Context Offloading (v4.10.0)
 
@@ -71,6 +76,7 @@ When you see: `[Output offloaded: 45KB → /context-read phase2_20260112_143022_
 ```bash
 AGENT_OS_TASKS_V4=true         # Dependency-first tasks v4.0 format (v5.0, default true since v5.1)
 AGENT_OS_TEAMS=true            # Teams-based wave coordination (v5.1, default true since v5.1)
+AGENT_OS_MAX_TEAMMATES=5       # Max concurrent teammates per wave (v5.2)
 AGENT_OS_INLINE_MAX=512        # Inline display threshold
 AGENT_OS_PREVIEW_MIN=4096      # Preview trigger for failures
 AGENT_OS_SUCCESS_RETENTION=24  # Hours to keep success outputs
@@ -203,9 +209,9 @@ See `rules/verification-loop.md` for implementation details.
 - Edit tasks via commands or direct JSON editing
 - Hooks auto-regenerate markdown on JSON changes
 
-### Agent Security (v4.12.0)
+### Agent Security (v5.2.0)
 
-Agent tool access uses **three complementary mechanisms**:
+Agent tool access uses **four complementary mechanisms**:
 
 | Mechanism | Type | When to Use |
 |-----------|------|-------------|
@@ -226,22 +232,26 @@ Agent tool access uses **three complementary mechanisms**:
 
 See `rules/agent-tool-restrictions.md` for full decision tree and examples.
 
-### Teams Integration (v5.1.0)
+### Teams Integration (v5.2.0)
 
 Agent OS uses Claude Code's native Teams API for peer coordination where it adds clear value:
 
 | Scenario | Mode | Mechanism |
 |----------|------|-----------|
 | Within-wave task coordination | Teams | `TeamCreate` + `SendMessage` artifact sharing |
+| Within-wave group coordination | Teams (v5.2) | `subtask-group-worker` teammates with artifact relay |
 | PR review waiting | Teams | `review-watcher` teammate with message notification |
 | Cross-wave orchestration | Task() | Hierarchical spawning for context isolation |
 | PR review cycle | Task() | Sequential discovery + implementation |
 
-**Feature flag**: `AGENT_OS_TEAMS` (default: `false`). Set to `true` in `settings.json` to enable.
+**Prerequisite**: Claude Code Agent Teams must be enabled: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (set in environment or `~/.claude.json`).
+
+**Feature flags**: `AGENT_OS_TEAMS` (default: `true`). `AGENT_OS_MAX_TEAMMATES` (default: `5`).
 
 **Key agents affected:**
-- `wave-orchestrator` — team lead, spawns phase2 teammates for parallel tasks
+- `wave-orchestrator` — team lead, dynamic granularity (task-level or group-level) with isolation-based cap
 - `phase2-implementation` — teammate mode: claims tasks, broadcasts artifacts
+- `subtask-group-worker` — teammate mode (v5.2): claims group tasks, broadcasts scoped artifacts
 - `execute-spec-orchestrator` — spawns `review-watcher` teammate for PR polling
 - `review-watcher` — lightweight Haiku-model teammate that notifies on review arrival
 
@@ -252,7 +262,8 @@ See `rules/teams-integration.md` for full documentation.
 - Feature branches: `feature/SPEC-NAME-brief-description`
 - Commit after each completed subtask
 - PR created automatically in Phase 3
-- Pre-commit hooks validate build/tests/types
+- Pre-commit hooks validate build/tests/types (with `additionalContext` for commit messages, v5.3.0)
+- Resume PR-linked sessions with `claude --from-pr <PR_NUMBER>` (v5.3.0)
 
 ### Standards Location
 
@@ -276,8 +287,9 @@ These run automatically - you don't need to invoke them:
 | **SubagentStart** | Agent spawned | Initialize agent context, track metrics (v4.8.0) |
 | **SubagentStop** | Agent completes | **Capture transcript, offload large outputs, track tokens** (v4.10.0) |
 | **TaskCompleted** | Task status → completed | **Log completion to progress, increment session stats** (v4.12.0) |
+| **TeammateIdle** | Teammate goes idle | **Track teammate lifecycle metrics** (v5.3.0) |
 | PostToolUse (Write/Edit) | File changes | Regenerate tasks.md from JSON |
-| PreToolUse (git commit) | Before commits | Validate build, tests, types |
+| PreToolUse (git commit) | Before commits | Validate build, tests, types; **return additionalContext** (v5.3.0) |
 
 ### Agent Metrics (v4.8.0+)
 
@@ -354,16 +366,23 @@ context: fork  # Optional: isolate execution context
 # Skill instructions here...
 ```
 
-## Important: Extended Thinking
+## Opus 4.6: Adaptive Thinking & Fast Mode (v5.3.0)
 
-For complex planning tasks (/create-spec, /shape-spec), extended thinking is available:
+Opus 4.6 uses **adaptive thinking** — the model dynamically decides when and how deeply to think. The previous `budget_tokens` approach is deprecated.
 
-```
-When facing complex architectural decisions:
-1. Consider multiple approaches
-2. Analyze trade-offs thoroughly
-3. Document reasoning in spec
-```
+For complex planning tasks (`/create-spec`, `/shape-spec`), adaptive thinking engages automatically:
+- At **high effort** (default): Claude almost always thinks before responding
+- At **lower effort**: thinking is skipped for simple problems
+- **Fast mode** (`/fast`): 2.5x faster output at premium pricing — useful for long `/execute-tasks` runs
+
+### Model Strategy (v5.3.0)
+
+Agent OS uses a two-tier model assignment:
+
+| Tier | Model | Agents | Rationale |
+|------|-------|--------|-----------|
+| **Full** | Opus 4.6 (default) | 13 agents (including wave-lifecycle-agent) | Complex reasoning, multi-step logic |
+| **Lightweight** | Haiku | 5 agents (classifiers + review-watcher) | Simple classification, low token overhead |
 
 ## Progress Log
 
@@ -453,6 +472,17 @@ Agents with `memory: project` accumulate cross-session knowledge scoped to the p
 | `wave-lifecycle-agent` | Learns review polling, merge patterns per project |
 
 **NOT given memory:** Haiku-model classifiers (token overhead disproportionate), stateless/procedural agents (`git-workflow`, `project-manager`, `subtask-group-worker`, `phase3-delivery`, `pr-review-implementation`).
+
+### Auto-Memory vs Project Memory (v5.3.0)
+
+Claude Code v2.1.32+ has **automatic memory** that records and recalls user-level memories across sessions (stored in `~/.claude/`). This is **complementary** to Agent OS project memory:
+
+| System | Scope | Storage | Purpose |
+|--------|-------|---------|---------|
+| Claude Code auto-memory | User-level | `~/.claude/` | User preferences, workflow habits |
+| Agent OS `memory: project` | Project-level | Agent-specific | Test patterns, coding conventions, reviewer preferences |
+
+Both systems operate simultaneously without conflict.
 
 ---
 

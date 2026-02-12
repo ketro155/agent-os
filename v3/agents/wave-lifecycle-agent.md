@@ -1,8 +1,7 @@
 ---
 name: wave-lifecycle-agent
 description: Executes complete lifecycle for a single wave. Preserves context within wave, returns when wave is merged or failed.
-tools: Read, Bash, Grep, Glob, TodoWrite, Task(general-purpose), AskUserQuestion
-model: sonnet
+tools: Read, Bash, Grep, Glob, TodoWrite, Task(general-purpose), AskUserQuestion, Write, Edit
 memory: project
 ---
 

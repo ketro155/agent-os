@@ -2,7 +2,7 @@
 
 # Agent OS Shared Functions
 # Used by both base.sh and project.sh
-# Updated for v5.2.0 architecture
+# Updated for v5.3.0 architecture
 
 # Base URL for raw GitHub content
 BASE_URL="https://raw.githubusercontent.com/buildermethods/agent-os/main"
@@ -253,10 +253,10 @@ install_v3_from_github() {
             "agents/${agent}.md"
     done
 
-    # Download hooks (8 hooks)
+    # Download hooks (9 hooks)
     echo ""
     echo "  📂 Hooks:"
-    for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed; do
+    for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle; do
         download_file "${BASE_URL}/v3/hooks/${hook}.sh" \
             "./.claude/hooks/${hook}.sh" \
             "$overwrite" \

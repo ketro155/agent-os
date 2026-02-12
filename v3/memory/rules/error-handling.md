@@ -250,6 +250,54 @@ const ERROR_CATALOG = {
     message: "System in invalid state",
     retryable: false,
     abort: true
+  },
+
+  // ═══════════════════════════════════════════════════════════════════
+  // E2E ERRORS (E3xx) - Browser-level test failures (v5.0.1)
+  // ═══════════════════════════════════════════════════════════════════
+
+  E300: {
+    tier: ErrorTier.RECOVERABLE,
+    code: "E300",
+    name: "E2E_SCENARIO_FAILED",
+    message: "E2E test scenario failed",
+    retryable: false,
+    recovery: "Fix the failing scenario or update test expectations"
+  },
+  E301: {
+    tier: ErrorTier.RECOVERABLE,
+    code: "E301",
+    name: "E2E_TIMEOUT",
+    message: "E2E test scenario timed out",
+    retryable: true,
+    max_retries: 2,
+    retry_delay_ms: 3000
+  },
+  E302: {
+    tier: ErrorTier.RECOVERABLE,
+    code: "E302",
+    name: "E2E_ELEMENT_NOT_FOUND",
+    message: "Target element not found during E2E test",
+    retryable: true,
+    max_retries: 3,
+    retry_delay_ms: 2000
+  },
+  E303: {
+    tier: ErrorTier.FATAL,
+    code: "E303",
+    name: "E2E_BROWSER_CRASH",
+    message: "Browser connection lost during E2E test",
+    retryable: false,
+    abort: true
+  },
+  E304: {
+    tier: ErrorTier.TRANSIENT,
+    code: "E304",
+    name: "E2E_NETWORK_ERROR",
+    message: "Network request failed during E2E test",
+    retryable: true,
+    max_retries: 3,
+    retry_delay_ms: 2000
   }
 };
 ```
@@ -411,7 +459,14 @@ function mapErrorToCode(err) {
   // Test/Build errors
   if (message.includes('test') && message.includes('fail')) return 'E101';
   if (message.includes('build') && message.includes('fail')) return 'E102';
-  
+
+  // E2E errors
+  if (message.includes('scenario') && message.includes('fail')) return 'E300';
+  if (message.includes('e2e') && message.includes('timeout')) return 'E301';
+  if (message.includes('element not found') || message.includes('selector')) return 'E302';
+  if (message.includes('browser') && (message.includes('crash') || message.includes('disconnect'))) return 'E303';
+  if (message.includes('e2e') && message.includes('network')) return 'E304';
+
   return 'E206'; // Default: INVALID_STATE
 }
 ```
@@ -434,6 +489,10 @@ This agent uses the standardized error handling from rules/error-handling.md:
 ---
 
 ## Changelog
+
+### v5.0.1 (2026-02-09)
+- Added E2E error codes (E300-E304) referenced by e2e-integration.md
+- Added E2E error mappings to mapErrorToCode()
 
 ### v4.9.0 (2026-01-10)
 - Initial standardized error handling system

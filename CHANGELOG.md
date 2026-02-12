@@ -10,6 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.3.0] - 2026-02-12 - Claude Code & Opus 4.6 Alignment
+
+### Added
+- **`TeammateIdle` hook** — new hook event (Claude Code v2.1.33) tracks teammate lifecycle metrics in `agents.jsonl` for debugging slow waves
+- **`additionalContext` in pre-commit gate** — PreToolUse hook (Claude Code v2.1.21) now returns staged files and validation summary as context, helping the model write better commit messages
+- **Model strategy documentation** — two-tier assignment (Opus for reasoning agents, Haiku for classifiers) documented in `agent-tool-restrictions.md` with decision tree
+- **Opus 4.6 adaptive thinking section** — replaces stale "Extended Thinking" guidance in CLAUDE.md; documents adaptive thinking mode and fast mode (`/fast`)
+- **Auto-memory vs project memory** — clarification in CLAUDE.md that Claude Code auto-memory (user-level) and Agent OS `memory: project` (project-level) are complementary
+- **`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` prerequisite** — documented in CLAUDE.md and `teams-integration.md`; setup hook emits warning if Teams enabled without the Claude Code feature flag
+- **`${CLAUDE_SESSION_ID}` in skills** — context-stats and log-entry skills now include session ID for traceability
+- **`--from-pr` flag** — documented in Git Workflow section for PR-linked session resume
+
+### Changed
+- **wave-lifecycle-agent model: sonnet → Opus** — removed `model: sonnet` override so agent inherits default Opus 4.6; stronger reasoning reduces risk of review decision bugs (v5.1.1 regression area)
+- **teams-integration.md** — added Prerequisite section, TeammateIdle in hooks table, PR review status indicator note
+- **agent-tool-restrictions.md** — added Model Strategy section with decision tree, current assignments table, fast mode documentation, validation checklist item
+- **CLAUDE.md** — 7 documentation updates: Teams prerequisite, model strategy, fast mode, adaptive thinking, auto-memory distinction, `--from-pr`, TeammateIdle hook; bumped to v5.3.0
+- **setup.sh** — validates Teams tools availability when `AGENT_OS_TEAMS=true`
+- **pre-commit-gate.sh** — outputs `additionalContext` JSON field on success and warnings
+
+### Backward Compatibility
+- All changes are additive — no breaking changes
+- `AGENT_OS_TEAMS=false` remains entirely unchanged
+- Haiku classifiers remain on Haiku (unchanged)
+- Only wave-lifecycle-agent model assignment changed (Sonnet → Opus)
+
+---
+
 ## [5.2.0] - 2026-02-12 - Atomic Teammates: Group-Level Parallelism
 
 ### Added

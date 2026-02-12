@@ -1,4 +1,4 @@
-# Agent OS Environment Variables (v4.11.0)
+# Agent OS Environment Variables (v5.2.0)
 
 > Centralized documentation for all environment variables used by Agent OS.
 > See individual components for detailed usage.
@@ -111,6 +111,35 @@ When the scratch directory exceeds this size, oldest files are removed.
 
 ```bash
 export AGENT_OS_SCRATCH_MAX_MB=250
+```
+
+---
+
+## Teams (v5.2.0)
+
+These variables control Teams-based wave coordination.
+
+### AGENT_OS_MAX_TEAMMATES
+
+**Purpose**: Maximum concurrent teammates per wave team.
+
+| Key | Value |
+|-----|-------|
+| Default | `5` |
+| Type | Integer |
+| Used By | `wave-orchestrator` (dynamic cap formula) |
+
+The actual teammate count is capped by both this value and the `isolation_score`-based formula:
+
+```
+avgIsolation >= 0.95 → cap = min(workUnits, MAX, 5)
+avgIsolation >= 0.80 → cap = min(workUnits, MAX, 3)
+avgIsolation >= 0.60 → cap = min(workUnits, MAX, 2)
+avgIsolation <  0.60 → cap = 1
+```
+
+```bash
+export AGENT_OS_MAX_TEAMMATES=5
 ```
 
 ---
@@ -319,6 +348,10 @@ All default values are defined in:
 ---
 
 ## Changelog
+
+### v5.2.0 (2026-02-12)
+- Added Teams section with `AGENT_OS_MAX_TEAMMATES` variable
+- Documented dynamic teammate cap formula
 
 ### v4.11.0 (2026-01-15)
 - Initial centralized documentation

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Agent OS v3.0 - Pre-Commit Validation Gate
+# Agent OS v5.3.0 - Pre-Commit Validation Gate
 # Replaces: build-check skill invocation, Phase 3 Step 9.7
 # CANNOT be skipped - runs before every git commit
 
@@ -114,18 +114,25 @@ fi
 
 if [ ${#WARNINGS[@]} -gt 0 ]; then
   WARNING_MSG=$(printf '%s\\n' "${WARNINGS[@]}")
+  # Collect staged files for additionalContext (v5.3.0)
+  STAGED_FILES=$(git diff --cached --name-only 2>/dev/null | head -20 | tr '\n' ', ' | sed 's/,$//')
   cat << EOF
 {
   "continue": true,
-  "systemMessage": "Pre-commit validation passed with warnings:\\n$WARNING_MSG"
+  "systemMessage": "Pre-commit validation passed with warnings:\\n$WARNING_MSG",
+  "additionalContext": "Staged files: ${STAGED_FILES:-none}. Warnings: $WARNING_MSG"
 }
 EOF
   exit 0
 fi
 
+# Collect staged files for additionalContext (v5.3.0)
+STAGED_FILES=$(git diff --cached --name-only 2>/dev/null | head -20 | tr '\n' ', ' | sed 's/,$//')
+STAGED_COUNT=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
 cat << EOF
 {
   "continue": true,
-  "systemMessage": "Pre-commit validation passed"
+  "systemMessage": "Pre-commit validation passed",
+  "additionalContext": "All checks passed (build, types, lint, tests). ${STAGED_COUNT} file(s) staged: ${STAGED_FILES:-none}"
 }
 EOF

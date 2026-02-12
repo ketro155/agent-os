@@ -1,17 +1,18 @@
 #!/bin/bash
-# Agent OS v4.12.0 - Setup Hook
+# Agent OS v5.3.0 - Setup Hook
 # Triggers: claude --init, --init-only, --maintenance
 # Purpose: One-time project initialization, directory creation, version check
 set -e
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-EXPECTED_VERSION="4.12.0"
+EXPECTED_VERSION="${AGENT_OS_VERSION:-5.2.0}"
 
 # 1. Create .agent-os directory structure (idempotent via mkdir -p)
-for dir in state progress scratch scratch/tool_outputs memory memory/pinned \
-           memory/sessions metrics metrics/transcripts logs specs plans cache \
-           schemas standards standards/global standards/frontend standards/backend \
-           standards/testing test-plans test-results recaps; do
+for dir in state state/checkpoints progress scratch scratch/tool_outputs \
+           memory memory/pinned memory/sessions metrics metrics/transcripts \
+           logs specs plans cache schemas product backlog \
+           standards standards/global standards/frontend standards/backend \
+           standards/testing test-plans test-results test-reports recaps; do
   mkdir -p "$PROJECT_DIR/.agent-os/$dir"
 done
 
@@ -42,7 +43,17 @@ if [ -n "$CLAUDE_ENV_FILE" ] && [ -n "$CLAUDE_PROJECT_DIR" ]; then
   echo "export CLAUDE_PROJECT_DIR=\"$CLAUDE_PROJECT_DIR\"" >> "$CLAUDE_ENV_FILE"
 fi
 
-# 6. Output
+# 6. Validate Teams tools availability (v5.3.0)
+TEAMS_WARNING=""
+if [ "${AGENT_OS_TEAMS}" = "true" ]; then
+  # Check if CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is likely enabled
+  # We can't directly test tool availability from a hook, but we can warn if the env var isn't set
+  if [ -z "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS}" ] && [ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS}" != "1" ]; then
+    TEAMS_WARNING=" Warning: AGENT_OS_TEAMS=true but CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS may not be set. Teams tools require this Claude Code feature flag."
+  fi
+fi
+
+# 7. Output
 cat << EOF
-{"continue":true,"systemMessage":"Agent OS v${EXPECTED_VERSION} initialized. Run /plan-product or /analyze-product to get started."}
+{"continue":true,"systemMessage":"Agent OS v${EXPECTED_VERSION} initialized.${TEAMS_WARNING} Run /plan-product or /analyze-product to get started."}
 EOF

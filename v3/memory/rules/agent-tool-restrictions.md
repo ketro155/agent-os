@@ -1,4 +1,4 @@
-# Agent Tool Restrictions (v5.1.0)
+# Agent Tool Restrictions (v5.3.0)
 
 > Standardized approach for restricting agent capabilities through tool access control.
 > Ensures consistent security posture across all Agent OS agents.
@@ -40,6 +40,7 @@ tools: Read, Grep, Glob  # Only these three tools are available
 | Orchestration | `Read, Bash, Grep, Glob, Task` | Spawns subagents |
 | Team lead | `Read, Bash, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList` | Coordinates teammates |
 | Lightweight teammate | `Read, Bash, SendMessage` | Minimal tools for single purpose |
+| Implementation teammate | `Read, Edit, Write, Bash, Grep, Glob, TodoWrite, SendMessage, TaskUpdate, TaskList, TaskGet` | Full dev + team tools (v5.2.0) |
 | Browser automation | `Read, Write, mcp__claude-in-chrome__*` | Chrome MCP tools |
 
 ## Secondary Mechanism: `disallowedTools:` (Defense-in-Depth)
@@ -294,6 +295,56 @@ model: haiku
 
 **Rationale**: Minimal tool set — only needs to read PR status (Bash for script execution), and notify the team lead (SendMessage). Cannot modify files, cannot spawn subagents. The `haiku` model keeps token cost low for this polling-only task.
 
+## Model Strategy (v5.3.0)
+
+Agent OS uses a **two-tier model assignment** optimized for Opus 4.6:
+
+| Tier | Model | When to Use | Agents |
+|------|-------|-------------|--------|
+| **Full** | Opus 4.6 (inherit default) | Complex reasoning, multi-step logic, critical decisions | 13 agents |
+| **Lightweight** | Haiku | Simple classification, polling, low token overhead | 5 agents |
+
+### Decision Tree
+
+```
+┌────────────────────────────────────────┐
+│  Does the agent perform complex        │
+│  reasoning or multi-step decisions?    │
+└──────────────┬─────────────────────────┘
+               │
+          YES  │  NO
+               │
+               ▼
+┌──────────────────────┐    ┌─────────────────────────────────┐
+│  Use Opus (default)  │    │  Is it a simple classifier      │
+│  No model: override  │    │  or single-purpose poller?      │
+└──────────────────────┘    └──────────────┬──────────────────┘
+                                      YES  │  NO
+                                           │
+                                    ┌──────┴──────┐
+                                    │             │
+                                    ▼             ▼
+                              ┌──────────┐  ┌──────────────┐
+                              │ Haiku    │  │ Opus         │
+                              │ model:   │  │ (default)    │
+                              │ haiku    │  └──────────────┘
+                              └──────────┘
+```
+
+### Current Model Assignments
+
+| Agent | Model | Rationale |
+|-------|-------|-----------|
+| `comment-classifier` | haiku | Simple classification, defense-in-depth |
+| `future-classifier` | haiku | Simple classification, defense-in-depth |
+| `roadmap-integrator` | haiku | Simple scoring/placement |
+| `review-watcher` | haiku | Single-purpose polling loop |
+| All other agents (13) | Opus 4.6 | Complex reasoning, multi-step logic |
+
+### Fast Mode
+
+Opus 4.6 supports **fast mode** (`/fast` toggle in Claude Code) for 2.5x faster output at premium pricing. This is useful for long-running workflows like `/execute-tasks` but is a user-level toggle, not an agent-level setting.
+
 ## Validation Checklist
 
 When creating or reviewing an agent:
@@ -305,10 +356,22 @@ When creating or reviewing an agent:
 - [ ] No tool appears in both lists
 - [ ] If agent uses `Task` → restrict with `Task(specific-types)` (v4.12.0)
 - [ ] If agent spawns teammates → document `teammate_restrictions` in body (v5.1.0)
+- [ ] Implementation teammates (`subtask-group-worker`, `phase2-implementation`) have team tools but note: `subtask-group-worker` intentionally has NO `memory: project` (lightweight, stateless) (v5.2.0)
+- [ ] Model assignment follows two-tier strategy: Opus for reasoning agents, Haiku for classifiers/pollers (v5.3.0)
 
 ---
 
 ## Changelog
+
+### v5.3.0 (2026-02-12)
+- Added Model Strategy section with two-tier assignment (Opus + Haiku)
+- Added model decision tree and current assignments table
+- Added fast mode documentation
+- Added validation checklist item for model assignment
+
+### v5.2.0 (2026-02-12)
+- Added "Implementation teammate" entry to Common Tool Sets table
+- Added validation checklist note: subtask-group-worker has team tools but no `memory: project`
 
 ### v5.1.0 (2026-02-09)
 - Added `teammate_restrictions` convention for team lead agents

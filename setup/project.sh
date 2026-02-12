@@ -11,9 +11,9 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.2.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.3.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="5.2.0"
+    AGENT_OS_VERSION="5.3.0"
 fi
 AGENT_OS_RELEASE_DATE="2026-02-12"
 
@@ -475,7 +475,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         # Install hooks (mandatory validation + subagent lifecycle v4.8.0)
         echo ""
         echo "  📂 Hooks:"
-        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed; do
+        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle; do
             if [ -f "$BASE_AGENT_OS/v3/hooks/${hook}.sh" ]; then
                 copy_file "$BASE_AGENT_OS/v3/hooks/${hook}.sh" "./.claude/hooks/${hook}.sh" "$OVERWRITE_CLAUDE" "hooks/${hook}.sh"
                 chmod +x "./.claude/hooks/${hook}.sh"
@@ -926,7 +926,7 @@ echo ""
 echo "v4.9-4.12 Features (included):"
 echo "  • E2E test integration, context offloading, agent memory"
 echo "  • AST verification, Ralph Wiggum verification loop"
-echo "  • Setup hook, TaskCompleted hook, Task(type) spawn restrictions"
+echo "  • Setup hook, TaskCompleted hook, TeammateIdle hook, Task(type) spawn restrictions"
 echo ""
 
 echo "Next steps:"

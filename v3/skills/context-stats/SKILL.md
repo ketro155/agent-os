@@ -1,7 +1,7 @@
 ---
 name: context-stats
 description: Display context efficiency statistics - tokens saved, outputs offloaded, storage usage.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Context Stats Skill
@@ -54,6 +54,7 @@ if [ -f "$STATS_FILE" ]; then
   fi
 
   echo "📊 Session Statistics"
+  echo "   Session ID:     ${CLAUDE_SESSION_ID:-unknown}"
   echo "   Started:        $STARTED"
   echo "   Outputs:        $COUNT offloaded"
   echo "   Data Saved:     $HUMAN_BYTES"
@@ -118,6 +119,7 @@ Display the statistics in a clear, formatted way:
 ═══════════════════════════════════════════════════════════════
 
 📊 Session Statistics
+   Session ID:     abc123-def456
    Started:        2026-01-12T14:30:00Z
    Outputs:        8 offloaded
    Data Saved:     145KB

@@ -3,12 +3,12 @@
 # Agent OS Base Installation Script
 # This script installs Agent OS to the current directory as a central repository
 # Other projects can then install from this base using project.sh
-# Updated for v5.2.0 architecture
+# Updated for v5.3.0 architecture
 
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="5.2.0"
+AGENT_OS_VERSION="5.3.0"
 AGENT_OS_RELEASE_DATE="2026-02-12"
 
 # Initialize flags
@@ -199,7 +199,7 @@ done
 
 echo ""
 echo "  📂 v3 Hooks:"
-for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed; do
+for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle; do
     download_file "${BASE_URL}/v3/hooks/${hook}.sh" \
         "$INSTALL_DIR/v3/hooks/${hook}.sh" \
         "$OVERWRITE_COMMANDS" \
@@ -332,7 +332,7 @@ echo ""
 echo "📍 Base installation structure:"
 echo "   $INSTALL_DIR/v3/commands/           - Command templates (8 commands)"
 echo "   $INSTALL_DIR/v3/agents/             - Agent templates (18 agents)"
-echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (8 hooks)"
+echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (9 hooks)"
 echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (17 scripts)"
 echo "   $INSTALL_DIR/v3/memory/             - Memory templates + rules (12 files)"
 echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (8 skills)"

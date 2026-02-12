@@ -1,7 +1,7 @@
 ---
 name: log-entry
 description: Add an entry to the project memory logs (decisions, implementations, or insights)
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Log Entry Skill
@@ -90,3 +90,4 @@ Format the entry using the template from the appropriate log file and append it.
 - Not every change needs logging - focus on significant decisions
 - Cross-reference related specs, tasks, or code
 - Use today's date in YYYY-MM-DD format
+- Include session ID (`${CLAUDE_SESSION_ID}`) in entries for traceability (v5.3.0)
