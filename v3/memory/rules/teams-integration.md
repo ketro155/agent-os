@@ -1,4 +1,4 @@
-# Teams Integration (v5.3.0)
+# Teams Integration (v5.4.0)
 
 > Native Claude Code Teams integration for peer coordination within Agent OS.
 > Enables real-time artifact sharing, message-based review notification, incremental verification, and group-level parallelism.
@@ -38,6 +38,7 @@ Agent OS v5.1.0 introduces a **hybrid orchestration model**:
 |----------|---------|---------|
 | `AGENT_OS_TEAMS` | `false` | Enable Teams-based wave coordination and review watching |
 | `AGENT_OS_MAX_TEAMMATES` | `5` | Maximum concurrent teammates per wave team (v5.2.0) |
+| `AGENT_OS_CODE_REVIEW` | `true` | Enable two-tier code review (Sonnet + Opus) (v5.4.0) |
 
 Set in `.claude/settings.json` under `env`:
 
@@ -111,17 +112,21 @@ Without this flag, `TeamCreate`, `SendMessage`, and other Teams tools may not be
 ### Wave-Level Teams
 
 ```
-1.  TeamCreate("wave-{spec}-{N}")
-1.5 Choose granularity: task_level | group_level | hybrid (v5.2.0)
-2.  TaskCreate for each work unit (task or subtask group)
-3.  Spawn teammates (phase2-implementation or subtask-group-worker)
-4.  Teammates claim tasks via TaskList → TaskUpdate
-5.  Teammates broadcast artifacts via SendMessage
-5.5 Team lead relays verified artifacts to sibling teammates (v5.2.0)
-6.  Team lead validates artifacts incrementally
-7.  All tasks complete → full Ralph verification
-8.  shutdown_request to all teammates
-9.  TeamDelete("wave-{spec}-{N}")
+1.   TeamCreate("wave-{spec}-{N}")
+1.5  Choose granularity: task_level | group_level | hybrid (v5.2.0)
+2.   TaskCreate for each work unit (task or subtask group)
+3.   Spawn teammates (phase2-implementation or subtask-group-worker)
+3.5  Spawn code-reviewer teammate if AGENT_OS_CODE_REVIEW=true (v5.4.0)
+4.   Teammates claim tasks via TaskList → TaskUpdate
+5.   Teammates broadcast artifacts via SendMessage
+5.5  Team lead relays verified artifacts to sibling teammates (v5.2.0)
+5.75 Team lead relays artifacts to code-reviewer for Tier 1 review (v5.4.0)
+6.   Team lead validates artifacts incrementally
+6.5  Team lead routes blocking findings to implementing teammate (v5.4.0)
+7.   All tasks complete → full Ralph verification
+7.5  shutdown_request to code-reviewer → invoke code-validator via Task() (v5.4.0)
+8.   shutdown_request to all implementation teammates
+9.   TeamDelete("wave-{spec}-{N}")
 ```
 
 ### Review Watcher Teams
@@ -284,15 +289,26 @@ The `teammate_restrictions` convention documents which agent types can be spawne
 
 | Agent (Team Lead) | Allowed Teammates | Context |
 |-------------------|-------------------|---------|
-| `wave-orchestrator` | `phase2-implementation`, `subtask-group-worker` | Wave task execution |
+| `wave-orchestrator` | `phase2-implementation`, `subtask-group-worker`, `code-reviewer` | Wave task execution + semantic review |
 | `execute-spec-orchestrator` | `review-watcher` | PR review polling |
 
 **Documentation pattern** — add to agent body:
 
 ```markdown
 ## Teammate Restrictions
-teammate_restrictions: [phase2-implementation, subtask-group-worker]
+teammate_restrictions: [phase2-implementation, subtask-group-worker, code-reviewer]
 ```
+
+## Utility Teammate Exemption (v5.4.0)
+
+Certain teammates serve a **utility role** (review, monitoring) rather than implementation. These are **exempt from `AGENT_OS_MAX_TEAMMATES`** cap:
+
+| Utility Teammate | Purpose | Why Exempt |
+|-----------------|---------|------------|
+| `code-reviewer` | Tier 1 semantic review | Doesn't consume implementation context slots |
+| `review-watcher` | PR review polling | Minimal resource usage (Haiku model) |
+
+The dynamic cap formula in wave-orchestrator T1.5 applies only to **implementation teammates** (`phase2-implementation`, `subtask-group-worker`). Utility teammates are spawned separately and do not count against the cap.
 
 ## Dual-Mode Version Routing
 
@@ -341,16 +357,78 @@ SubagentStop hook offloads large teammate outputs the same way it handles Task()
 | TeamDelete fails | RECOVERABLE | Log warning, continue (cleanup) |
 | Review-watcher timeout | RECOVERABLE | Notify orchestrator, manual intervention |
 
+## Two-Tier Code Review Integration (v5.4.0)
+
+When `AGENT_OS_CODE_REVIEW=true`, wave-orchestrator integrates a two-tier review system:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    TWO-TIER CODE REVIEW (v5.4.0)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  TIER 1 (Sonnet teammate, parallel during execution):               │
+│    wave-orchestrator receives artifact_created                      │
+│      → T4 pre-check (file exists?)                                  │
+│      → T4.5 sibling relay                                           │
+│      → T4.75 relay to code-reviewer                                 │
+│    code-reviewer reviews → sends findings                           │
+│      → T4.8 route CRITICAL/HIGH to implementer (max 2 fix attempts)│
+│      → Accumulate all findings to file                              │
+│                                                                     │
+│  TIER 2 (Opus subagent, sequential at wave end):                    │
+│    T5: All tasks done → shutdown code-reviewer                      │
+│      → Task(code-validator) with changed files + Tier 1 findings    │
+│      → Deep analysis: design, security, spec, cross-task            │
+│      → Combine Tier 1 + Tier 2 → block if unresolved CRITICAL/HIGH │
+│                                                                     │
+│  LEGACY MODE (AGENT_OS_TEAMS=false):                                │
+│    Only Tier 2 runs with IS_STANDALONE=true                         │
+│    Tier 2 expands scope to cover Tier 1 checks                     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Fix Cycle Bound
+
+To prevent infinite reviewer-implementer feedback loops:
+
+```
+MAX_REVIEW_FIX_ATTEMPTS = 2 (per finding per task)
+
+Attempt 1: Route fix request to implementer
+Attempt 2: Route second fix request
+Attempt 3+: Finding marked unresolved, escalated to Tier 2
+```
+
+### Error Resilience
+
+| Failure | Recovery |
+|---------|----------|
+| code-reviewer crashes | Warn + continue; Tier 2 safety net covers full scope |
+| code-validator timeout (E005) | Warn + non-blocking pass with PR note |
+| code-validator crash (E206) | Warn + non-blocking pass with PR note |
+
 ## Security Considerations
 
 - Teammates inherit tool restrictions from their agent definition — a `phase2-implementation` teammate has the same tools whether spawned via `Task()` or as a teammate
 - Team lead verifies artifacts before trusting broadcasts — don't blindly merge claimed exports
 - `review-watcher` has minimal tools (Read, Bash, SendMessage) — cannot modify codebase
+- `code-reviewer` has defense-in-depth (disallowedTools: Write, Edit, Bash, NotebookEdit) — identifies but never fixes issues
 - Team naming convention (`wave-{spec}-{N}`) prevents cross-spec team conflicts
 
 ---
 
 ## Changelog
+
+### v5.4.0 (2026-02-13)
+- Added Two-Tier Code Review Integration section (T4.75, T4.8, T5 handoff)
+- Added `AGENT_OS_CODE_REVIEW` to feature flag table
+- Added `code-reviewer` to wave-orchestrator teammate restrictions
+- Added Utility Teammate Exemption section (code-reviewer, review-watcher exempt from cap)
+- Added fix cycle bound documentation (MAX_REVIEW_FIX_ATTEMPTS=2)
+- Added error resilience table for code review failures
+- Updated wave-level team lifecycle with code review steps (3.5, 5.75, 6.5, 7.5)
+- Added code-reviewer to security considerations (defense-in-depth)
 
 ### v5.3.0 (2026-02-12)
 - Added Prerequisite section: `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` required for Teams tools

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v5.3.0 - Claude Code & Opus 4.6 Alignment: TeammateIdle hook, model strategy, additionalContext",
+  "_comment": "Agent OS v5.4.0 - Two-Tier Code Review: Sonnet real-time + Opus deep analysis",
 
   "hooks": {
     "Setup": [
@@ -149,7 +149,7 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "5.3.0",
+    "AGENT_OS_VERSION": "5.4.0",
     "AGENT_OS_TASKS_V4": "true",
     "AGENT_OS_TEAMS": "true",
     "AGENT_OS_MAX_TEAMMATES": "5",
@@ -157,6 +157,7 @@
     "AGENT_OS_PREVIEW_MIN": "4096",
     "AGENT_OS_SUCCESS_RETENTION": "24",
     "AGENT_OS_FAILURE_RETENTION": "48",
-    "AGENT_OS_SCRATCH_MAX_MB": "250"
+    "AGENT_OS_SCRATCH_MAX_MB": "250",
+    "AGENT_OS_CODE_REVIEW": "false"
   }
 }

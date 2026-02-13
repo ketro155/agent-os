@@ -101,6 +101,11 @@ fi
 
 **Handle Results:**
 
+> **canAutoFix() Utility**: `.claude/scripts/e2e-utils.ts` provides auto-fix analysis
+> ```bash
+> npx tsx .claude/scripts/e2e-utils.ts analyze-all '[{...failures...}]'
+> ```
+
 ```
 IF all scenarios pass:
   ✅ E2E validation passed
@@ -108,22 +113,42 @@ IF all scenarios pass:
   - Continue to artifact collection
 
 IF failures exist:
-  ANALYZE failures count and type
+  ANALYZE failures using canAutoFix utility:
 
-  IF failures.length < 3 AND canAutoFix(failures):
-    ATTEMPT fix:
-      - Analyze failure cause (missing element, timing, etc.)
-      - Apply targeted fix
+  ```bash
+  # Analyze all failures for auto-fixability
+  ANALYSIS=$(npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/e2e-utils.ts" analyze-all '${JSON.stringify(failures)}')
+  ```
+
+  IF failures.length <= 3 AND analysis.fixable == true:
+    ATTEMPT fix using remediation plan:
+      ```bash
+      PLAN=$(npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/e2e-utils.ts" plan '${JSON.stringify(failures)}')
+      ```
+      - Apply suggested fixes from plan.steps[]
       - Re-run failed scenarios
     IF fix succeeds: Continue
     ELSE: Return blocked
 
-  ELSE (failures >= 3 OR complex):
+  ELSE (failures > 3 OR analysis.fixable == false):
     ⛔ Return status "blocked"
     - Include failure report with screenshots
     - List specific scenarios that failed
-    - Provide remediation suggestions
+    - Include analysis.reason for why not auto-fixable
+    - Provide remediation suggestions from analysis.fixes[]
 ```
+
+**Auto-Fix Pattern Reference:**
+
+| Fix Type | Confidence | Auto-Fixable |
+|----------|------------|--------------|
+| MISSING_DATA_TESTID | HIGH | ✅ Yes |
+| MISSING_ARIA_LABEL | HIGH | ✅ Yes |
+| TIMING_ISSUE | MEDIUM | ✅ Yes |
+| SELECTOR_OUTDATED | MEDIUM | ✅ Yes |
+| ELEMENT_NOT_VISIBLE | LOW | ❌ No |
+| NETWORK_TIMEOUT | LOW | ❌ No |
+| UNKNOWN | LOW | ❌ No |
 
 **Failure Report Format:**
 
@@ -179,6 +204,37 @@ IF skip_e2e == true:
 </details>
 ```
 
+### 3.75 Code Review Results (v5.4.0)
+
+If `code_review` data is present in the wave results (set by wave-orchestrator when `AGENT_OS_CODE_REVIEW=true`), include a code review section in the PR description:
+
+```markdown
+## Code Review
+- **Tier 1** (Sonnet, real-time): [N] findings ([M] blocking)
+- **Tier 2** (Opus, deep): [N] findings ([M] blocking)
+- **Status**: Passed ✅
+
+<details>
+<summary>Advisory findings ([total])</summary>
+
+| Tier | Severity | File | Finding |
+|------|----------|------|---------|
+| 1 | MEDIUM | src/auth/session.ts:42 | Consider extracting repeated validation |
+| 2 | MEDIUM | src/auth/*.ts | Inconsistent error handling across auth module |
+| 2 | LOW | src/utils/hash.ts:15 | Magic number could be named constant |
+
+</details>
+```
+
+**If no code review data exists** (feature disabled), omit this section entirely.
+
+**If code review ran but had no findings**, include a brief note:
+
+```markdown
+## Code Review
+- **Status**: Passed ✅ (0 findings)
+```
+
 ---
 
 ### 4. Final Artifact Collection
@@ -198,6 +254,61 @@ jq '[.tasks[] | select(.artifacts) | .artifacts.exports_added[]] | unique' tasks
 > ⛔ **BLOCKING GATE** - Cannot create PR with orphaned backlog items
 
 Before delivery, all `future_tasks` must be triaged to prevent orphaned backlog items.
+
+#### Classification Criteria
+
+The `future-classifier` agent assigns types based on these criteria:
+
+| Type | Criteria | Examples |
+|------|----------|----------|
+| **ROADMAP_ITEM** | Strategic, cross-cutting, or requires own spec | "Add multi-tenant support", "Migrate to new auth provider", "Performance optimization epic" |
+| **WAVE_TASK** | Tactical, scoped to current feature, could fit in a wave | "Add loading indicator", "Handle edge case X", "Improve error message" |
+
+#### Graduation Decision Tree
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    GRADUATION DECISION CRITERIA                      │
+└─────────────────────────────────────────────────────────────────────┘
+                               │
+                    ┌──────────┴──────────┐
+                    │ What type of item?  │
+                    └──────────┬──────────┘
+                               │
+            ┌──────────────────┼──────────────────┐
+            │                  │                  │
+       ROADMAP_ITEM       WAVE_TASK          Unknown
+            │                  │                  │
+            ▼                  ▼                  ▼
+    ┌───────────────┐  ┌────────────────────┐   Reclassify
+    │ Auto-graduate │  │ User decides:      │
+    │ to roadmap.md │  │                    │
+    └───────────────┘  │ Is it related to   │
+                       │ current feature?   │
+                       └─────────┬──────────┘
+                                 │
+            ┌────────────────────┼────────────────────┐
+            │                    │                    │
+           YES              SOMEWHAT                  NO
+            │                    │                    │
+            ▼                    ▼                    ▼
+    ┌───────────────┐    ┌───────────────┐    ┌───────────────┐
+    │ "Tag for      │    │ "Next Spec"   │    │ "Drop"        │
+    │  Wave N"      │    │ Carry forward │    │ Won't do      │
+    │               │    │               │    │               │
+    │ Still useful  │    │ Useful but    │    │ Out of scope, │
+    │ for this spec │    │ out of scope  │    │ or superseded │
+    └───────────────┘    └───────────────┘    └───────────────┘
+```
+
+#### Disposition Guidelines
+
+| Disposition | When to Use | Example |
+|-------------|-------------|---------|
+| **Roadmap** (auto) | Strategic item needing own spec | "Add SSO support" → Roadmap Phase 3 |
+| **Tag for Wave N** | Tactical improvement that fits current feature | "Add retry logic to API calls" → Wave 8 |
+| **Next Spec** | Related but out of scope for current delivery | "Extend feature to mobile" → Next sprint |
+| **Drop** | Superseded, duplicate, or explicitly rejected | "Old approach before refactor" → Drop |
 
 ```bash
 # Run automatic graduation based on future_type
@@ -753,6 +864,10 @@ if (prResult.error) {
 ---
 
 ## Changelog
+
+### v5.4.0 (2026-02-13)
+- Added Step 3.75 Code Review Results section in PR description
+- Renders Tier 1 + Tier 2 findings summary when AGENT_OS_CODE_REVIEW=true
 
 ### v4.11.0 (2026-01-14)
 - Added Step 3.5 E2E Validation Gate

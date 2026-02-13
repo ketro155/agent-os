@@ -11,11 +11,11 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.3.0"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.4.0"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="5.3.0"
+    AGENT_OS_VERSION="5.4.0"
 fi
-AGENT_OS_RELEASE_DATE="2026-02-12"
+AGENT_OS_RELEASE_DATE="2026-02-13"
 
 # Track installation progress for cleanup
 INSTALL_STARTED=false
@@ -466,7 +466,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         # Install agents (phase subagents + utility agents)
         echo ""
         echo "  📂 Agents:"
-        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher; do
+        for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher code-reviewer code-validator; do
             if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
             fi
@@ -544,6 +544,11 @@ if [ "$CLAUDE_CODE" = true ]; then
         fi
         if [ -f "$BASE_AGENT_OS/v3/scripts/migrate-v3-to-v4.js" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/migrate-v3-to-v4.js" "./.claude/scripts/migrate-v3-to-v4.js" "$OVERWRITE_CLAUDE" "scripts/migrate-v3-to-v4.js"
+        fi
+        # v5.4.0 Code review coordination script
+        if [ -f "$BASE_AGENT_OS/v3/scripts/code-review-ops.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/code-review-ops.sh" "./.claude/scripts/code-review-ops.sh" "$OVERWRITE_CLAUDE" "scripts/code-review-ops.sh"
+            chmod +x "./.claude/scripts/code-review-ops.sh"
         fi
 
         # Install memory/rules
@@ -909,7 +914,12 @@ echo ""
 echo "--------------------------------"
 echo ""
 
-echo "v5.2 Architecture Features:"
+echo "v5.4 Architecture Features:"
+echo "  • Two-tier code review: Sonnet real-time + Opus deep analysis"
+echo "  • Three-tier model strategy: Opus (reasoning) + Sonnet (fast) + Haiku (classification)"
+echo "  • Utility teammate exemption from AGENT_OS_MAX_TEAMMATES cap"
+echo ""
+echo "v5.2 Features (included):"
 echo "  • Atomic Teammates: group-level parallelism with subtask-group-worker"
 echo "  • Dynamic teammate cap based on isolation_score"
 echo "  • Artifact relay protocol for cross-teammate sharing"

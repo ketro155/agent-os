@@ -1,4 +1,4 @@
-# Agent Tool Restrictions (v5.3.0)
+# Agent Tool Restrictions (v5.4.0)
 
 > Standardized approach for restricting agent capabilities through tool access control.
 > Ensures consistent security posture across all Agent OS agents.
@@ -41,6 +41,7 @@ tools: Read, Grep, Glob  # Only these three tools are available
 | Team lead | `Read, Bash, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList` | Coordinates teammates |
 | Lightweight teammate | `Read, Bash, SendMessage` | Minimal tools for single purpose |
 | Implementation teammate | `Read, Edit, Write, Bash, Grep, Glob, TodoWrite, SendMessage, TaskUpdate, TaskList, TaskGet` | Full dev + team tools (v5.2.0) |
+| Semantic reviewer | `Read, Grep, Glob, SendMessage, TaskList, TaskGet` | Read-only + team coordination (v5.4.0) |
 | Browser automation | `Read, Write, mcp__claude-in-chrome__*` | Chrome MCP tools |
 
 ## Secondary Mechanism: `disallowedTools:` (Defense-in-Depth)
@@ -76,6 +77,7 @@ The following agents use both `tools:` and `disallowedTools:`:
 | `comment-classifier` | Classify PR comments | `Read` | `Write, Edit, Bash, NotebookEdit` |
 | `future-classifier` | Classify future work items | `Read, Glob, Grep` | `Write, Edit, Bash, NotebookEdit` |
 | `roadmap-integrator` | Determine roadmap placement | `Read, Grep` | `Write, Edit, Bash, NotebookEdit` |
+| `code-reviewer` | Real-time semantic review | `Read, Grep, Glob, SendMessage, TaskList, TaskGet` | `Write, Edit, Bash, NotebookEdit` |
 
 ### Why Both?
 
@@ -240,7 +242,7 @@ Use `Task(types)` when an agent has `Task` in its tools list and only spawns spe
 | Agent | Allowed Spawns | Rationale |
 |-------|---------------|-----------|
 | `execute-spec-orchestrator` | `Task(wave-lifecycle-agent)` | Only spawns wave agents |
-| `wave-orchestrator` | `Task(phase2-implementation, subtask-group-worker)` | Spawns implementation workers |
+| `wave-orchestrator` | `Task(phase2-implementation, subtask-group-worker, code-validator)` | Spawns implementation workers + deep reviewer |
 | `wave-lifecycle-agent` | `Task(general-purpose)` | Spawns general-purpose for review processing |
 | `phase1-discovery` | `Task(Explore)` | Read-only codebase exploration |
 | `pr-review-discovery` | `Task(comment-classifier, Explore)` | Classification and exploration |
@@ -250,7 +252,7 @@ Use `Task(types)` when an agent has `Task` in its tools list and only spawns spe
 
 | Agent (Team Lead) | Allowed Teammates | Rationale |
 |-------------------|-------------------|-----------|
-| `wave-orchestrator` | `phase2-implementation`, `subtask-group-worker` | Wave task execution |
+| `wave-orchestrator` | `phase2-implementation`, `subtask-group-worker`, `code-reviewer` | Wave task execution + semantic review |
 | `execute-spec-orchestrator` | `review-watcher` | PR review polling |
 
 ### Anti-Pattern: Unrestricted Task
@@ -295,13 +297,14 @@ model: haiku
 
 **Rationale**: Minimal tool set — only needs to read PR status (Bash for script execution), and notify the team lead (SendMessage). Cannot modify files, cannot spawn subagents. The `haiku` model keeps token cost low for this polling-only task.
 
-## Model Strategy (v5.3.0)
+## Model Strategy (v5.4.0)
 
-Agent OS uses a **two-tier model assignment** optimized for Opus 4.6:
+Agent OS uses a **three-tier model assignment**:
 
 | Tier | Model | When to Use | Agents |
 |------|-------|-------------|--------|
-| **Full** | Opus 4.6 (inherit default) | Complex reasoning, multi-step logic, critical decisions | 13 agents |
+| **Full** | Opus 4.6 (inherit default) | Complex reasoning, multi-step logic, critical decisions | 13 agents + code-validator |
+| **Fast analysis** | Sonnet | Real-time semantic review, moderate reasoning | code-reviewer |
 | **Lightweight** | Haiku | Simple classification, polling, low token overhead | 5 agents |
 
 ### Decision Tree
@@ -316,19 +319,28 @@ Agent OS uses a **two-tier model assignment** optimized for Opus 4.6:
                │
                ▼
 ┌──────────────────────┐    ┌─────────────────────────────────┐
-│  Use Opus (default)  │    │  Is it a simple classifier      │
-│  No model: override  │    │  or single-purpose poller?      │
+│  Use Opus (default)  │    │  Does it need moderate reasoning │
+│  No model: override  │    │  with fast turnaround?           │
 └──────────────────────┘    └──────────────┬──────────────────┘
                                       YES  │  NO
                                            │
                                     ┌──────┴──────┐
                                     │             │
                                     ▼             ▼
-                              ┌──────────┐  ┌──────────────┐
-                              │ Haiku    │  │ Opus         │
-                              │ model:   │  │ (default)    │
-                              │ haiku    │  └──────────────┘
-                              └──────────┘
+                              ┌──────────┐  ┌─────────────────────────┐
+                              │ Sonnet   │  │  Is it a simple         │
+                              │ model:   │  │  classifier or poller?  │
+                              │ sonnet   │  └──────────┬──────────────┘
+                              └──────────┘        YES  │  NO
+                                                       │
+                                                ┌──────┴──────┐
+                                                │             │
+                                                ▼             ▼
+                                          ┌──────────┐  ┌──────────────┐
+                                          │ Haiku    │  │ Opus         │
+                                          │ model:   │  │ (default)    │
+                                          │ haiku    │  └──────────────┘
+                                          └──────────┘
 ```
 
 ### Current Model Assignments
@@ -339,6 +351,8 @@ Agent OS uses a **two-tier model assignment** optimized for Opus 4.6:
 | `future-classifier` | haiku | Simple classification, defense-in-depth |
 | `roadmap-integrator` | haiku | Simple scoring/placement |
 | `review-watcher` | haiku | Single-purpose polling loop |
+| `code-reviewer` | sonnet | Real-time semantic review, moderate reasoning (v5.4.0) |
+| `code-validator` | Opus 4.6 | Deep cross-task analysis, complex reasoning (v5.4.0) |
 | All other agents (13) | Opus 4.6 | Complex reasoning, multi-step logic |
 
 ### Fast Mode
@@ -357,11 +371,21 @@ When creating or reviewing an agent:
 - [ ] If agent uses `Task` → restrict with `Task(specific-types)` (v4.12.0)
 - [ ] If agent spawns teammates → document `teammate_restrictions` in body (v5.1.0)
 - [ ] Implementation teammates (`subtask-group-worker`, `phase2-implementation`) have team tools but note: `subtask-group-worker` intentionally has NO `memory: project` (lightweight, stateless) (v5.2.0)
-- [ ] Model assignment follows two-tier strategy: Opus for reasoning agents, Haiku for classifiers/pollers (v5.3.0)
+- [ ] Model assignment follows three-tier strategy: Opus for reasoning, Sonnet for fast analysis, Haiku for classifiers/pollers (v5.4.0)
 
 ---
 
 ## Changelog
+
+### v5.4.0 (2026-02-13)
+- Expanded model strategy to three-tier (Opus + Sonnet + Haiku)
+- Added code-reviewer to defense-in-depth agents table
+- Added "Semantic reviewer" to Common Tool Sets table
+- Updated wave-orchestrator spawn restrictions to include code-validator
+- Updated wave-orchestrator teammate restrictions to include code-reviewer
+- Added code-reviewer (Sonnet) and code-validator (Opus) to model assignments
+- Updated decision tree with Sonnet branch
+- Updated validation checklist for three-tier model strategy
 
 ### v5.3.0 (2026-02-12)
 - Added Model Strategy section with two-tier assignment (Opus + Haiku)

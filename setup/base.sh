@@ -3,13 +3,13 @@
 # Agent OS Base Installation Script
 # This script installs Agent OS to the current directory as a central repository
 # Other projects can then install from this base using project.sh
-# Updated for v5.3.0 architecture
+# Updated for v5.4.0 architecture
 
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="5.3.0"
-AGENT_OS_RELEASE_DATE="2026-02-12"
+AGENT_OS_VERSION="5.4.0"
+AGENT_OS_RELEASE_DATE="2026-02-13"
 
 # Initialize flags
 OVERWRITE_COMMANDS=false
@@ -190,7 +190,7 @@ done
 
 echo ""
 echo "  📂 Agents:"
-for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher; do
+for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher code-reviewer code-validator; do
     download_file "${BASE_URL}/v3/agents/${agent}.md" \
         "$INSTALL_DIR/v3/agents/${agent}.md" \
         "$OVERWRITE_COMMANDS" \
@@ -209,7 +209,7 @@ done
 
 echo ""
 echo "  📂 v3 Scripts:"
-for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh; do
+for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh; do
     download_file "${BASE_URL}/v3/scripts/${script}" \
         "$INSTALL_DIR/v3/scripts/${script}" \
         "$OVERWRITE_COMMANDS" \
@@ -331,9 +331,9 @@ echo "--------------------------------"
 echo ""
 echo "📍 Base installation structure:"
 echo "   $INSTALL_DIR/v3/commands/           - Command templates (8 commands)"
-echo "   $INSTALL_DIR/v3/agents/             - Agent templates (18 agents)"
+echo "   $INSTALL_DIR/v3/agents/             - Agent templates (20 agents)"
 echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (9 hooks)"
-echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (17 scripts)"
+echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (18 scripts)"
 echo "   $INSTALL_DIR/v3/memory/             - Memory templates + rules (12 files)"
 echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (8 skills)"
 echo "   $INSTALL_DIR/v3/templates/          - Spec, task, test templates"
