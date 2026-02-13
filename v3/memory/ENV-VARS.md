@@ -1,4 +1,4 @@
-# Agent OS Environment Variables (v5.2.0)
+# Agent OS Environment Variables (v5.4.0)
 
 > Centralized documentation for all environment variables used by Agent OS.
 > See individual components for detailed usage.
@@ -141,6 +141,32 @@ avgIsolation <  0.60 → cap = 1
 ```bash
 export AGENT_OS_MAX_TEAMMATES=5
 ```
+
+---
+
+## Code Review (v5.4.0)
+
+These variables control the two-tier code review system.
+
+### AGENT_OS_CODE_REVIEW
+
+**Purpose**: Enable two-tier code review system (Sonnet Tier 1 + Opus Tier 2).
+
+| Key | Value |
+|-----|-------|
+| Default | `false` |
+| Type | Boolean (`true`/`false`) |
+| Used By | `wave-orchestrator` (conditional reviewer spawn + validator invocation) |
+
+When enabled, wave-orchestrator spawns a Sonnet `code-reviewer` teammate for real-time
+semantic review during wave execution, and invokes an Opus `code-validator` subagent
+for deep design/security/spec analysis at wave completion.
+
+```bash
+export AGENT_OS_CODE_REVIEW=true
+```
+
+**Cost implications**: Enabling adds one Sonnet teammate (running in parallel during wave execution) and one Opus subagent invocation (at wave end). Projects that already use pre-commit hooks for lint/type/test validation may not need this for every spec.
 
 ---
 
@@ -348,6 +374,10 @@ All default values are defined in:
 ---
 
 ## Changelog
+
+### v5.4.0 (2026-02-13)
+- Added Code Review section with `AGENT_OS_CODE_REVIEW` variable
+- Documented cost implications of enabling code review
 
 ### v5.2.0 (2026-02-12)
 - Added Teams section with `AGENT_OS_MAX_TEAMMATES` variable

@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.4.0] - 2026-02-13 - Two-Tier Code Review
+
+### Added
+- **Two-tier code review system** (`AGENT_OS_CODE_REVIEW=true`, opt-in):
+  - `code-reviewer` (Sonnet teammate): real-time semantic review during wave execution — code smells, hardcoded secrets, spec compliance
+  - `code-validator` (Opus subagent): deep design pattern analysis, OWASP security scan, spec compliance, cross-task consistency
+  - Blocks on unresolved CRITICAL/HIGH findings from either tier
+  - Fix cycle with bound (`MAX_REVIEW_FIX_ATTEMPTS=2`) prevents infinite reviewer-implementer feedback loops
+- **Three-tier model strategy**: Opus (deep reasoning) + Sonnet (fast analysis) + Haiku (classification)
+- **Utility teammate exemption**: `code-reviewer` and `review-watcher` don't count against `AGENT_OS_MAX_TEAMMATES` cap
+- **`code-review-ops.sh`**: Extracted review coordination logic (finding accumulation, severity classification, tier combination, fix cycle bound)
+
+### Changed
+- `wave-orchestrator`: T4.75 (reviewer relay), T4.8 (finding routing), T5 (two-tier handoff with shutdown + Task invocation)
+- `wave-orchestrator`: Task spawn restrictions updated to include `code-validator`
+- `wave-orchestrator`: Teammate restrictions updated to include `code-reviewer`
+- `wave-orchestrator`: T1.5 cap formula now explicitly excludes utility teammates
+- `phase3-delivery`: PR description template includes two-tier code review results section (Step 3.75)
+- Model strategy expanded from two-tier to three-tier across CLAUDE.md and agent-tool-restrictions.md
+- `teams-integration.md`: Wave lifecycle updated with code review steps, utility exemption, fix cycle docs
+- `ENV-VARS.md`: Added `AGENT_OS_CODE_REVIEW` documentation
+
+### Backward Compatibility
+- `AGENT_OS_CODE_REVIEW=false` (default) — no code review agents spawned, zero overhead
+- `AGENT_OS_TEAMS=false` + `AGENT_OS_CODE_REVIEW=true` — only Tier 2 (standalone mode) via Task()
+- All existing agents unchanged — new agents are additive only
+
+---
+
 ## [5.3.0] - 2026-02-12 - Claude Code & Opus 4.6 Alignment
 
 ### Added

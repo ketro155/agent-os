@@ -1,11 +1,11 @@
-# Agent OS v5.3.0 - Core Memory
+# Agent OS v5.4.0 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.
 
 ## Agent OS Overview
 
-Agent OS is a development framework providing structured AI-assisted workflows. Version 5.3.0 uses Claude Code's latest features:
+Agent OS is a development framework providing structured AI-assisted workflows. Version 5.4.0 uses Claude Code's latest features:
 
 - **Hooks** for deterministic validation (cannot be skipped)
 - **Subagent lifecycle hooks** for tracking agent spawns (v4.8.0)
@@ -31,6 +31,7 @@ Agent OS is a development framework providing structured AI-assisted workflows. 
 - **TeammateIdle hook** for teammate lifecycle tracking (v5.3.0)
 - **Opus 4.6 model strategy** with two-tier agent model assignment (v5.3.0)
 - **PreToolUse additionalContext** for smarter pre-commit context (v5.3.0)
+- **Two-tier code review** with Sonnet real-time + Opus deep analysis (v5.4.0)
 
 ## Context Offloading (v4.10.0)
 
@@ -77,6 +78,7 @@ When you see: `[Output offloaded: 45KB → /context-read phase2_20260112_143022_
 AGENT_OS_TASKS_V4=true         # Dependency-first tasks v4.0 format (v5.0, default true since v5.1)
 AGENT_OS_TEAMS=true            # Teams-based wave coordination (v5.1, default true since v5.1)
 AGENT_OS_MAX_TEAMMATES=5       # Max concurrent teammates per wave (v5.2)
+AGENT_OS_CODE_REVIEW=false     # Two-tier code review (v5.4.0, opt-in)
 AGENT_OS_INLINE_MAX=512        # Inline display threshold
 AGENT_OS_PREVIEW_MIN=4096      # Preview trigger for failures
 AGENT_OS_SUCCESS_RETENTION=24  # Hours to keep success outputs
@@ -220,11 +222,11 @@ Agent tool access uses **four complementary mechanisms**:
 | `Task(types)` | Spawn restriction | Orchestrators — limit spawnable agent types (v4.12.0) |
 
 **Defense-in-depth agents** (read-only, process untrusted input):
-- `comment-classifier`, `future-classifier`, `roadmap-integrator`
+- `comment-classifier`, `future-classifier`, `roadmap-integrator`, `code-reviewer`
 
 **Spawn-restricted orchestrators** (v4.12.0):
 - `execute-spec-orchestrator` → `Task(wave-lifecycle-agent)`
-- `wave-orchestrator` → `Task(phase2-implementation, subtask-group-worker)`
+- `wave-orchestrator` → `Task(phase2-implementation, subtask-group-worker, code-validator)`
 - `wave-lifecycle-agent` → `Task(general-purpose)`
 - `phase1-discovery` → `Task(Explore)`
 - `pr-review-discovery` → `Task(comment-classifier, Explore)`
@@ -336,6 +338,8 @@ Use `Task` tool to invoke these specialized agents:
 | phase2-implementation | TDD implementation | For each task |
 | phase3-delivery | Completion & PR workflow | After all tasks done |
 | git-workflow | Branch, commit, PR operations | Called by phases |
+| code-reviewer | Real-time code review (Sonnet) | Reactive teammate in wave teams; reviews artifacts as they're broadcast |
+| code-validator | Deep code validation (Opus) | Wave-level design, security, spec compliance, and cross-task review |
 
 ## Skills (v4.8.0+)
 
@@ -375,13 +379,14 @@ For complex planning tasks (`/create-spec`, `/shape-spec`), adaptive thinking en
 - At **lower effort**: thinking is skipped for simple problems
 - **Fast mode** (`/fast`): 2.5x faster output at premium pricing — useful for long `/execute-tasks` runs
 
-### Model Strategy (v5.3.0)
+### Model Strategy (v5.4.0)
 
-Agent OS uses a two-tier model assignment:
+Agent OS uses a three-tier model assignment:
 
 | Tier | Model | Agents | Rationale |
 |------|-------|--------|-----------|
-| **Full** | Opus 4.6 (default) | 13 agents (including wave-lifecycle-agent) | Complex reasoning, multi-step logic |
+| **Full** | Opus 4.6 (default) | 13 agents + code-validator | Complex reasoning, multi-step logic |
+| **Fast analysis** | Sonnet | code-reviewer | Real-time semantic review, moderate reasoning |
 | **Lightweight** | Haiku | 5 agents (classifiers + review-watcher) | Simple classification, low token overhead |
 
 ## Progress Log
