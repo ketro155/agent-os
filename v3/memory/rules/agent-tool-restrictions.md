@@ -243,7 +243,7 @@ Use `Task(types)` when an agent has `Task` in its tools list and only spawns spe
 |-------|---------------|-----------|
 | `execute-spec-orchestrator` | `Task(wave-lifecycle-agent)` | Only spawns wave agents |
 | `wave-orchestrator` | `Task(phase2-implementation, subtask-group-worker, code-validator)` | Spawns implementation workers + deep reviewer |
-| `wave-lifecycle-agent` | `Task(general-purpose)` | Spawns general-purpose for review processing |
+| `wave-lifecycle-agent` | `Task(wave-orchestrator, phase3-delivery, general-purpose)` | Spawns orchestrator for execution, delivery for PR, general-purpose for review/E2E |
 | `phase1-discovery` | `Task(Explore)` | Read-only codebase exploration |
 | `pr-review-discovery` | `Task(comment-classifier, Explore)` | Classification and exploration |
 | `test-discovery` | `Task(Explore)` | Read-only test pattern exploration |

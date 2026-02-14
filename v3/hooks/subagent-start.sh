@@ -1,7 +1,7 @@
 #!/bin/bash
-# Agent OS v4.8.0 - SubagentStart Hook
+# Agent OS v5.4.1 - SubagentStart Hook
 # Tracks subagent lifecycle for debugging and metrics
-# Receives: AGENT_TYPE, AGENT_ID from Claude Code
+# Input: Hook context JSON on stdin
 
 set -e
 
@@ -12,8 +12,13 @@ AGENTS_LOG="$METRICS_DIR/agents.jsonl"
 # Ensure metrics directory exists
 mkdir -p "$METRICS_DIR"
 
-# Get agent info from environment (provided by Claude Code)
-AGENT_TYPE="${AGENT_TYPE:-unknown}"
+# Read hook input from stdin (Claude Code passes context as JSON)
+HOOK_INPUT=$(cat)
+AGENT_TYPE=$(echo "$HOOK_INPUT" | jq -r '.agent_type // .subagent_type // .type // "unknown"' 2>/dev/null)
+AGENT_ID=$(echo "$HOOK_INPUT" | jq -r '.agent_id // .id // "unknown"' 2>/dev/null)
+
+# Fallback to env vars for backward compatibility
+AGENT_TYPE="${AGENT_TYPE:-${AGENT_TYPE_ENV:-unknown}}"
 AGENT_ID="${AGENT_ID:-$(date +%s)}"
 STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 

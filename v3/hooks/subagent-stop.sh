@@ -1,10 +1,10 @@
 #!/bin/bash
-# Agent OS v4.10.0 - SubagentStop Hook with Context Offloading
+# Agent OS v5.4.1 - SubagentStop Hook with Context Offloading
 # Implements FewWord-inspired tiered output strategy
 # - <512B: inline display
 # - 512B-4KB: compact pointer (~35 tokens)
 # - >4KB: pointer + failure preview
-# Receives: AGENT_ID, AGENT_TRANSCRIPT_PATH, AGENT_RESULT from Claude Code
+# Input: Hook context JSON on stdin
 
 set -e
 
@@ -31,10 +31,11 @@ FAILURE_RETENTION=${AGENT_OS_FAILURE_RETENTION:-48}
 # Ensure directories exist
 mkdir -p "$METRICS_DIR" "$TRANSCRIPTS_DIR" "$TOOL_OUTPUTS_DIR"
 
-# Get agent info from environment (provided by Claude Code)
-AGENT_ID="${AGENT_ID:-unknown}"
-TRANSCRIPT_PATH="${AGENT_TRANSCRIPT_PATH:-}"
-AGENT_RESULT="${AGENT_RESULT:-}"
+# Read hook input from stdin (Claude Code passes context as JSON)
+HOOK_INPUT=$(cat)
+AGENT_ID=$(echo "$HOOK_INPUT" | jq -r '.agent_id // .id // "unknown"' 2>/dev/null)
+TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path // .agent_transcript_path // ""' 2>/dev/null)
+AGENT_RESULT=$(echo "$HOOK_INPUT" | jq -r '.result // .agent_result // ""' 2>/dev/null)
 STOPPED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Determine exit status from result (success if contains "completed" or no error)

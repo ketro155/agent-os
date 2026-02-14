@@ -16,6 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.4.1] - 2026-02-13 - Agent Spawn Chain & Hook Observability Fix
+
+### Fixed
+- **CRITICAL: SubagentStart/Stop hooks always logged `agent_type: "unknown"`** — hooks were reading from environment variables but Claude Code passes context via stdin JSON. Now uses `HOOK_INPUT=$(cat)` + `jq` parsing pattern (matching `teammate-idle.sh` and `task-completed.sh`)
+- **CRITICAL: Agent hierarchy collapse in wave-lifecycle-agent** — Step 1 delegated to `general-purpose` with prose instructions to "read execute-tasks.md and follow it." The general-purpose agent would short-circuit by implementing inline rather than spawning the expected `wave-orchestrator` → `phase2-implementation` chain. Step 1 now directly spawns typed agents.
+
+### Changed
+- **`subagent-start.sh`** — reads `agent_type`, `agent_id` from stdin JSON with jq fallback chain; backward-compatible env var fallback
+- **`subagent-stop.sh`** — reads `agent_id`, `transcript_path`, `result` from stdin JSON with jq fallback chain
+- **`wave-lifecycle-agent`** — Step 1 rewritten to directly spawn `wave-orchestrator` (for task execution) and `phase3-delivery` (for PR creation); frontmatter updated to `Task(wave-orchestrator, phase3-delivery, general-purpose)`; `general-purpose` retained only for review processing (Step 3) and E2E smoke tests (Step 3.5)
+- **`agent-tool-restrictions.md`** — spawn restrictions table updated for wave-lifecycle-agent
+- **`CLAUDE.md`** — spawn restriction bullet updated for wave-lifecycle-agent
+- All changes synced to v3 templates
+
+---
+
 ## [5.4.0] - 2026-02-13 - Two-Tier Code Review
 
 ### Added

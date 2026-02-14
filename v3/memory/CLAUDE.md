@@ -227,7 +227,7 @@ Agent tool access uses **four complementary mechanisms**:
 **Spawn-restricted orchestrators** (v4.12.0):
 - `execute-spec-orchestrator` → `Task(wave-lifecycle-agent)`
 - `wave-orchestrator` → `Task(phase2-implementation, subtask-group-worker, code-validator)`
-- `wave-lifecycle-agent` → `Task(general-purpose)`
+- `wave-lifecycle-agent` → `Task(wave-orchestrator, phase3-delivery, general-purpose)`
 - `phase1-discovery` → `Task(Explore)`
 - `pr-review-discovery` → `Task(comment-classifier, Explore)`
 - `test-discovery` → `Task(Explore)`

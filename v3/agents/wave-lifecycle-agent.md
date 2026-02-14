@@ -1,7 +1,7 @@
 ---
 name: wave-lifecycle-agent
 description: Executes complete lifecycle for a single wave. Preserves context within wave, returns when wave is merged or failed.
-tools: Read, Bash, Grep, Glob, TodoWrite, Task(general-purpose), AskUserQuestion, Write, Edit
+tools: Read, Bash, Grep, Glob, TodoWrite, Task(wave-orchestrator, phase3-delivery, general-purpose), AskUserQuestion, Write, Edit
 memory: project
 ---
 
@@ -103,66 +103,149 @@ if (resume_phase) {
 
 ### Step 1: Execute Tasks (EXECUTE Phase)
 
-Spawn an isolated executor agent to run `/execute-tasks` for this wave.
+Directly orchestrate task execution and PR creation for this wave. This eliminates the
+general-purpose intermediary that previously short-circuited the agent hierarchy.
+
+> **v5.4.1**: Step 1 now spawns `wave-orchestrator` and `phase3-delivery` directly instead
+> of delegating to a `general-purpose` agent. This ensures the full agent hierarchy
+> (`wave-lifecycle → wave-orchestrator → phase2-implementation`) is always maintained.
+
+#### Step 1a: Build Wave Execution Context
 
 ```javascript
 INFORM: `Starting wave ${wave_number} of ${total_waves} for spec "${spec_name}"...`
 
-// Spawn executor agent
-const execute_result = Task({
-  subagent_type: "general-purpose",
-  prompt: `You are an executor agent. Read and execute the /execute-tasks command.
+// Read tasks.json to get task list for this wave
+const SPEC_FOLDER = `.agent-os/specs/${spec_name}/`
+const tasks_raw = bash `jq -r '
+  if .version == "4.0" then
+    .computed.waves[] | select(.wave_id == ${wave_number}) | .tasks
+  else
+    .execution_strategy.waves[${wave_number - 1}].tasks // []
+  end
+' "${SPEC_FOLDER}tasks.json"`
 
-## Your Task
-Execute wave ${wave_number} of spec "${spec_name}".
+const task_ids = JSON.parse(tasks_raw)
 
-## Instructions
-1. Read the command file:
-   \`\`\`bash
-   cat "${CLAUDE_PROJECT_DIR}/.claude/commands/execute-tasks.md"
-   \`\`\`
+// Build task details for each task in this wave
+const task_details = bash `jq -c '[
+  .tasks[] | select(.id as $id | ${JSON.stringify(task_ids)} | index($id))
+  | {
+      id: .id,
+      description: (.description // .title),
+      subtasks: [.subtasks[]?.id] ,
+      context_summary: (.context_summary // {})
+    }
+]' "${SPEC_FOLDER}tasks.json"`
 
-2. Follow ALL instructions in that file for:
-   - Spec: ${spec_name}
-   - Wave: ${wave_number}
+// Get predecessor artifacts from previous waves (if any)
+const predecessor_artifacts = wave_number > 1
+  ? bash `jq -c '.predecessor_artifacts // {}' "${SPEC_FOLDER}tasks.json"`
+  : '{"verified": true}'
 
-3. This includes spawning phase1-discovery, wave-orchestrator, and phase3-delivery agents.
+// Determine execution mode from parallel config
+const parallel_config = input.parallel_config || { enabled: false }
+const execution_mode = parallel_config.enabled ? "parallel" : "sequential"
 
-4. When complete, return ONLY this JSON summary:
+// Get git branch for this wave
+const git_branch = bash `git branch --show-current`
+```
 
-\`\`\`json
-{
-  "status": "success" | "failed",
-  "wave": ${wave_number},
-  "tasks_completed": <number>,
-  "tasks_failed": <number>,
-  "pr_number": <PR number if created>,
-  "pr_url": "<PR URL if created>",
-  "error": "<error message if failed>"
+#### Step 1b: Spawn wave-orchestrator
+
+```javascript
+const wave_context = {
+  wave_number: wave_number,
+  spec_name: spec_name,
+  spec_folder: SPEC_FOLDER,
+  tasks: JSON.parse(task_details),
+  predecessor_artifacts: JSON.parse(predecessor_artifacts),
+  execution_mode: execution_mode,
+  git_branch: git_branch.trim()
 }
-\`\`\`
 
-## Important
-- Only return the JSON summary above
-- Do NOT return verbose logs or phase outputs
+const orchestrator_result = Task({
+  subagent_type: "wave-orchestrator",
+  prompt: `Execute all tasks for wave ${wave_number} of spec "${spec_name}".
+
+WaveExecutionContext:
+${JSON.stringify(wave_context, null, 2)}
+
+Instructions:
+1. Verify predecessor artifacts (Step 0)
+2. Spawn phase2-implementation agents for each task
+3. Run Ralph verification on completed tasks
+4. Return wave result JSON with status, tasks_completed, tasks_failed, and artifacts
 `
 })
 
-// Process result
-const result = JSON.parse(execute_result)
+const wave_result = JSON.parse(orchestrator_result)
 
-if (result.status !== "success" || !result.pr_number) {
+if (wave_result.status === "fail" || wave_result.status === "blocked") {
   RETURN: {
     status: "failed",
     wave: wave_number,
     phase: "EXECUTE",
-    error: result.error || "Wave execution failed - no PR created"
+    error: wave_result.error || wave_result.blocker || "Wave orchestration failed"
   }
 }
 
-// Store PR info in our context for later phases
-pr_number = result.pr_number
-pr_url = result.pr_url
+INFORM: `Wave ${wave_number} tasks completed. Creating PR...`
+```
+
+#### Step 1c: Spawn phase3-delivery for PR creation
+
+```javascript
+const delivery_context = {
+  spec_name: spec_name,
+  spec_folder: SPEC_FOLDER,
+  tasks_folder: SPEC_FOLDER,
+  completed_tasks: wave_result.completed_tasks || wave_result.tasks || [],
+  git_branch: git_branch.trim()
+}
+
+const delivery_result = Task({
+  subagent_type: "phase3-delivery",
+  prompt: `Create PR for wave ${wave_number} of spec "${spec_name}".
+
+Input:
+${JSON.stringify(delivery_context, null, 2)}
+
+Instructions:
+1. Verify all tasks complete
+2. Run full test suite
+3. Run build verification
+4. Create PR with comprehensive description
+5. Return JSON with status, pr_number, pr_url
+`
+})
+
+const delivery = JSON.parse(delivery_result)
+
+if (delivery.status === "blocked" || delivery.status === "fail") {
+  RETURN: {
+    status: "failed",
+    wave: wave_number,
+    phase: "EXECUTE",
+    error: delivery.error || "PR creation failed"
+  }
+}
+```
+
+#### Step 1d: Store PR info
+
+```javascript
+pr_number = delivery.pr_number
+pr_url = delivery.pr_url
+
+if (!pr_number) {
+  RETURN: {
+    status: "failed",
+    wave: wave_number,
+    phase: "EXECUTE",
+    error: "Phase 3 completed but no PR number returned"
+  }
+}
 
 // Store PR in state file for resume support
 bash `${CLAUDE_PROJECT_DIR}/.claude/scripts/execute-spec-operations.sh set-pr ${spec_name} ${pr_number} "${pr_url}"`
@@ -649,6 +732,13 @@ if (reviewResult.status === 'timeout') {
 ---
 
 ## Changelog
+
+### v5.4.1 (2026-02-13)
+- **CRITICAL**: Step 1 now spawns `wave-orchestrator` and `phase3-delivery` directly instead of delegating to `general-purpose`
+- Eliminates agent chain collapse where general-purpose short-circuited by implementing inline
+- Frontmatter tools updated: `Task(wave-orchestrator, phase3-delivery, general-purpose)` (general-purpose retained for review/E2E steps)
+- Proper WaveExecutionContext built from tasks.json and passed directly to wave-orchestrator
+- Output contract unchanged: returns same JSON format to execute-spec-orchestrator
 
 ### v5.1.1 (2026-02-10)
 - **BUGFIX**: Review processing decision logic completely rewritten for safety
