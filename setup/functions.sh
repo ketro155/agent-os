@@ -2,7 +2,7 @@
 
 # Agent OS Shared Functions
 # Used by both base.sh and project.sh
-# Updated for v5.3.0 architecture
+# Updated for v5.4.2 architecture
 
 # Base URL for raw GitHub content
 BASE_URL="https://raw.githubusercontent.com/buildermethods/agent-os/main"
@@ -207,6 +207,7 @@ install_v3_from_github() {
     # Create directories
     mkdir -p "./.claude/commands"
     mkdir -p "./.claude/agents"
+    mkdir -p "./.claude/agents/references"
     mkdir -p "./.claude/hooks"
     mkdir -p "./.claude/scripts"
     mkdir -p "./.claude/rules"
@@ -218,6 +219,8 @@ install_v3_from_github() {
     mkdir -p "./.claude/skills/context-read"
     mkdir -p "./.claude/skills/context-search"
     mkdir -p "./.claude/skills/context-stats"
+    mkdir -p "./.claude/skills/test-guardian"
+    mkdir -p "./.claude/skills/tmux-monitor"
     mkdir -p "./.claude/templates/specs"
     mkdir -p "./.claude/templates/tasks"
     mkdir -p "./.claude/templates/test-scenarios"
@@ -243,14 +246,22 @@ install_v3_from_github() {
             "commands/${cmd}.md"
     done
 
-    # Download agents (18 agents)
+    # Download agents (20 agents + 3 references)
     echo ""
     echo "  📂 Agents:"
-    for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher; do
+    for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher code-reviewer code-validator; do
         download_file "${BASE_URL}/v3/agents/${agent}.md" \
             "./.claude/agents/${agent}.md" \
             "$overwrite" \
             "agents/${agent}.md"
+    done
+    echo ""
+    echo "  📂 Agent References:"
+    for ref in tdd-implementation-guide wave-team-protocol wave-verification-reference; do
+        download_file "${BASE_URL}/v3/agents/references/${ref}.md" \
+            "./.claude/agents/references/${ref}.md" \
+            "$overwrite" \
+            "agents/references/${ref}.md"
     done
 
     # Download hooks (9 hooks)
@@ -267,7 +278,7 @@ install_v3_from_github() {
     # Download scripts
     echo ""
     echo "  📂 Scripts:"
-    for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh; do
+    for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh test-skill-triggers.sh; do
         download_file "${BASE_URL}/v3/scripts/${script}" \
             "./.claude/scripts/${script}" \
             "$overwrite" \
@@ -292,7 +303,7 @@ install_v3_from_github() {
         "./.claude/ENV-VARS.md" \
         "$overwrite" \
         "ENV-VARS.md"
-    for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration; do
+    for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration context-offloading; do
         download_file "${BASE_URL}/v3/memory/rules/${rule}.md" \
             "./.claude/rules/${rule}.md" \
             "$overwrite" \
@@ -302,7 +313,7 @@ install_v3_from_github() {
     # Download skills
     echo ""
     echo "  📂 Skills:"
-    for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats; do
+    for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
         download_file "${BASE_URL}/v3/skills/${skill}/SKILL.md" \
             "./.claude/skills/${skill}/SKILL.md" \
             "$overwrite" \
