@@ -9,10 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Installer sync (v5.4.0)**: `setup/base.sh` and `setup/project.sh` now include `code-reviewer`, `code-validator` agents and `code-review-ops.sh` script
-- **Version bumped** to 5.4.0 in `settings.json` (both `v3/` and `.claude/`), `setup/base.sh`, `setup/project.sh`
-- **`AGENT_OS_CODE_REVIEW`** env var added to `settings.json` (default: `false`)
-- Agent count: 18 → 20, script count: 17 → 18 in base installer summary
+- **Installer sync (v5.4.1)**: `setup/base.sh` and `setup/project.sh` version bumped to 5.4.1
+- **Version bumped** to 5.4.1 in `settings.json` (both `v3/` and `.claude/`), `setup/base.sh`, `setup/project.sh`, `CLAUDE.md` headers
+- v3/ source templates already contain v5.4.1 hook fixes and agent spawn chain fix — installer copies them automatically
 
 ---
 

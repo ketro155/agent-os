@@ -1,4 +1,4 @@
-# Agent OS v5.4.0 - Core Memory
+# Agent OS v5.4.1 - Core Memory
 
 > This file is automatically loaded by Claude Code at session start.
 > It replaces embedded instructions in commands with native memory hierarchy.

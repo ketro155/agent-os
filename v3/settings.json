@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v5.4.0 - Two-Tier Code Review: Sonnet real-time + Opus deep analysis",
+  "_comment": "Agent OS v5.4.1 - Hook observability + agent spawn chain fix",
 
   "hooks": {
     "Setup": [
@@ -149,7 +149,7 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "5.4.0",
+    "AGENT_OS_VERSION": "5.4.1",
     "AGENT_OS_TASKS_V4": "true",
     "AGENT_OS_TEAMS": "true",
     "AGENT_OS_MAX_TEAMMATES": "5",
