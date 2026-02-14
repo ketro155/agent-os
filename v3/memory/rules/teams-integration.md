@@ -1,3 +1,8 @@
+---
+paths:
+  - ".claude/agents/**"
+---
+
 # Teams Integration (v5.4.0)
 
 > Native Claude Code Teams integration for peer coordination within Agent OS.
@@ -38,7 +43,7 @@ Agent OS v5.1.0 introduces a **hybrid orchestration model**:
 |----------|---------|---------|
 | `AGENT_OS_TEAMS` | `false` | Enable Teams-based wave coordination and review watching |
 | `AGENT_OS_MAX_TEAMMATES` | `5` | Maximum concurrent teammates per wave team (v5.2.0) |
-| `AGENT_OS_CODE_REVIEW` | `true` | Enable two-tier code review (Sonnet + Opus) (v5.4.0) |
+| `AGENT_OS_CODE_REVIEW` | `false` | Enable two-tier code review (Sonnet + Opus) (v5.4.0) |
 
 Set in `.claude/settings.json` under `env`:
 

@@ -1,7 +1,10 @@
 ---
 name: log-entry
-description: Add an entry to the project memory logs (decisions, implementations, or insights)
+description: Adds an entry to the Agent OS project memory logs for cross-session continuity, supporting decisions, implementations, and insights. Use after significant architectural choices, major code changes, or when a learning or pattern emerges. Use when user says "log this decision", "record this insight", "document this implementation", or "add log entry".
 version: 1.1.0
+metadata:
+  author: Agent OS
+  category: documentation
 ---
 
 # Log Entry Skill
@@ -23,12 +26,10 @@ Where `[type]` is one of:
 
 If not specified, ask the user:
 
-<question>
-What type of entry do you want to add?
+**What type of entry do you want to add?**
 - **decision**: An architectural or product choice with rationale
 - **implementation**: Significant code changes and why
 - **insight**: A learning, pattern, or idea for the future
-</question>
 
 ### 2. Gather Entry Details
 

@@ -1,7 +1,10 @@
 ---
 name: subtask-expansion
-description: Generate TDD-structured subtasks for a parent task based on complexity analysis. Invoke when a task needs subtask breakdown during execute-tasks workflow.
+description: Generates TDD-structured subtasks (RED-GREEN-VERIFY) for a parent task based on keyword complexity analysis. Use during /execute-tasks when a task has needs_subtask_expansion or when phase1-discovery encounters tasks without subtasks. Use when user says "expand task", "generate subtasks", "break down task", or "subtask expansion".
 version: 1.0.0
+metadata:
+  author: Agent OS
+  category: workflow-automation
 ---
 
 # Subtask Expansion Skill

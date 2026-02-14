@@ -1,7 +1,10 @@
 ---
 name: context-search
-description: Search through offloaded outputs for specific terms. Useful for finding errors, patterns, or specific content across multiple agent runs.
+description: Searches across all offloaded agent outputs for specific terms or regex patterns. Use when you need to find errors, patterns, or specific content across multiple agent runs stored in the scratch directory. Use when user says "search outputs", "find error in outputs", "search context", or "grep offloaded". NOT for searching codebase files (use Grep for that).
 version: 1.0.0
+metadata:
+  author: Agent OS
+  category: context-management
 ---
 
 # Context Search Skill

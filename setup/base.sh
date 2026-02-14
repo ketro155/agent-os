@@ -3,12 +3,12 @@
 # Agent OS Base Installation Script
 # This script installs Agent OS to the current directory as a central repository
 # Other projects can then install from this base using project.sh
-# Updated for v5.4.1 architecture
+# Updated for v5.4.2 architecture
 
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="5.4.1"
+AGENT_OS_VERSION="5.4.2"
 AGENT_OS_RELEASE_DATE="2026-02-13"
 
 # Initialize flags
@@ -90,6 +90,7 @@ mkdir -p "$INSTALL_DIR/standards/backend"
 mkdir -p "$INSTALL_DIR/standards/testing"
 mkdir -p "$INSTALL_DIR/standards/code-style"
 mkdir -p "$INSTALL_DIR/v3/agents"
+mkdir -p "$INSTALL_DIR/v3/agents/references"
 mkdir -p "$INSTALL_DIR/v3/commands"
 mkdir -p "$INSTALL_DIR/v3/hooks"
 mkdir -p "$INSTALL_DIR/v3/scripts"
@@ -103,6 +104,8 @@ mkdir -p "$INSTALL_DIR/v3/skills/log-entry"
 mkdir -p "$INSTALL_DIR/v3/skills/context-read"
 mkdir -p "$INSTALL_DIR/v3/skills/context-search"
 mkdir -p "$INSTALL_DIR/v3/skills/context-stats"
+mkdir -p "$INSTALL_DIR/v3/skills/test-guardian"
+mkdir -p "$INSTALL_DIR/v3/skills/tmux-monitor"
 mkdir -p "$INSTALL_DIR/v3/templates/specs"
 mkdir -p "$INSTALL_DIR/v3/templates/tasks"
 mkdir -p "$INSTALL_DIR/v3/templates/test-scenarios"
@@ -196,6 +199,14 @@ for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchest
         "$OVERWRITE_COMMANDS" \
         "v3/agents/${agent}.md"
 done
+echo ""
+echo "  📂 Agent References:"
+for ref in tdd-implementation-guide wave-team-protocol wave-verification-reference; do
+    download_file "${BASE_URL}/v3/agents/references/${ref}.md" \
+        "$INSTALL_DIR/v3/agents/references/${ref}.md" \
+        "$OVERWRITE_COMMANDS" \
+        "v3/agents/references/${ref}.md"
+done
 
 echo ""
 echo "  📂 v3 Hooks:"
@@ -209,7 +220,7 @@ done
 
 echo ""
 echo "  📂 v3 Scripts:"
-for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh; do
+for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh test-skill-triggers.sh; do
     download_file "${BASE_URL}/v3/scripts/${script}" \
         "$INSTALL_DIR/v3/scripts/${script}" \
         "$OVERWRITE_COMMANDS" \
@@ -233,7 +244,7 @@ download_file "${BASE_URL}/v3/memory/ENV-VARS.md" \
     "$INSTALL_DIR/v3/memory/ENV-VARS.md" \
     "$OVERWRITE_COMMANDS" \
     "v3/memory/ENV-VARS.md"
-for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration; do
+for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration context-offloading; do
     download_file "${BASE_URL}/v3/memory/rules/${rule}.md" \
         "$INSTALL_DIR/v3/memory/rules/${rule}.md" \
         "$OVERWRITE_COMMANDS" \
@@ -242,7 +253,7 @@ done
 
 echo ""
 echo "  📂 v3 Skills:"
-for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats; do
+for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
     download_file "${BASE_URL}/v3/skills/${skill}/SKILL.md" \
         "$INSTALL_DIR/v3/skills/${skill}/SKILL.md" \
         "$OVERWRITE_COMMANDS" \
@@ -331,11 +342,11 @@ echo "--------------------------------"
 echo ""
 echo "📍 Base installation structure:"
 echo "   $INSTALL_DIR/v3/commands/           - Command templates (8 commands)"
-echo "   $INSTALL_DIR/v3/agents/             - Agent templates (20 agents)"
+echo "   $INSTALL_DIR/v3/agents/             - Agent templates (20 agents + 3 references)"
 echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (9 hooks)"
-echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (18 scripts)"
-echo "   $INSTALL_DIR/v3/memory/             - Memory templates + rules (12 files)"
-echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (8 skills)"
+echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (19 scripts)"
+echo "   $INSTALL_DIR/v3/memory/             - Memory templates + rules (13 files)"
+echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (10 skills)"
 echo "   $INSTALL_DIR/v3/templates/          - Spec, task, test templates"
 echo "   $INSTALL_DIR/standards/             - Development standards"
 echo "   $INSTALL_DIR/config.yml             - Configuration"

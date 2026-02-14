@@ -11,9 +11,9 @@ BASE_AGENT_OS="$(dirname "$SCRIPT_DIR")"
 
 # Read version from settings.json (fallback to hardcoded if jq not available or file missing)
 if command -v jq &> /dev/null && [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.4.1"' "$BASE_AGENT_OS/v3/settings.json")
+    AGENT_OS_VERSION=$(jq -r '.env.AGENT_OS_VERSION // "5.4.2"' "$BASE_AGENT_OS/v3/settings.json")
 else
-    AGENT_OS_VERSION="5.4.1"
+    AGENT_OS_VERSION="5.4.2"
 fi
 AGENT_OS_RELEASE_DATE="2026-02-13"
 
@@ -433,6 +433,8 @@ if [ "$CLAUDE_CODE" = true ]; then
     create_tracked_dir "./.claude/skills/context-read"
     create_tracked_dir "./.claude/skills/context-search"
     create_tracked_dir "./.claude/skills/context-stats"
+    create_tracked_dir "./.claude/skills/test-guardian"
+    create_tracked_dir "./.claude/skills/tmux-monitor"
     create_tracked_dir "./.claude/templates"
     create_tracked_dir "./.claude/templates/specs"
     create_tracked_dir "./.claude/templates/tasks"
@@ -469,6 +471,13 @@ if [ "$CLAUDE_CODE" = true ]; then
         for agent in phase1-discovery phase2-implementation phase3-delivery wave-orchestrator subtask-group-worker pr-review-discovery pr-review-implementation future-classifier comment-classifier roadmap-integrator git-workflow project-manager execute-spec-orchestrator wave-lifecycle-agent test-discovery test-executor test-reporter review-watcher code-reviewer code-validator; do
             if [ -f "$BASE_AGENT_OS/v3/agents/${agent}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/agents/${agent}.md" "./.claude/agents/${agent}.md" "$OVERWRITE_CLAUDE" "agents/${agent}.md"
+            fi
+        done
+        # Agent reference documents (v5.4.2 - split from large agents)
+        create_tracked_dir "./.claude/agents/references"
+        for ref in tdd-implementation-guide wave-team-protocol wave-verification-reference; do
+            if [ -f "$BASE_AGENT_OS/v3/agents/references/${ref}.md" ]; then
+                copy_file "$BASE_AGENT_OS/v3/agents/references/${ref}.md" "./.claude/agents/references/${ref}.md" "$OVERWRITE_CLAUDE" "agents/references/${ref}.md"
             fi
         done
 
@@ -550,6 +559,11 @@ if [ "$CLAUDE_CODE" = true ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/code-review-ops.sh" "./.claude/scripts/code-review-ops.sh" "$OVERWRITE_CLAUDE" "scripts/code-review-ops.sh"
             chmod +x "./.claude/scripts/code-review-ops.sh"
         fi
+        # v5.4.2 Skill trigger validation script
+        if [ -f "$BASE_AGENT_OS/v3/scripts/test-skill-triggers.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/test-skill-triggers.sh" "./.claude/scripts/test-skill-triggers.sh" "$OVERWRITE_CLAUDE" "scripts/test-skill-triggers.sh"
+            chmod +x "./.claude/scripts/test-skill-triggers.sh"
+        fi
 
         # Install memory/rules
         echo ""
@@ -561,7 +575,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" ]; then
             copy_file "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" "./.claude/ENV-VARS.md" "$OVERWRITE_CLAUDE" "ENV-VARS.md"
         fi
-        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration; do
+        for rule in tdd-workflow git-conventions execute-tasks error-handling verification-loop e2e-integration agent-tool-restrictions e2e-fixtures e2e-batch-checkpoint teams-integration context-offloading; do
             if [ -f "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/memory/rules/${rule}.md" "./.claude/rules/${rule}.md" "$OVERWRITE_CLAUDE" "rules/${rule}.md"
             fi
@@ -570,7 +584,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         # Install skills (v4.9.0 - hot-reloadable patterns, v4.10.0 - context offloading)
         echo ""
         echo "  📂 Skills:"
-        for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats; do
+        for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
             if [ -f "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" "./.claude/skills/${skill}/SKILL.md" "$OVERWRITE_CLAUDE" "skills/${skill}/SKILL.md"
             fi
@@ -918,6 +932,8 @@ echo "v5.4 Architecture Features:"
 echo "  • Two-tier code review: Sonnet real-time + Opus deep analysis"
 echo "  • Three-tier model strategy: Opus (reasoning) + Sonnet (fast) + Haiku (classification)"
 echo "  • Utility teammate exemption from AGENT_OS_MAX_TEAMMATES cap"
+echo "  • Context-optimized CLAUDE.md with progressive disclosure (~60% smaller)"
+echo "  • Agent reference splitting: large agents load docs on-demand"
 echo ""
 echo "v5.2 Features (included):"
 echo "  • Atomic Teammates: group-level parallelism with subtask-group-worker"

@@ -1,7 +1,10 @@
 ---
 name: context-read
-description: Retrieve offloaded output by ID. Use when you see "[Output offloaded → /context-read ID]" messages.
+description: Retrieves offloaded context outputs from the scratch directory by ID or symlink. Use when you see "[Output offloaded]" pointer messages or need to view full agent output that was compressed for token efficiency. Use when user says "read output", "show offloaded", "context-read", or "view agent output".
 version: 1.0.0
+metadata:
+  author: Agent OS
+  category: context-management
 ---
 
 # Context Read Skill

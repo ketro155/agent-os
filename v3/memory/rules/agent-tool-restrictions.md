@@ -1,3 +1,8 @@
+---
+paths:
+  - ".claude/agents/**"
+---
+
 # Agent Tool Restrictions (v5.4.0)
 
 > Standardized approach for restricting agent capabilities through tool access control.

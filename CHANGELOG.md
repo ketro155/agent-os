@@ -8,10 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [5.4.2] - 2026-02-13 - Context Optimization & Progressive Disclosure
+
+### Added
+- **Agent reference splitting** — extracted large sections from `phase2-implementation.md` (1270→300 lines) and `wave-orchestrator.md` (1258→296 lines) into on-demand reference documents in `agents/references/`:
+  - `tdd-implementation-guide.md` — TDD workflow reference loaded via `paths:` frontmatter
+  - `wave-team-protocol.md` — Teams coordination protocol reference
+  - `wave-verification-reference.md` — Ralph verification loop reference
+- **`rules/context-offloading.md`** — extracted detailed context offloading docs from CLAUDE.md into a path-scoped rule file (loaded only when working with scratch/metrics paths)
+- **2 new skills in distribution**: `test-guardian` (test failure classification) and `tmux-monitor` (live agent dashboard) — previously source-only, now included in v3/ templates and installer
+- **`scripts/test-skill-triggers.sh`** — validation script to verify skill trigger phrase registration
+
 ### Changed
-- **Installer sync (v5.4.1)**: `setup/base.sh` and `setup/project.sh` version bumped to 5.4.1
-- **Version bumped** to 5.4.1 in `settings.json` (both `v3/` and `.claude/`), `setup/base.sh`, `setup/project.sh`, `CLAUDE.md` headers
-- v3/ source templates already contain v5.4.1 hook fixes and agent spawn chain fix — installer copies them automatically
+- **CLAUDE.md slimmed ~64%** — from 499 lines to 178 lines via progressive disclosure pattern; detailed docs moved to `rules/*.md` files loaded on-demand by `paths:` frontmatter
+- **All 10 skill descriptions rewritten** with explicit trigger phrases for more reliable skill activation
+- **`paths:` frontmatter added** to `context-offloading.md`, `agent-tool-restrictions.md`, `e2e-integration.md`, `teams-integration.md` for context-scoped loading
+- **Installer updated**: `setup/base.sh` and `setup/project.sh` now install agent references (3 files), context-offloading rule, 10 skills (was 8), and test-skill-triggers script
+- All changes synced to v3/ distribution templates
+
+### Backward Compatibility
+- All changes are additive — no breaking changes
+- Existing installations unaffected; `--upgrade` flag picks up new files
+- Agent behavior unchanged — reference docs contain the same content, just loaded on-demand instead of inline
 
 ---
 

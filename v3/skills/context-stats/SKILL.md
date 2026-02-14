@@ -1,7 +1,10 @@
 ---
 name: context-stats
-description: Display context efficiency statistics - tokens saved, outputs offloaded, storage usage.
+description: Displays context offloading efficiency statistics including tokens saved, total outputs offloaded, and scratch storage usage for the current session. Use when you want to understand how much context has been preserved. Use when user says "show stats", "how many tokens saved", "context efficiency", or "offload statistics". NOT for viewing individual outputs (use /context-read) or searching (use /context-search).
 version: 1.1.0
+metadata:
+  author: Agent OS
+  category: context-management
 ---
 
 # Context Stats Skill

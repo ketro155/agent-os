@@ -1,11 +1,16 @@
 ---
 name: context-summary
-description: When you need to compress current context for handoff to another agent or for session recovery. Use before spawning subagents or ending sessions.
+description: Compresses the current working context into a structured summary for handoff to subagents, session recovery, or wave transitions. Use before spawning subagents, ending sessions, or when the context window is filling up. Use when user says "summarize context", "prepare handoff", "compress session", or "context summary". NOT for viewing offloaded outputs (use /context-read).
 version: 1.0.0
 context: fork
+metadata:
+  author: Agent OS
+  category: context-management
 ---
 
 # Context Summary Skill
+
+> **Note**: `context: fork` is a Claude Code extension that isolates this skill's execution context.
 
 Compress current working context into a structured summary for handoff to subagents or session recovery.
 

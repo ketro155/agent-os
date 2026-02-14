@@ -1,3 +1,12 @@
+---
+paths:
+  - ".agent-os/test-plans/**"
+  - ".agent-os/test-results/**"
+  - "**/*.test.*"
+  - "**/*.spec.*"
+  - "**/*.e2e.*"
+---
+
 # E2E Test Integration (v4.11.0)
 
 > Standardized end-to-end testing integration across Agent OS workflows.
@@ -216,6 +225,17 @@ Output formats:
   - Markdown (for PR description)
 ```
 
+## Batch Checkpointing (v5.0.1)
+
+E2E test batches support checkpointing to enable resume on interruption.
+
+- Checkpoint written after each scenario to `.agent-os/test-results/${SPEC_NAME}/checkpoint.json`
+- Stale checkpoints (> 2 hours old) are discarded automatically
+- Checkpoint is cleaned up and merged into `results.json` after batch completes
+- Only applies to sequential batch execution (not parallel)
+
+See `rules/e2e-batch-checkpoint.md` for full protocol documentation.
+
 ## Best Practices
 
 ### Writing E2E-Friendly Code
@@ -236,7 +256,7 @@ Output formats:
 1. **Prioritize critical paths** - checkout flow > admin settings
 2. **Include negative tests** - error handling, validation
 3. **Design for independence** - each scenario should be self-contained
-4. **Use fixtures** for common setup (login, navigation)
+4. **Use fixtures** for common setup (login, navigation) - See `rules/e2e-fixtures.md`
 
 ## Error Codes
 
@@ -252,8 +272,13 @@ Output formats:
 
 ## Changelog
 
+### v5.0.1 (2026-02-09)
+- Added batch checkpointing for E2E test resume on interruption
+- See `rules/e2e-batch-checkpoint.md` for protocol details
+
 ### v4.11.0 (2026-01-14)
 - Initial E2E integration system
 - Three integration points: create-spec, wave-lifecycle, phase3
 - Hard-blocking failure behavior
 - Default E2E plan generation in create-spec
+- Fixture format documentation (see `rules/e2e-fixtures.md`)

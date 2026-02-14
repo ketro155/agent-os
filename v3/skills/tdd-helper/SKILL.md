@@ -1,7 +1,10 @@
 ---
 name: tdd-helper
-description: When implementing features using Test-Driven Development. Guides you through RED-GREEN-REFACTOR cycle with proper test structure.
+description: Guides implementation through the Test-Driven Development RED-GREEN-REFACTOR cycle with proper test structure, naming conventions, and anti-pattern avoidance. Use when starting new feature implementation, fixing bugs test-first, or refactoring existing code. Use when user says "help with TDD", "red green refactor", "write tests first", or "test-driven development guide".
 version: 1.0.0
+metadata:
+  author: Agent OS
+  category: testing
 ---
 
 # TDD Helper Skill
