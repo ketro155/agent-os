@@ -267,6 +267,37 @@
             }
           }
         },
+        "correctness_criteria": {
+          "type": "array",
+          "description": "Spec correctness criteria this task contributes to verifying (from Definition of Correctness)",
+          "items": {
+            "type": "object",
+            "required": ["criterion_id", "claim"],
+            "properties": {
+              "criterion_id": {
+                "type": "integer",
+                "description": "Index from spec Definition of Correctness"
+              },
+              "claim": {
+                "type": "string",
+                "description": "The concrete correctness statement"
+              },
+              "verification": {
+                "type": "string",
+                "description": "How to verify within this task's scope"
+              },
+              "pass_boundary": {
+                "type": "string",
+                "description": "What 'pass' means for this task"
+              }
+            }
+          }
+        },
+        "failure_prevention": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Failure scenarios from spec Definition of Correctness that this task guards against"
+        },
         "tdd_phase": {
           "enum": ["red", "green", "refactor", "verify"],
           "description": "TDD phase (for subtasks only)"
