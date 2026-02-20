@@ -205,28 +205,152 @@ ELSE:
 - **mission_lite**: core product purpose and value
 - **tech_stack**: technical requirements
 
-### Step 3: Requirements Clarification (USER DECISION POINT)
+### Step 3: Definition of Correctness (MANDATORY, USER DECISION POINT)
 
-Use the brainstorming skill to explore approaches and refine requirements through Socratic questioning.
+> **Core Principle**: DEFINE CORRECT BEFORE DESIGNING. Options scaffold thinking, freeform forces specificity, push back if vague.
 
-**Core Principle:** UNDERSTAND BEFORE DESIGNING
+**Phase A — WHY (Motivation + Problem Statement — AskUserQuestion → Freeform):**
+```javascript
+AskUserQuestion({
+  questions: [
+    {
+      question: "WHY is this feature needed? What's the core driver?",
+      header: "Motivation",
+      multiSelect: false,
+      options: [
+        { label: "User pain point", description: "Users are hitting a specific frustration, error, or dead end" },
+        { label: "Missing capability", description: "Users need to do something the product can't do yet" },
+        { label: "Technical debt", description: "Current implementation causes problems or blocks future work" },
+        { label: "Strategic enabler", description: "Unlocks future capabilities or competitive positioning" }
+      ]
+    },
+    {
+      question: "Who experiences this problem?",
+      header: "Audience",
+      multiSelect: false,
+      options: [
+        { label: "End users", description: "The people who use the product daily" },
+        { label: "Developers", description: "The team building or maintaining the product" },
+        { label: "Administrators", description: "People who configure, manage, or monitor the product" },
+        { label: "External systems", description: "APIs, integrations, or downstream consumers" }
+      ]
+    }
+  ]
+})
+```
+```
+THEN — Freeform deepening:
+  Based on motivation selection, ask ONE targeted question:
+  "User pain point" → "Describe a specific moment where someone hits this problem.
+     What were they trying to do, and what went wrong?"
+  "Missing capability" → "What workaround do they use today? Walk me through the steps."
+  "Technical debt" → "What specific problem does the current implementation cause?
+     Example: 'Tests take 5 minutes because of X coupling.'"
+  "Strategic enabler" → "What future capability does this unblock?
+     What's currently impossible that becomes possible?"
 
-**Phase A: Initial clarification (freeform questions)**
-For open-ended understanding, ask ONE question at a time:
-- What problem does this feature solve?
-- Who are the primary users?
-- What are the success criteria?
-- Are there hard constraints (performance, compatibility)?
-- What's explicitly out of scope?
+  IMPORTANT: Push back if the answer is vague:
+  "That helps me understand the direction. Can you make it more concrete?
+   Complete this: 'The problem is that when [person] tries to [action], [bad thing happens].'"
+```
 
-**Phase B: Approach generation (brainstorming skill - autonomous)**
+**Phase B — WHAT Correct Looks Like (Allowed Claims — AskUserQuestion → Freeform):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What type of correctness matters most for this feature?",
+    header: "Correctness",
+    multiSelect: true,
+    options: [
+      { label: "Functional correctness", description: "Specific user actions must produce specific results" },
+      { label: "Performance correctness", description: "Speed, throughput, or resource usage must meet thresholds" },
+      { label: "Data correctness", description: "Output data must be accurate, complete, and consistent" },
+      { label: "Behavioral correctness", description: "System must handle edge cases, errors, and concurrent use gracefully" }
+    ]
+  }]
+})
+```
+```
+THEN — For EACH selected dimension, ask a targeted freeform question:
+
+  "Functional correctness" → "List 2-3 specific statements that must be TRUE.
+     Format: '[Who] can [do what] and [see what result]'
+     Example: 'A user can submit a form with special characters and see a success message.'"
+
+  "Performance correctness" → "What are the specific thresholds?
+     Format: '[What] must be [faster/smaller/fewer] than [number][unit]'
+     Example: 'Page load must be under 3 seconds on 3G. API responses under 200ms.'"
+
+  "Data correctness" → "What data must be accurate and how would you verify it?
+     Format: '[What data] must match [source of truth] with [tolerance]'
+     Example: 'Invoice totals must match line item sum to the cent.'"
+
+  "Behavioral correctness" → "What edge cases or error scenarios must be handled?
+     Format: 'When [unusual condition], the system must [specific behavior]'
+     Example: 'When the network drops mid-upload, the user sees a retry button, not an error page.'"
+
+  IMPORTANT: Reject vague statements. Each must be:
+    - Specific (names a subject and action)
+    - Observable (describes a visible result)
+    - Bounded (has a constraint: time, quantity, scope)
+
+  If a statement like "the system works correctly" is given, push back:
+    "That's not testable — what specific thing should a tester DO, and what should they SEE?"
+```
+
+**Phase C — WHAT Wrong Looks Like (Failure Modes — AskUserQuestion → Freeform):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What type of failure would be most damaging for this feature?",
+    header: "Failure risk",
+    multiSelect: false,
+    options: [
+      { label: "Silent wrong answer", description: "Feature works but produces incorrect output without warning" },
+      { label: "Complete breakdown", description: "Feature crashes, hangs, or becomes unusable" },
+      { label: "Data corruption", description: "Feature damages existing data or creates inconsistencies" },
+      { label: "Regression", description: "Feature works but breaks something else that was working" }
+    ]
+  }]
+})
+```
+```
+THEN — Freeform deepening:
+  "Describe 1-2 specific scenarios where this type of failure would happen.
+   Format: 'When [trigger], the system [does wrong thing] instead of [expected thing]'
+
+   Examples based on selection:
+   Silent wrong answer → 'Dashboard shows yesterday's revenue as today's without any date label'
+   Complete breakdown → 'Clicking save on a large form shows infinite spinner and loses all entered data'
+   Data corruption → 'Concurrent edits by two admins silently overwrite each other's changes'
+   Regression → 'Adding dark mode breaks all existing chart color contrasts in light mode'"
+```
+
+**Phase D — Trade-off Priority (AskUserQuestion):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "When these qualities conflict during implementation, which should win?",
+    header: "Trade-offs",
+    multiSelect: false,
+    options: [
+      { label: "Accuracy > Speed", description: "Better to be slow and right than fast and wrong" },
+      { label: "Speed > Completeness", description: "Ship core cases fast; handle edge cases later" },
+      { label: "Simplicity > Power", description: "Fewer features done well over many features done passably" },
+      { label: "Completeness > Speed", description: "Handle all cases even if delivery takes longer" }
+    ]
+  }]
+})
+```
+
+**Phase E: Approach generation (brainstorming skill - autonomous)**
 ```
 ACTION: brainstorming skill invoked for complex features
 GENERATE: 2-3 distinct approaches with trade-offs
 IDENTIFY: Recommended approach with reasoning
 ```
 
-**Phase C: Approach selection (AskUserQuestion)**
+**Phase F: Approach selection (AskUserQuestion)**
 ```javascript
 AskUserQuestion({
   questions: [{
@@ -316,6 +440,7 @@ Create the file: .agent-os/specs/YYYY-MM-DD-spec-name/spec.md using the Write to
 
 **Required Sections:**
 - Overview
+- Definition of Correctness
 - User Stories
 - Spec Scope
 - Out of Scope
@@ -855,6 +980,42 @@ For documents:
 - **Description**: Marketing text organized by section (hero, features, testimonials)
 - **Usage**: Import and display in respective page sections
 - **Reference Name**: `landingPageCopy`
+```
+
+### Step 10.75: Correctness Alignment Summary (MANDATORY)
+
+> **Purpose**: Before presenting the full spec for review, distill the Definition of Correctness into a quick-check summary. This surfaces misalignment early instead of hiding it in lengthy documents.
+
+**Present to user:**
+```markdown
+## Definition of Correctness — Quick Check
+
+**Problem**: [Concrete problem statement from Phase A]
+**Who/When**: [Affected users and frequency]
+
+**Correct means** (all must be true):
+1. [Allowed claim 1 — concrete, testable statement]
+2. [Allowed claim 2]
+3. [Allowed claim 3]
+
+**Wrong means** (any of these = failure):
+1. [Failure mode 1 — concrete scenario]
+2. [Failure mode 2]
+
+**When trade-offs arise**: [Priority selection — e.g., "Accuracy wins over speed"]
+
+Does this accurately capture what you need?
+```
+
+**Response Handling:**
+```
+IF user says "yes" or confirms:
+  PROCEED to Step 11 (full review)
+
+IF user says "no" or provides corrections:
+  UPDATE the correctness criteria in the spec based on feedback
+  RE-PRESENT the updated quick check
+  LOOP until confirmed
 ```
 
 ### Step 11: User Review (USER DECISION POINT)

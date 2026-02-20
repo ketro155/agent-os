@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Definition of Correctness (DoC)** — structured correctness capture across the entire spec → task pipeline:
+  - `shape-spec.md` Step 2.5: Correctness Framing phase with Options → Freeform → Push-back pattern (what correct looks like, what wrong looks like, trade-off priority)
+  - `create-spec.md` Step 3: Replaced freeform Phase A with 4-phase DoC discovery (WHY → WHAT Correct → WHAT Wrong → Trade-offs) using AskUserQuestion scaffolding
+  - `create-spec.md` Step 10.75: Correctness Alignment Summary — distilled gut-check before full spec review
+  - `create-tasks.md` Step 0.75: Correctness-to-Task Mapping — maps spec criteria to task areas with user priority selection
+  - `create-tasks.md`: New `correctness_criteria` and `failure_prevention` fields in task schema (v4.0)
+  - `create-tasks.md`: Spec validation gate now checks for Definition of Correctness section
+  - **Type-appropriate DoC sections** added to all 4 spec templates:
+    - `feature.md`: Problem statement, allowed claims, failure modes, verification method table
+    - `bugfix.md`: Before/after framing with reproduction steps
+    - `refactor.md`: Behavioral invariants and measurable quality improvements
+    - `integration.md`: Contract compliance with SLA requirements
+
 ---
 
 ## [5.4.2] - 2026-02-13 - Context Optimization & Progressive Disclosure

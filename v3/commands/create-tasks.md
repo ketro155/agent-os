@@ -76,6 +76,69 @@ With the user's approval, proceed to creating a tasks list based on the current 
 
 ## Process Flow
 
+### Step 0.75: Correctness-to-Task Mapping (USER DECISION POINT)
+
+> **Purpose**: Before generating tasks, map the spec's correctness criteria to implementation focus areas. This ensures correctness is built in, not bolted on.
+
+**Extract from spec.md:**
+```
+EXTRACT from spec.md Definition of Correctness section:
+  - correctness_criteria: list of allowed claims
+  - failure_modes: list of failure scenarios
+  - trade_off_priority: which dimension wins
+
+IF no Definition of Correctness section found:
+  WARN: "Spec is missing a Definition of Correctness. Correctness criteria won't flow into tasks."
+  CONTINUE: Proceed with standard task generation
+```
+
+**Present to user:**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "I've mapped the spec's correctness criteria to implementation areas. Which are highest priority for early delivery?",
+    header: "Priority",
+    multiSelect: true,
+    options: [
+      // Dynamically generated from correctness_criteria
+      { label: "[Criterion 1 summary]", description: "Maps to: [component/task area]" },
+      { label: "[Criterion 2 summary]", description: "Maps to: [component/task area]" },
+      { label: "[Criterion 3 summary]", description: "Maps to: [component/task area]" },
+      { label: "[Failure prevention]", description: "Defensive code for failure mode: [summary]" }
+    ]
+  }]
+})
+```
+
+**Impact on task generation:**
+- User-selected priorities influence wave ordering (not just technical dependencies)
+- Each task's `constraints.require` includes the correctness criteria it addresses
+- Failure mode prevention is an explicit task, not assumed
+
+**Correctness Fields for tasks.json (v4.0):**
+
+Add `correctness_criteria` and `failure_prevention` to implementation tasks:
+
+```json
+{
+  "correctness_criteria": [
+    {
+      "criterion_id": 1,
+      "claim": "The concrete correctness statement from spec DoC",
+      "verification": "How to verify within this task's scope",
+      "pass_boundary": "What 'pass' means for this task"
+    }
+  ],
+  "failure_prevention": [
+    "Failure scenario from spec that this task guards against"
+  ]
+}
+```
+
+**Integration with verification loop**: After structural checks (files exist, tests pass), the verifier also checks:
+1. Does the implementation address the `correctness_criteria` claims?
+2. Are `failure_prevention` scenarios handled (error paths, edge cases)?
+
 ### Step 1: Create tasks.md and tasks.json (writing-plans + tdd skills)
 
 Use the writing-plans skill to create detailed micro-tasks and the tdd skill to enforce test-first structure. Generate both human-readable (tasks.md) and machine-readable (tasks.json) formats.
@@ -292,6 +355,11 @@ FOR each implementation task:
   SET task.depends_on based on:
     - Import dependencies (task A imports from task B's files)
     - Shared file ordering (lower complexity first when sharing files)
+
+  POPULATE task.constraints from spec + standards:
+    - do_not: Extract "do not", "avoid", "never" guidance from spec
+    - prefer: Extract "prefer", "recommended", "should use" guidance
+    - require: Extract "must", "required", "mandatory" from spec + applicable standards
 
 GROUP implementation tasks into execution waves:
   - Wave boundary = where depends_on crosses a verification point
@@ -774,6 +842,7 @@ const validateSpec = async (specContent) => {
   // Required sections
   const REQUIRED_SECTIONS = [
     { pattern: /##\s*Overview/i, name: 'Overview' },
+    { pattern: /##\s*Definition of Correctness/i, name: 'Definition of Correctness' },
     { pattern: /##\s*User Stories/i, name: 'User Stories' },
     { pattern: /##\s*Expected Deliverable/i, name: 'Expected Deliverable' }
   ];

@@ -20,6 +20,22 @@ Integrate with [external service/API/system] to enable [capability]. This provid
 - **Method**: API Key / OAuth 2.0 / JWT / mTLS
 - **Credentials Location**: Environment variables / Secrets manager
 
+## Definition of Correctness
+
+### Integration Contract
+**External system**: [System name and version]
+**Data format**: [Expected request/response format]
+**SLA requirements**: [Latency, uptime, error rate expectations]
+
+### Correctness Criteria
+1. [Data flows correctly between systems — specific example]
+2. [Error responses from external system are handled gracefully]
+3. [Authentication/authorization works end-to-end]
+
+### Failure Modes
+1. [External system is unreachable and feature crashes instead of degrading gracefully]
+2. [Data format mismatch causes silent data corruption]
+
 ## User Stories
 
 ### Story 1: [Primary Integration Use Case]

@@ -20,6 +20,21 @@ Refactoring [component/module] to improve [quality attribute: maintainability, t
 - [Benefit 2: e.g., easier unit testing]
 - [Benefit 3: e.g., clear separation of concerns]
 
+## Definition of Correctness
+
+### Behavioral Invariants
+These behaviors MUST NOT change after refactoring:
+1. [Specific behavior that must be preserved]
+2. [Specific behavior that must be preserved]
+
+### Quality Improvements (Measurable)
+1. [Metric that should improve — e.g., "Build time decreases from 45s to under 30s"]
+2. [Structural improvement — e.g., "No function exceeds 50 lines"]
+
+### Failure Modes
+1. [Existing behavior changes unexpectedly]
+2. [Performance degrades beyond acceptable threshold]
+
 ## Behavioral Invariants
 
 > **CRITICAL**: These must remain unchanged after refactoring

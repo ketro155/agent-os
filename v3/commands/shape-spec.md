@@ -69,6 +69,88 @@ AskUserQuestion({
 })
 ```
 
+### 2.5 Correctness Framing (MANDATORY)
+
+> **Core Principle**: Options scaffold thinking, freeform forces specificity, push back if vague.
+
+```
+MANDATORY: Before proceeding to codebase exploration, capture initial correctness framing.
+This ensures the user articulates concrete, testable statements of what "correct" means.
+```
+
+**STEP A — What "Correct" Looks Like (AskUserQuestion → Freeform Deepening):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What does 'correct' look like when this feature is complete?",
+    header: "Correctness",
+    multiSelect: false,
+    options: [
+      { label: "User can do something new", description: "A specific action or workflow becomes possible that wasn't before" },
+      { label: "Something broken gets fixed", description: "A specific error, failure, or frustration goes away" },
+      { label: "Something slow gets faster", description: "A measurable quantity (speed, throughput, efficiency) improves" },
+      { label: "Something manual becomes automatic", description: "A manual step or workaround is eliminated" }
+    ]
+  }]
+})
+```
+```
+THEN — Freeform deepening based on selection:
+  "User can do something new" → "Describe the specific action. What does the user DO, and what do they SEE?
+     Example: 'A user clicks reset password, receives an email within 1 minute, clicks the link, enters a new password, and can immediately log in.'"
+  "Something broken gets fixed" → "Describe the broken scenario today. What triggers it, what goes wrong?
+     Example: 'When a user submits the form with special characters, the page shows a 500 error.'"
+  "Something slow gets faster" → "What's slow, how slow is it now, and how fast should it be?
+     Example: 'Dashboard load takes 12 seconds; should be under 3 seconds.'"
+  "Something manual becomes automatic" → "Walk me through the current manual process step by step.
+     Example: 'Admin manually exports CSV, opens in Excel, runs formula, copies result back.'"
+
+IMPORTANT: Push back if the deepening answer is still vague.
+  "That helps me understand the direction, but I need something concrete enough to test.
+   Can you complete this sentence: 'A tester would verify this by ___'?"
+```
+
+**STEP B — What "Wrong" Looks Like (AskUserQuestion → Freeform Deepening):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "What would make someone say 'this is NOT what I asked for'?",
+    header: "Failure",
+    multiSelect: false,
+    options: [
+      { label: "Wrong results", description: "Feature works but produces incorrect output or data" },
+      { label: "Broken workflow", description: "Feature exists but the user can't complete their task" },
+      { label: "Performance regression", description: "Feature works but makes something else slower or worse" },
+      { label: "Missing edge case", description: "Feature works for the common case but fails on important variations" }
+    ]
+  }]
+})
+```
+```
+THEN — Freeform deepening:
+  "Describe a specific scenario for this failure. What would the user do, and what would go wrong?
+   Example: 'User resets password successfully but the old password still works — both passwords are valid.'"
+```
+
+**STEP C — Trade-off Priority (AskUserQuestion):**
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "When these qualities conflict, which matters MOST for this feature?",
+    header: "Priority",
+    multiSelect: false,
+    options: [
+      { label: "Correctness first", description: "It must be right, even if it's slower or harder to use" },
+      { label: "Speed first", description: "It must be fast/responsive, even if edge cases are deferred" },
+      { label: "Completeness first", description: "It must handle all cases, even if initial delivery takes longer" },
+      { label: "Simplicity first", description: "It must be easy to use/maintain, even if less powerful" }
+    ]
+  }]
+})
+```
+
+**Output**: Store the three answers (correctness definition, failure definition, trade-off priority) as structured output that flows into `/create-spec` via the shaped spec.
+
 ### 3. Product Alignment
 
 ```
@@ -262,6 +344,10 @@ TEMPLATE:
 > Status: Ready for /create-spec
 
 ## Summary
+## Correctness Framing
+### What "Correct" Looks Like
+### What "Wrong" Looks Like
+### Trade-off Priority
 ## Chosen Approach
 ## Scope
 ## Technical Notes

@@ -28,6 +28,21 @@ Fix for [bug description]. This issue causes [impact] when [trigger condition].
 - [User type or scenario 1]
 - [User type or scenario 2]
 
+## Definition of Correctness
+
+### Bug Description
+**Current (broken) behavior**: [What happens now — concrete, reproducible]
+**Expected (correct) behavior**: [What should happen — concrete, testable]
+**Reproduction steps**: [Exact steps to trigger the bug]
+
+### Correctness Criteria
+1. [The specific scenario that was broken now works correctly]
+2. [No regression — existing related functionality still works]
+
+### Failure Modes
+1. [Bug still occurs under specific condition]
+2. [Fix introduces new bug in related area]
+
 ## Spec Scope
 
 1. **Root Cause Investigation** - Identify exact source of bug

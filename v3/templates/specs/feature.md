@@ -8,6 +8,36 @@
 
 [1-2 sentence description of the new capability and its purpose]
 
+## Definition of Correctness
+
+### Problem Statement
+**Problem**: [Concrete description of what's broken, missing, or slow today]
+**Who is affected**: [User types and how often they encounter this]
+**Current workaround**: [How users handle this today, or "none — they can't"]
+
+### Correctness Criteria (Allowed Claims)
+Each statement must be specific, observable, and bounded.
+
+1. [Subject] can [action] and [observable result within constraint]
+2. [Subject] can [action] and [observable result within constraint]
+3. [Subject] can [action] and [observable result within constraint]
+
+### Failure Modes
+If any of these occur, the feature has failed.
+
+1. [Specific failure scenario that would make a user say "this is broken"]
+2. [Specific failure scenario]
+
+### Trade-off Priority
+When implementation forces a trade-off: **[Priority] wins over [Deprioritized]**.
+Example: "Accuracy wins over speed — better to show a loading state than stale data."
+
+### Verification Method
+| Criterion | How to Verify | Pass/Fail Boundary |
+|-----------|---------------|-------------------|
+| [Claim 1] | [Specific test or check] | [What "pass" means] |
+| [Claim 2] | [Specific test or check] | [What "pass" means] |
+
 ## User Stories
 
 ### Story 1: [Primary Use Case]
@@ -49,9 +79,15 @@ As a **[user type]**, I want to **[action]**, so that **[benefit]**.
 
 ## Expected Deliverable
 
-1. [Testable outcome 1 - user can...]
-2. [Testable outcome 2 - system behaves...]
-3. [Tests covering main functionality and edge cases]
+### Functional Outcomes
+1. [User can... — maps to Correctness Criteria #N]
+2. [System does... — maps to Correctness Criteria #N]
+
+### Verification Checklist
+- [ ] All Correctness Criteria verified (see Definition of Correctness)
+- [ ] No Failure Modes triggered during testing
+- [ ] Trade-off decisions align with stated priority
+- [ ] E2E test covers critical path from Criteria #1
 
 ## Dependencies
 
