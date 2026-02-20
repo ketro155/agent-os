@@ -86,6 +86,7 @@ CURSOR=false
 PROJECT_TYPE=""
 WITH_HOOKS=false
 UPGRADE=false
+FORCE_ALL=false
 TARGET_DIR=""
 
 # Legacy v2.x files to clean up when upgrading to v3
@@ -199,7 +200,11 @@ while [[ $# -gt 0 ]]; do
         --upgrade)
             UPGRADE=true
             OVERWRITE_INSTRUCTIONS=true
-            OVERWRITE_STANDARDS=true
+            # Standards are project-owned — not overwritten by --upgrade
+            shift
+            ;;
+        --force)
+            FORCE_ALL=true
             shift
             ;;
         --project-type=*)
@@ -220,7 +225,10 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --claude-code               Add Claude Code support"
             echo "  --cursor                    Add Cursor support"
-            echo "  --upgrade                   Upgrade existing installation (overwrites all files)"
+            echo "  --upgrade                   Upgrade framework files (preserves CLAUDE.md customizations"
+            echo "                              and standards). Use with --force to overwrite everything."
+            echo "  --force                     With --upgrade: also overwrite standards and CLAUDE.md"
+            echo "                              project customizations (creates .backup files)"
             echo "  --target=PATH               Target project directory (default: current directory)"
             echo "  --with-hooks                Add additional validation hooks"
             echo "  --project-type=TYPE         Use specific project type for installation"
@@ -242,6 +250,18 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Validate --force requires --upgrade
+if [ "$FORCE_ALL" = true ] && [ "$UPGRADE" != true ]; then
+    echo "❌ Error: --force requires --upgrade"
+    echo "Usage: $0 --upgrade --force --claude-code"
+    exit 1
+fi
+
+# When --force is used with --upgrade, overwrite everything including standards
+if [ "$FORCE_ALL" = true ]; then
+    OVERWRITE_STANDARDS=true
+fi
 
 echo ""
 echo "🚀 Agent OS Project Installation"
@@ -569,7 +589,13 @@ if [ "$CLAUDE_CODE" = true ]; then
         echo ""
         echo "  📂 Memory:"
         if [ -f "$BASE_AGENT_OS/v3/memory/CLAUDE.md" ]; then
-            copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
+            if [ "$FORCE_ALL" = true ]; then
+                copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "true" "CLAUDE.md"
+            elif [ "$UPGRADE" = true ]; then
+                merge_claude_md "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md"
+            else
+                copy_file "$BASE_AGENT_OS/v3/memory/CLAUDE.md" "./.claude/CLAUDE.md" "$OVERWRITE_CLAUDE" "CLAUDE.md"
+            fi
         fi
         # v4.11.0: Environment variables documentation
         if [ -f "$BASE_AGENT_OS/v3/memory/ENV-VARS.md" ]; then
@@ -616,7 +642,13 @@ if [ "$CLAUDE_CODE" = true ]; then
         echo ""
         echo "  📂 Settings:"
         if [ -f "$BASE_AGENT_OS/v3/settings.json" ]; then
-            copy_file "$BASE_AGENT_OS/v3/settings.json" "./.claude/settings.json" "$OVERWRITE_CLAUDE" "settings.json"
+            if [ "$FORCE_ALL" = true ]; then
+                copy_file "$BASE_AGENT_OS/v3/settings.json" "./.claude/settings.json" "true" "settings.json"
+            elif [ "$UPGRADE" = true ]; then
+                merge_settings_json "$BASE_AGENT_OS/v3/settings.json" "./.claude/settings.json"
+            else
+                copy_file "$BASE_AGENT_OS/v3/settings.json" "./.claude/settings.json" "$OVERWRITE_CLAUDE" "settings.json"
+            fi
         fi
 
         # Install schema
@@ -636,7 +668,13 @@ if [ "$CLAUDE_CODE" = true ]; then
 
     else
         # GitHub installation
-        install_v3_from_github "$OVERWRITE_CLAUDE"
+        local github_upgrade_mode="false"
+        if [ "$FORCE_ALL" = true ]; then
+            github_upgrade_mode="force"
+        elif [ "$UPGRADE" = true ]; then
+            github_upgrade_mode="upgrade"
+        fi
+        install_v3_from_github "$OVERWRITE_CLAUDE" "$github_upgrade_mode"
     fi
 fi
 
@@ -922,6 +960,19 @@ fi
 
 if [ "$CURSOR" = true ]; then
     echo "   .cursor/rules/             - Cursor command rules"
+fi
+
+if [ "$UPGRADE" = true ]; then
+    echo ""
+    echo "📋 Upgrade notes:"
+    if [ "$FORCE_ALL" = true ]; then
+        echo "  • All files overwritten (--force mode)"
+    else
+        echo "  • Framework files (commands, agents, hooks, scripts): replaced"
+        echo "  • CLAUDE.md: framework section updated, project additions preserved"
+        echo "  • settings.json: hooks updated, custom env vars preserved"
+        echo "  • Standards: preserved (use --force to replace)"
+    fi
 fi
 
 echo ""

@@ -85,6 +85,92 @@ copy_directory() {
     done
 }
 
+# Merge CLAUDE.md: replace framework section, preserve project content
+merge_claude_md() {
+    local source="$1"   # new framework CLAUDE.md (with markers)
+    local dest="$2"     # existing project CLAUDE.md
+
+    if [ ! -f "$dest" ]; then
+        cp "$source" "$dest"
+        return 0
+    fi
+
+    # Case 1: Existing file has markers — extract project content after END marker
+    if grep -q "AGENT-OS:END" "$dest"; then
+        local project_content
+        project_content=$(sed -n '/<!-- AGENT-OS:END -->/,$ { /<!-- AGENT-OS:END -->/d; p; }' "$dest")
+
+        cp "$source" "$dest"
+
+        # Append preserved project content if non-empty
+        if [ -n "$(echo "$project_content" | tr -d '[:space:]')" ]; then
+            echo "" >> "$dest"
+            echo "$project_content" >> "$dest"
+        fi
+
+        echo "  ✓ CLAUDE.md (framework updated, project content preserved)"
+        return 0
+    fi
+
+    # Case 2: No markers — check if it's a vanilla framework file
+    if head -1 "$dest" | grep -q "^# Agent OS v"; then
+        cp "$source" "$dest"
+        echo "  ✓ CLAUDE.md (replaced — no project customizations detected)"
+        return 0
+    fi
+
+    # Case 3: No markers, doesn't look like framework — backup and replace
+    cp "$dest" "${dest}.backup"
+    cp "$source" "$dest"
+    echo "  ⚠️  CLAUDE.md (replaced — backup saved to CLAUDE.md.backup)"
+    echo "      Review backup and copy any project-specific content after the <!-- AGENT-OS:END --> marker"
+    return 0
+}
+
+# Merge settings.json: replace hooks/permissions, preserve custom env vars
+merge_settings_json() {
+    local source="$1"   # new framework settings.json
+    local dest="$2"     # existing project settings.json
+
+    if [ ! -f "$dest" ]; then
+        cp "$source" "$dest"
+        return 0
+    fi
+
+    # If jq not available, fall back to overwrite
+    if ! command -v jq &>/dev/null; then
+        cp "$source" "$dest"
+        echo "  ✓ settings.json (replaced — jq not available for merge)"
+        return 0
+    fi
+
+    # Extract custom env vars from existing (non-AGENT_OS_* keys)
+    local custom_env
+    custom_env=$(jq '{env: (.env // {} | to_entries | map(select(.key | startswith("AGENT_OS_") | not)) | from_entries)}' "$dest" 2>/dev/null)
+
+    if [ $? -ne 0 ] || [ -z "$custom_env" ]; then
+        cp "$source" "$dest"
+        echo "  ✓ settings.json (replaced — existing file had invalid JSON)"
+        return 0
+    fi
+
+    # Check if there are any custom env vars to preserve
+    local custom_count
+    custom_count=$(echo "$custom_env" | jq '.env | length')
+
+    if [ "$custom_count" -eq 0 ]; then
+        cp "$source" "$dest"
+        echo "  ✓ settings.json (replaced — no custom env vars)"
+        return 0
+    fi
+
+    # Merge: new framework base + preserved custom env vars
+    jq -s '.[0] * {env: (.[0].env + .[1].env)}' "$source" <(echo "$custom_env") > "${dest}.tmp"
+    mv "${dest}.tmp" "$dest"
+    echo "  ✓ settings.json (framework updated, ${custom_count} custom env var(s) preserved)"
+    return 0
+}
+
 # Function to convert command file to Cursor .mdc format
 convert_to_cursor_rule() {
     local source="$1"
@@ -200,6 +286,7 @@ install_from_github() {
 # This downloads the native v5 architecture files (hooks, scripts, agents, etc.)
 install_v3_from_github() {
     local overwrite="$1"
+    local upgrade_mode="${2:-false}"   # "upgrade", "force", or "false"
 
     echo ""
     echo "📥 Downloading v5 architecture files from GitHub..."
@@ -295,10 +382,18 @@ install_v3_from_github() {
     # Download memory/rules
     echo ""
     echo "  📂 Memory:"
-    download_file "${BASE_URL}/v3/memory/CLAUDE.md" \
-        "./.claude/CLAUDE.md" \
-        "$overwrite" \
-        "CLAUDE.md"
+    if [ "$upgrade_mode" = "upgrade" ]; then
+        # Download to temp file, then merge
+        local tmp_claude="/tmp/agent-os-claude-md-$$.md"
+        curl -s -o "$tmp_claude" "${BASE_URL}/v3/memory/CLAUDE.md"
+        merge_claude_md "$tmp_claude" "./.claude/CLAUDE.md"
+        rm -f "$tmp_claude"
+    else
+        download_file "${BASE_URL}/v3/memory/CLAUDE.md" \
+            "./.claude/CLAUDE.md" \
+            "$overwrite" \
+            "CLAUDE.md"
+    fi
     download_file "${BASE_URL}/v3/memory/ENV-VARS.md" \
         "./.claude/ENV-VARS.md" \
         "$overwrite" \
@@ -345,10 +440,18 @@ install_v3_from_github() {
     # Download settings
     echo ""
     echo "  📂 Settings:"
-    download_file "${BASE_URL}/v3/settings.json" \
-        "./.claude/settings.json" \
-        "$overwrite" \
-        "settings.json"
+    if [ "$upgrade_mode" = "upgrade" ]; then
+        # Download to temp file, then merge
+        local tmp_settings="/tmp/agent-os-settings-$$.json"
+        curl -s -o "$tmp_settings" "${BASE_URL}/v3/settings.json"
+        merge_settings_json "$tmp_settings" "./.claude/settings.json"
+        rm -f "$tmp_settings"
+    else
+        download_file "${BASE_URL}/v3/settings.json" \
+            "./.claude/settings.json" \
+            "$overwrite" \
+            "settings.json"
+    fi
 
     # Download schemas
     echo ""

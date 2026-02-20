@@ -1,3 +1,4 @@
+<!-- AGENT-OS:START -->
 # Agent OS v5.4.2 - Core Memory
 
 > Loaded at every session start. Keep concise. For detailed docs, see `rules/*.md` files.
@@ -176,3 +177,4 @@ node .claude/scripts/json-to-markdown.js .agent-os/specs/*/tasks.json  # Regener
 | Teams Integration | `rules/teams-integration.md` |
 | Context Offloading | `rules/context-offloading.md` |
 | Error Handling | `rules/error-handling.md` |
+<!-- AGENT-OS:END -->

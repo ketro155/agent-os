@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Safe upgrade strategy** — `--upgrade` now preserves project-specific content instead of overwriting everything:
+  - **CLAUDE.md merge**: Framework section (between `<!-- AGENT-OS:START/END -->` markers) replaced, project additions after the END marker preserved intact
+  - **settings.json merge**: Hooks and permissions replaced from new framework source, custom (non-`AGENT_OS_*`) env vars preserved
+  - **Standards preserved**: `--upgrade` no longer overwrites `.agent-os/standards/` (project-owned files)
+  - **`--force` flag**: `--upgrade --force` overrides all safety and overwrites everything (creates `.backup` files for CLAUDE.md)
+  - **Backward compatible**: Pre-marker CLAUDE.md files detected and handled (vanilla framework files replaced safely, unknown content backed up with warning)
+  - Three-tier file ownership: Framework (always overwrite), Mixed (merge), Project (skip)
 - **Definition of Correctness (DoC)** — structured correctness capture across the entire spec → task pipeline:
   - `shape-spec.md` Step 2.5: Correctness Framing phase with Options → Freeform → Push-back pattern (what correct looks like, what wrong looks like, trade-off priority)
   - `create-spec.md` Step 3: Replaced freeform Phase A with 4-phase DoC discovery (WHY → WHAT Correct → WHAT Wrong → Trade-offs) using AskUserQuestion scaffolding
