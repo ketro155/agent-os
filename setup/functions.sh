@@ -298,11 +298,11 @@ install_v3_from_github() {
     mkdir -p "./.claude/hooks"
     mkdir -p "./.claude/scripts"
     mkdir -p "./.claude/rules"
-    mkdir -p "./.claude/skills/artifact-verification"
+    mkdir -p "./.claude/skills/artifact-verification/references"
     mkdir -p "./.claude/skills/brainstorming"
     mkdir -p "./.claude/skills/context-summary"
     mkdir -p "./.claude/skills/tdd-helper"
-    mkdir -p "./.claude/skills/subtask-expansion"
+    mkdir -p "./.claude/skills/subtask-expansion/references"
     mkdir -p "./.claude/skills/log-entry"
     mkdir -p "./.claude/skills/context-read"
     mkdir -p "./.claude/skills/context-search"
@@ -415,6 +415,15 @@ install_v3_from_github() {
             "$overwrite" \
             "skills/${skill}/SKILL.md"
     done
+    # Skill reference files (progressive disclosure)
+    download_file "${BASE_URL}/v3/skills/artifact-verification/references/ast-verification-api.md" \
+        "./.claude/skills/artifact-verification/references/ast-verification-api.md" \
+        "$overwrite" \
+        "skills/artifact-verification/references/ast-verification-api.md"
+    download_file "${BASE_URL}/v3/skills/subtask-expansion/references/expansion-logic.md" \
+        "./.claude/skills/subtask-expansion/references/expansion-logic.md" \
+        "$overwrite" \
+        "skills/subtask-expansion/references/expansion-logic.md"
 
     # Download templates
     echo ""

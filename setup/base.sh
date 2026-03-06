@@ -96,11 +96,11 @@ mkdir -p "$INSTALL_DIR/v3/hooks"
 mkdir -p "$INSTALL_DIR/v3/scripts"
 mkdir -p "$INSTALL_DIR/v3/memory/rules"
 mkdir -p "$INSTALL_DIR/v3/schemas"
-mkdir -p "$INSTALL_DIR/v3/skills/artifact-verification"
+mkdir -p "$INSTALL_DIR/v3/skills/artifact-verification/references"
 mkdir -p "$INSTALL_DIR/v3/skills/brainstorming"
 mkdir -p "$INSTALL_DIR/v3/skills/context-summary"
 mkdir -p "$INSTALL_DIR/v3/skills/tdd-helper"
-mkdir -p "$INSTALL_DIR/v3/skills/subtask-expansion"
+mkdir -p "$INSTALL_DIR/v3/skills/subtask-expansion/references"
 mkdir -p "$INSTALL_DIR/v3/skills/log-entry"
 mkdir -p "$INSTALL_DIR/v3/skills/context-read"
 mkdir -p "$INSTALL_DIR/v3/skills/context-search"
@@ -260,6 +260,15 @@ for skill in artifact-verification brainstorming context-summary tdd-helper subt
         "$OVERWRITE_COMMANDS" \
         "v3/skills/${skill}/SKILL.md"
 done
+# Skill reference files (progressive disclosure)
+download_file "${BASE_URL}/v3/skills/artifact-verification/references/ast-verification-api.md" \
+    "$INSTALL_DIR/v3/skills/artifact-verification/references/ast-verification-api.md" \
+    "$OVERWRITE_COMMANDS" \
+    "v3/skills/artifact-verification/references/ast-verification-api.md"
+download_file "${BASE_URL}/v3/skills/subtask-expansion/references/expansion-logic.md" \
+    "$INSTALL_DIR/v3/skills/subtask-expansion/references/expansion-logic.md" \
+    "$OVERWRITE_COMMANDS" \
+    "v3/skills/subtask-expansion/references/expansion-logic.md"
 
 echo ""
 echo "  📂 v3 Templates:"

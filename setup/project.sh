@@ -445,10 +445,12 @@ if [ "$CLAUDE_CODE" = true ]; then
     create_tracked_dir "./.claude/rules"
     create_tracked_dir "./.claude/skills"
     create_tracked_dir "./.claude/skills/artifact-verification"
+    create_tracked_dir "./.claude/skills/artifact-verification/references"
     create_tracked_dir "./.claude/skills/brainstorming"
     create_tracked_dir "./.claude/skills/context-summary"
     create_tracked_dir "./.claude/skills/tdd-helper"
     create_tracked_dir "./.claude/skills/subtask-expansion"
+    create_tracked_dir "./.claude/skills/subtask-expansion/references"
     create_tracked_dir "./.claude/skills/log-entry"
     # v4.10.0: Context offloading skills
     create_tracked_dir "./.claude/skills/context-read"
@@ -631,6 +633,17 @@ if [ "$CLAUDE_CODE" = true ]; then
                 copy_file "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" "./.claude/skills/${skill}/SKILL.md" "$OVERWRITE_CLAUDE" "skills/${skill}/SKILL.md"
             fi
         done
+        # Skill reference files (progressive disclosure)
+        if [ -f "$BASE_AGENT_OS/v3/skills/artifact-verification/references/ast-verification-api.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/skills/artifact-verification/references/ast-verification-api.md" \
+                "./.claude/skills/artifact-verification/references/ast-verification-api.md" "$OVERWRITE_CLAUDE" \
+                "skills/artifact-verification/references/ast-verification-api.md"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/skills/subtask-expansion/references/expansion-logic.md" ]; then
+            copy_file "$BASE_AGENT_OS/v3/skills/subtask-expansion/references/expansion-logic.md" \
+                "./.claude/skills/subtask-expansion/references/expansion-logic.md" "$OVERWRITE_CLAUDE" \
+                "skills/subtask-expansion/references/expansion-logic.md"
+        fi
 
         # Install templates (v4.9.0)
         echo ""
