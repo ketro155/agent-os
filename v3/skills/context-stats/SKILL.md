@@ -136,9 +136,19 @@ Display the statistics in a clear, formatted way:
    ─────────────────────────────────────────────────────────
    ✓ phase2_20260112_143022_exit0                    12.5KB phase2-implementation
    ✗ phase2_20260112_143522_exit1                    45.2KB phase2-implementation
-   ✓ wave-orchestrator_20260112_144001_exit0          8.3KB wave-orchestrator
+   ✓ phase2_20260112_144001_exit0                      8.3KB phase2-implementation
 
 ═══════════════════════════════════════════════════════════════
 Commands: /context-read <id> | /context-search <term>
 ═══════════════════════════════════════════════════════════════
 ```
+
+## Changelog
+
+### v1.1.0 (2026-02-09)
+- Added session ID display
+- Updated example output for v5.5.0 agent names
+
+### v1.0.0 (2026-01-10)
+- Initial context-stats skill
+- Session statistics, storage usage, recent outputs display

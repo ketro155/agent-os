@@ -1,6 +1,6 @@
 ---
 name: log-entry
-description: Adds an entry to the Agent OS project memory logs for cross-session continuity, supporting decisions, implementations, and insights. Use after significant architectural choices, major code changes, or when a learning or pattern emerges. Use when user says "log this decision", "record this insight", "document this implementation", or "add log entry".
+description: Adds an entry to the Agent OS project memory logs for cross-session continuity, supporting decisions, implementations, and insights. Use after significant architectural choices, major code changes, or when a learning or pattern emerges. Use when user says "log this decision", "record this insight", "document this implementation", or "add log entry". NOT for compressing context for handoff (use /context-summary). NOT for viewing offloaded outputs (use /context-read).
 version: 1.2.0
 metadata:
   author: Agent OS
@@ -128,3 +128,16 @@ Format the entry using the templates below and append above the `<!-- Add new ..
 - Cross-reference related specs, tasks, or code
 - Use today's date in YYYY-MM-DD format
 - Include session ID (`${CLAUDE_SESSION_ID}`) in entries for traceability (v5.3.0)
+
+## Changelog
+
+### v1.2.0 (2026-02-09)
+- Added session ID to all log entry templates
+
+### v1.1.0 (2026-01-15)
+- Added insight category types (Pattern, Anti-pattern, Idea, Learning)
+
+### v1.0.0 (2026-01-10)
+- Initial log-entry skill
+- Three log types: decision, implementation, insight
+- Template-based formatting with marker insertion

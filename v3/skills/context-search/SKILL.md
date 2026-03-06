@@ -46,9 +46,9 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Search with context, showing filename
-grep -r -n -i -C 2 "$PATTERN" "$OUTPUTS_DIR"/*.txt 2>/dev/null | head -100
+grep -r -n -i --include='*.txt' -C 2 "$PATTERN" "$OUTPUTS_DIR" 2>/dev/null | head -100
 
-MATCH_COUNT=$(grep -r -l -i "$PATTERN" "$OUTPUTS_DIR"/*.txt 2>/dev/null | wc -l | tr -d ' ')
+MATCH_COUNT=$(grep -r -l -i --include='*.txt' "$PATTERN" "$OUTPUTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Found matches in $MATCH_COUNT file(s)"
@@ -91,3 +91,11 @@ Would you like me to:
 1. Read the full output from either file?
 2. Help fix these TypeErrors?
 ```
+
+## Changelog
+
+### v1.0.0 (2026-01-10)
+- Initial context-search skill
+- Regex pattern search across offloaded outputs
+- Context lines around matches
+- Match count summary

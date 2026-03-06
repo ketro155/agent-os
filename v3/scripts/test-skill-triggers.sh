@@ -151,11 +151,15 @@ declare -a OVERLAP_GROUPS
 OVERLAP_GROUPS=(
   "context-read context-search context-stats context-summary"
   "tdd-helper test-guardian"
+  "subtask-expansion brainstorming artifact-verification"
+  "log-entry context-summary"
 )
 
 OVERLAP_GROUP_NAMES=(
   "Context management"
   "Testing"
+  "Task workflow"
+  "Logging vs context"
 )
 
 # ─── Main validation ─────────────────────────────────────────────────────────

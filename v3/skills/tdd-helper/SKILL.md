@@ -120,7 +120,7 @@ Detect the project's test runner before running commands:
 | `playwright.config.*` | Playwright | `npx playwright test` |
 | None detected | Fallback | `npm test` |
 
-See `references/tdd-implementation-guide.md` for full runner detection logic and configuration patterns.
+See `.claude/agents/references/tdd-implementation-guide.md` for full runner detection logic and configuration patterns.
 
 ## Test Structure Guidelines
 
@@ -188,7 +188,7 @@ When context offloading exceeds ~100KB (check via `/context-stats`), invoke `/co
 ### Cross-References
 
 - Full TDD workflow rules: `rules/tdd-workflow.md`
-- Runner detection and test patterns: `references/tdd-implementation-guide.md`
+- Runner detection and test patterns: `.claude/agents/references/tdd-implementation-guide.md`
 - Test failure classification: `/test-guardian`
 
 ## Anti-Patterns to Avoid

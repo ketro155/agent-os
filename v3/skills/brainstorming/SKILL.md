@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: Generates 2-3 structured approaches with trade-off analysis for feature design decisions. Use before AskUserQuestion in shape-spec Step 6 and create-spec Phase E. Use when user says "brainstorm approaches", "compare options", "generate alternatives", or "trade-off analysis". NOT for task breakdown (use /subtask-expansion). NOT for TDD guidance (use /tdd-helper).
+description: Generates 2-3 structured approaches with trade-off analysis for feature design decisions. Use when there are multiple viable implementation strategies and the user needs help choosing. Use before AskUserQuestion in shape-spec Step 6 and create-spec Phase E. Use when user says "brainstorm approaches", "compare options", "generate alternatives", "trade-off analysis", "what are my options", "pros and cons", or "help me decide". NOT for task breakdown (use /subtask-expansion). NOT for TDD guidance (use /tdd-helper).
 version: 1.0.0
 metadata:
   author: Agent OS

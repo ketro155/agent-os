@@ -1,6 +1,6 @@
 ---
 name: tmux-monitor
-description: Manages a task progress dashboard in tmux. Use alongside split-pane teammate mode for a complete monitoring view. Use when user says "start monitor", "show progress dashboard", "tmux monitor", or "watch task progress".
+description: Manages a task progress dashboard in tmux showing task completion, wave progress, and blocked items at a glance. Use alongside split-pane teammate mode for a complete monitoring view. Use when you need a bird's-eye view of execution progress. Use when user says "start monitor", "show progress dashboard", "tmux monitor", "watch task progress", "task status dashboard", or "how are my tasks going". NOT for checking individual task details (use jq on tasks.json).
 version: 2.0.0
 metadata:
   author: Agent OS

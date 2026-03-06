@@ -1,7 +1,7 @@
 ---
 name: subtask-expansion
-description: Generates TDD-structured subtasks (RED-GREEN-VERIFY) for a parent task based on keyword complexity analysis. Use during /execute-tasks when a task has needs_subtask_expansion or when phase1-discovery encounters tasks without subtasks. Use when user says "expand task", "generate subtasks", "break down task", or "subtask expansion".
-version: 1.1.0
+description: Breaks large tasks into smaller, testable subtasks following TDD structure (RED-GREEN-VERIFY) based on complexity analysis. Use during /execute-tasks when a task has needs_subtask_expansion, when phase1-discovery encounters tasks without subtasks, or when a task feels too big to implement in one pass. Use when user says "expand task", "generate subtasks", "break down task", "subtask expansion", "this task is too big", or "split this into smaller pieces". NOT for comparing implementation approaches (use /brainstorming).
+version: 1.2.0
 metadata:
   author: Agent OS
   category: workflow-automation
@@ -9,7 +9,7 @@ metadata:
 
 # Subtask Expansion Skill
 
-Generate TDD-structured subtasks for parent tasks based on complexity analysis. This skill centralizes subtask generation logic previously embedded in phase1-discovery Step 1.7.
+Break large tasks into smaller, testable subtasks using TDD structure. This skill centralizes subtask generation logic previously embedded in phase1-discovery Step 1.7.
 
 ## When to Use
 
@@ -18,8 +18,6 @@ Generate TDD-structured subtasks for parent tasks based on complexity analysis. 
 - When expanding future_tasks promoted to regular tasks
 
 ## Input Format
-
-You receive task context:
 
 ```json
 {
@@ -36,20 +34,13 @@ You receive task context:
 
 ## Complexity Analysis
 
-### Step 1: Check for Override
+### Priority Order
 
-```javascript
-if (input.complexity_override) {
-  complexity = input.complexity_override;
-  reasoning = "Using explicit complexity_override from task definition";
-} else {
-  complexity = analyzeKeywords(task.description);
-}
-```
+1. **`complexity_override`** (explicit in task definition) — always wins
+2. **LLM contextual judgment** — if scope clearly exceeds what keywords suggest, override the heuristic. Set `complexity_source: "llm_judgment"` with a `reasoning` field.
+3. **Keyword analysis** — fallback heuristic
 
-### Step 2: Keyword-Based Analysis (if no override)
-
-Analyze the task description for complexity signals:
+### Keyword Heuristic
 
 | Complexity | Keywords | Subtask Count |
 |------------|----------|---------------|
@@ -57,234 +48,50 @@ Analyze the task description for complexity signals:
 | **MEDIUM** | implement, create, extend, integrate, build, develop | 4 subtasks |
 | **HIGH** | refactor, redesign, migrate, overhaul, architect, rewrite | 5 subtasks |
 
-**Analysis Logic:**
+Check HIGH keywords first (they take precedence). Default to LOW if no keywords match.
 
-```javascript
-const COMPLEXITY_KEYWORDS = {
-  LOW: ["fix", "add", "update", "remove", "rename", "tweak", "adjust", "correct", "minor"],
-  MEDIUM: ["implement", "create", "extend", "integrate", "build", "develop", "enhance"],
-  HIGH: ["refactor", "redesign", "migrate", "overhaul", "architect", "rewrite", "restructure"]
-};
-
-function analyzeKeywords(description) {
-  const descLower = description.toLowerCase();
-  
-  // Check HIGH first (takes precedence)
-  for (const keyword of COMPLEXITY_KEYWORDS.HIGH) {
-    if (descLower.includes(keyword)) {
-      return "HIGH";
-    }
-  }
-  
-  // Check MEDIUM next
-  for (const keyword of COMPLEXITY_KEYWORDS.MEDIUM) {
-    if (descLower.includes(keyword)) {
-      return "MEDIUM";
-    }
-  }
-  
-  // Default to LOW for simple tasks
-  return "LOW";
-}
-```
-
-### LLM Override Guidance
-
-The keyword heuristic above is a starting point, not the final word. Priority order for complexity determination:
-
-1. **`complexity_override`** (explicit in task definition) — always wins
-2. **LLM contextual judgment** — if you recognize that "add distributed caching layer" is HIGH despite the "add" keyword, override the heuristic
-3. **Keyword analysis** (above) — fallback when no override and no strong contextual signal
-
-When overriding the keyword result, set `complexity_source: "llm_judgment"` and include a `reasoning` field explaining why (e.g., "keyword 'add' suggests LOW but the scope involves distributed systems coordination, upgrading to HIGH").
-
-### Step 3: Additional Complexity Factors
+### Adjustment Factors
 
 Adjust complexity upward if:
-
-- **Multiple files mentioned** (+1 level if 3+ files)
+- **Multiple files mentioned** (+1 level if 3+ files referenced)
 - **Integration keywords** present ("API", "database", "external")
 - **Test requirements** explicit ("with tests", "full coverage")
 
-```javascript
-function adjustComplexity(baseComplexity, task) {
-  let adjustment = 0;
-  
-  // File count adjustment
-  const fileMatches = task.description.match(/\b\w+\.(ts|js|tsx|jsx|md)\b/g) || [];
-  if (fileMatches.length >= 3) adjustment++;
-  
-  // Integration adjustment
-  const integrationKeywords = ["api", "database", "external", "third-party"];
-  if (integrationKeywords.some(k => task.description.toLowerCase().includes(k))) {
-    adjustment++;
-  }
-  
-  // Apply adjustment (cap at HIGH)
-  const levels = ["LOW", "MEDIUM", "HIGH"];
-  const currentIndex = levels.indexOf(baseComplexity);
-  const newIndex = Math.min(currentIndex + adjustment, 2);
-  
-  return levels[newIndex];
-}
-```
+For the full analysis and generation algorithms, see `references/expansion-logic.md`.
 
-## Subtask Generation
+## TDD Subtask Structure
 
-### TDD Structure Template
+All expansions follow this mandatory pattern:
 
-All subtasks follow mandatory TDD structure:
+| Position | Phase | Description |
+|----------|-------|-------------|
+| First | RED | Write failing tests for the task's functionality |
+| Middle (1-3) | GREEN | Implementation steps (varies by task type) |
+| Last | VERIFY | Verify all tests pass and commit |
 
-```javascript
-function generateSubtasks(task, complexity) {
-  const subtaskCount = { LOW: 3, MEDIUM: 4, HIGH: 5 }[complexity];
-  const subtasks = [];
-  
-  // Subtask 1: Always RED phase (write failing tests)
-  subtasks.push({
-    id: `${task.id}.1`,
-    type: "subtask",
-    parent: task.id,
-    description: `Write failing tests for ${extractFunctionality(task)} (TDD RED)`,
-    status: "pending",
-    tdd_phase: "red",
-    attempts: 0
-  });
-  
-  // Middle subtasks: GREEN phase (implementation)
-  const implementationSteps = generateImplementationSteps(task, subtaskCount - 2);
-  for (let i = 0; i < implementationSteps.length; i++) {
-    subtasks.push({
-      id: `${task.id}.${i + 2}`,
-      type: "subtask",
-      parent: task.id,
-      description: `${implementationSteps[i]} (TDD GREEN)`,
-      status: "pending",
-      tdd_phase: "green",
-      attempts: 0
-    });
-  }
-  
-  // Last subtask: Always VERIFY phase
-  subtasks.push({
-    id: `${task.id}.${subtaskCount}`,
-    type: "subtask",
-    parent: task.id,
-    description: "Verify all tests pass and commit",
-    status: "pending",
-    tdd_phase: "verify",
-    attempts: 0
-  });
-  
-  return subtasks;
-}
-```
+### Implementation Steps by Task Type
 
-### Implementation Step Generation
-
-Based on task type, generate appropriate middle subtasks:
-
-| Task Type | Implementation Steps |
-|-----------|---------------------|
+| Task Type | Typical GREEN Steps |
+|-----------|-------------------|
 | **Feature** | Implement core, Add validation, Handle edge cases |
 | **Refactor** | Extract logic, Update callers, Clean up, Update docs |
 | **Bugfix** | Identify root cause, Apply fix |
 | **Integration** | Set up connection, Implement handlers, Add error handling |
 
-```javascript
-function generateImplementationSteps(task, count) {
-  const descLower = task.description.toLowerCase();
-  
-  if (descLower.includes("refactor") || descLower.includes("extract")) {
-    return [
-      `Extract ${extractFunctionality(task)} logic into separate module`,
-      "Update all callers to use new module",
-      count > 2 ? "Clean up and remove old code" : null,
-      count > 3 ? "Update documentation" : null
-    ].filter(Boolean).slice(0, count);
-  }
-  
-  if (descLower.includes("fix") || descLower.includes("bug")) {
-    return [
-      `Identify and fix root cause of ${extractFunctionality(task)}`,
-      count > 1 ? "Add regression prevention" : null
-    ].filter(Boolean).slice(0, count);
-  }
-  
-  if (descLower.includes("integrate") || descLower.includes("api")) {
-    return [
-      `Implement ${extractFunctionality(task)} integration`,
-      "Add request/response handling",
-      count > 2 ? "Implement error handling and retry logic" : null
-    ].filter(Boolean).slice(0, count);
-  }
-  
-  // Default: Feature implementation
-  return [
-    `Implement core ${extractFunctionality(task)} functionality`,
-    count > 1 ? "Add input validation and error handling" : null,
-    count > 2 ? "Handle edge cases and boundary conditions" : null
-  ].filter(Boolean).slice(0, count);
-}
-
-function extractFunctionality(task) {
-  // Extract main functionality description from task
-  // Remove common prefixes and clean up
-  return task.description
-    .replace(/^(implement|create|add|fix|refactor|update|build)\s+/i, "")
-    .replace(/\s*\(.*\)$/, "")  // Remove parenthetical notes
-    .trim();
-}
-```
-
 ## Output Format
-
-Return structured JSON:
 
 ```json
 {
   "status": "success",
   "task_id": "5",
   "complexity_detected": "MEDIUM",
-  "complexity_source": "keyword_analysis|complexity_override|adjusted",
-  "reasoning": "Task contains 'implement' keyword suggesting MEDIUM complexity. No override provided.",
+  "complexity_source": "keyword_analysis|complexity_override|llm_judgment|adjusted",
+  "reasoning": "Task contains 'implement' keyword suggesting MEDIUM complexity.",
   "subtasks": [
-    {
-      "id": "5.1",
-      "type": "subtask",
-      "parent": "5",
-      "description": "Write failing tests for user authentication with JWT tokens (TDD RED)",
-      "status": "pending",
-      "tdd_phase": "red",
-      "attempts": 0
-    },
-    {
-      "id": "5.2",
-      "type": "subtask",
-      "parent": "5",
-      "description": "Implement core user authentication with JWT tokens functionality (TDD GREEN)",
-      "status": "pending",
-      "tdd_phase": "green",
-      "attempts": 0
-    },
-    {
-      "id": "5.3",
-      "type": "subtask",
-      "parent": "5",
-      "description": "Add input validation and error handling (TDD GREEN)",
-      "status": "pending",
-      "tdd_phase": "green",
-      "attempts": 0
-    },
-    {
-      "id": "5.4",
-      "type": "subtask",
-      "parent": "5",
-      "description": "Verify all tests pass and commit",
-      "status": "pending",
-      "tdd_phase": "verify",
-      "attempts": 0
-    }
+    { "id": "5.1", "type": "subtask", "parent": "5", "description": "Write failing tests for ... (TDD RED)", "status": "pending", "tdd_phase": "red", "attempts": 0 },
+    { "id": "5.2", "type": "subtask", "parent": "5", "description": "Implement core ... (TDD GREEN)", "status": "pending", "tdd_phase": "green", "attempts": 0 },
+    { "id": "5.3", "type": "subtask", "parent": "5", "description": "Add validation ... (TDD GREEN)", "status": "pending", "tdd_phase": "green", "attempts": 0 },
+    { "id": "5.4", "type": "subtask", "parent": "5", "description": "Verify all tests pass and commit", "status": "pending", "tdd_phase": "verify", "attempts": 0 }
   ],
   "parent_task_updates": {
     "subtasks": ["5.1", "5.2", "5.3", "5.4"],
@@ -296,48 +103,20 @@ Return structured JSON:
 
 ## Error Handling
 
-```javascript
-if (!task.id || !task.description) {
-  return {
-    status: "error",
-    error: "INVALID_INPUT",
-    message: "Task must have id and description fields"
-  };
-}
-
-if (complexity_override && !["LOW", "MEDIUM", "HIGH"].includes(complexity_override)) {
-  return {
-    status: "error",
-    error: "INVALID_COMPLEXITY_OVERRIDE",
-    message: `complexity_override must be LOW, MEDIUM, or HIGH. Got: ${complexity_override}`
-  };
-}
-```
-
-## Integration with phase1-discovery
-
-This skill is invoked from phase1-discovery Step 1.7:
-
-```javascript
-// In phase1-discovery Step 1.7
-for (const task of tasksNeedingExpansion) {
-  const expansionResult = await Skill({
-    skill: "subtask-expansion",
-    args: JSON.stringify({
-      task: task,
-      complexity_override: task.complexity_override || null,
-      spec_context: specSummary
-    })
-  });
-  
-  if (expansionResult.status === "success") {
-    // Update tasks.json with new subtasks
-    await updateTasksJson(task.id, expansionResult);
-  }
-}
-```
+- Missing `task.id` or `task.description` → return `INVALID_INPUT` error
+- Invalid `complexity_override` value → return `INVALID_COMPLEXITY_OVERRIDE` error
 
 ## Changelog
+
+### v1.2.0 (2026-03-06)
+- Extracted implementation logic to references/expansion-logic.md for context efficiency
+- Improved description for broader user-facing triggering
+- Added negative trigger for brainstorming disambiguation
+- Reduced SKILL.md from 350 to ~110 lines
+
+### v1.1.0 (2026-02-09)
+- Added LLM override guidance for complexity determination
+- Added additional complexity factors (file count, integration keywords)
 
 ### v1.0.0 (2026-01-09)
 - Initial extraction from phase1-discovery Step 1.7

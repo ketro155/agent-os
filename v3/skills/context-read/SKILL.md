@@ -100,3 +100,15 @@ Response:
 This output is from a phase2-implementation agent that failed (exit code 1).
 Would you like me to analyze the failure and suggest fixes?
 ```
+
+## Changelog
+
+### v1.1.0 (2026-02-09)
+- Added LATEST symlink support for quick access to most recent output
+- Added agent-type filtered LATEST (e.g., LATEST_phase2)
+- Added list mode when invoked without arguments
+
+### v1.0.0 (2026-01-10)
+- Initial context-read skill
+- Read offloaded outputs by ID
+- Display with agent type and error detection

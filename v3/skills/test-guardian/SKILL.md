@@ -8,7 +8,7 @@ metadata:
   category: testing
 ---
 
-# Test Guardian Skill (v5.0.1)
+# Test Guardian Skill
 
 > **Note**: `context: fork` is a Claude Code extension that isolates this skill's execution context.
 
