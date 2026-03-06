@@ -501,10 +501,10 @@ if [ "$CLAUDE_CODE" = true ]; then
             fi
         done
 
-        # Install hooks (mandatory validation + subagent lifecycle v4.8.0)
+        # Install hooks (mandatory validation + subagent lifecycle v4.8.0, v5.5.0 new hooks)
         echo ""
         echo "  📂 Hooks:"
-        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle; do
+        for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle pre-compact stop user-prompt-submit post-tool-failure; do
             if [ -f "$BASE_AGENT_OS/v3/hooks/${hook}.sh" ]; then
                 copy_file "$BASE_AGENT_OS/v3/hooks/${hook}.sh" "./.claude/hooks/${hook}.sh" "$OVERWRITE_CLAUDE" "hooks/${hook}.sh"
                 chmod +x "./.claude/hooks/${hook}.sh"
@@ -583,6 +583,21 @@ if [ "$CLAUDE_CODE" = true ]; then
         if [ -f "$BASE_AGENT_OS/v3/scripts/test-skill-triggers.sh" ]; then
             copy_file "$BASE_AGENT_OS/v3/scripts/test-skill-triggers.sh" "./.claude/scripts/test-skill-triggers.sh" "$OVERWRITE_CLAUDE" "scripts/test-skill-triggers.sh"
             chmod +x "./.claude/scripts/test-skill-triggers.sh"
+        fi
+        # v5.5.0 Centralized error reporting, tmux progress dashboard, shared utilities
+        if [ -f "$BASE_AGENT_OS/v3/scripts/error-utils.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/error-utils.sh" "./.claude/scripts/error-utils.sh" "$OVERWRITE_CLAUDE" "scripts/error-utils.sh"
+            chmod +x "./.claude/scripts/error-utils.sh"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/tmux-monitor.sh" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/tmux-monitor.sh" "./.claude/scripts/tmux-monitor.sh" "$OVERWRITE_CLAUDE" "scripts/tmux-monitor.sh"
+            chmod +x "./.claude/scripts/tmux-monitor.sh"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/markdown-utils.js" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/markdown-utils.js" "./.claude/scripts/markdown-utils.js" "$OVERWRITE_CLAUDE" "scripts/markdown-utils.js"
+        fi
+        if [ -f "$BASE_AGENT_OS/v3/scripts/graph-utils.ts" ]; then
+            copy_file "$BASE_AGENT_OS/v3/scripts/graph-utils.ts" "./.claude/scripts/graph-utils.ts" "$OVERWRITE_CLAUDE" "scripts/graph-utils.ts"
         fi
 
         # Install memory/rules
