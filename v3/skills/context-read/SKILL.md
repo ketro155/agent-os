@@ -1,7 +1,7 @@
 ---
 name: context-read
-description: Retrieves offloaded context outputs from the scratch directory by ID or symlink. Use when you see "[Output offloaded]" pointer messages or need to view full agent output that was compressed for token efficiency. Use when user says "read output", "show offloaded", "context-read", or "view agent output".
-version: 1.0.0
+description: Retrieves offloaded context outputs from the scratch directory by ID or symlink. Use when you see "[Output offloaded]" pointer messages or need to view full agent output that was compressed for token efficiency. Use when user says "read output", "show offloaded", "context-read", or "view agent output". NOT for searching content across outputs (use /context-search). NOT for viewing statistics (use /context-stats).
+version: 1.1.0
 metadata:
   author: Agent OS
   category: context-management
@@ -14,6 +14,7 @@ Retrieves offloaded outputs from the scratch directory. When subagent outputs ex
 ## Usage
 
 ```
+/context-read                # List available outputs (last 20)
 /context-read <output_id>    # Read specific output by ID
 /context-read LATEST         # Read most recent output
 /context-read LATEST_phase2  # Read most recent output from phase2-implementation agent
@@ -36,13 +37,25 @@ Execute this bash command to read the output:
 ```bash
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 OUTPUT_ID="$1"  # Replace with actual argument
+OUTPUTS_DIR="$PROJECT_DIR/.agent-os/scratch/tool_outputs"
 
-if [ "$OUTPUT_ID" = "LATEST" ]; then
-  FILE="$PROJECT_DIR/.agent-os/scratch/tool_outputs/LATEST.txt"
-elif [[ "$OUTPUT_ID" == LATEST_* ]]; then
-  FILE="$PROJECT_DIR/.agent-os/scratch/tool_outputs/${OUTPUT_ID}.txt"
+# List mode: no argument provided
+if [ -z "$OUTPUT_ID" ]; then
+  echo "Available outputs (last 20):"
+  echo ""
+  if [ -f "$OUTPUTS_DIR/../index.jsonl" ]; then
+    tail -20 "$OUTPUTS_DIR/../index.jsonl" | jq -r '.id + " (" + .agent_type + ", " + (.size | tostring) + " bytes, " + .created_at + ")"'
+  else
+    echo "No outputs found. Index file does not exist."
+  fi
+  exit 0
+fi
+
+# Read mode: resolve file path
+if [[ "$OUTPUT_ID" == LATEST* ]]; then
+  FILE="$OUTPUTS_DIR/${OUTPUT_ID}.txt"
 else
-  FILE="$PROJECT_DIR/.agent-os/scratch/tool_outputs/${OUTPUT_ID}.txt"
+  FILE="$OUTPUTS_DIR/${OUTPUT_ID}.txt"
 fi
 
 if [ -f "$FILE" ]; then
@@ -51,8 +64,19 @@ else
   echo "Output not found: $OUTPUT_ID"
   echo ""
   echo "Available outputs:"
-  jq -r '.id + " (" + .agent_type + ", " + (.size | tostring) + " bytes, " + .created_at + ")"' "$PROJECT_DIR/.agent-os/scratch/index.jsonl" 2>/dev/null | tail -10
+  tail -10 "$OUTPUTS_DIR/../index.jsonl" 2>/dev/null | jq -r '.id + " (" + .agent_type + ", " + (.size | tostring) + " bytes, " + .created_at + ")"'
 fi
+```
+
+## List Mode Response Format
+
+When invoked without arguments, display the available outputs list:
+```
+Available outputs (last 20):
+
+phase2_20260112_143022_1768209940_exit0 (phase2-implementation, 2048 bytes, 2026-01-12T14:30:22Z)
+phase2_20260112_150415_1768209941_exit0 (phase2-implementation, 1536 bytes, 2026-01-12T15:04:15Z)
+...
 ```
 
 ## Response Format

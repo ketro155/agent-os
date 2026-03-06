@@ -1,12 +1,7 @@
 ---
 name: artifact-verification
-description: Verifies that predecessor task artifacts (files, exports, APIs) exist before dependent tasks begin. Use before starting tasks with dependencies or at wave boundaries in multi-wave execution. Use when user says "verify artifacts", "check dependencies", "are predecessors done", or "validate task outputs".
-version: 2.0.0
-auto_invoke:
-  - trigger: wave_boundary
-    condition: "new_wave_has_dependencies"
-  - trigger: task_start
-    condition: "task.blocked_by.length > 0"
+description: Verifies that predecessor task artifacts (files, exports, APIs) exist before dependent tasks begin. Use before starting tasks with dependencies or at wave boundaries in multi-wave execution. Use when user says "verify artifacts", "check dependencies", "are predecessors done", or "validate task outputs". NOT for verifying test results (use /test-guardian).
+version: 3.0.0
 metadata:
   author: Agent OS
   category: workflow-automation
@@ -14,7 +9,7 @@ metadata:
 
 # Artifact Verification Skill
 
-> **Note**: `auto_invoke` is a Claude Code extension for automatic skill triggering at specified workflow events.
+> **Note**: This skill is auto-invoked by `/execute-tasks` Step 6a at wave boundaries. It can also be invoked manually via `/artifact-verification`.
 
 Verify that predecessor task artifacts actually exist before proceeding with dependent work. This prevents hallucination of non-existent exports, files, or APIs.
 
@@ -22,6 +17,7 @@ Verify that predecessor task artifacts actually exist before proceeding with dep
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 3.0.0 | 2026-03-06 | Updated for v5.5.0 flat team orchestration; removed deprecated agent references; auto-invoked by /execute-tasks Step 6a |
 | 2.0.0 | 2026-01-10 | Added auto-invocation at wave boundaries, AST-based type verification, verifyExportTypes |
 | 1.0.0 | 2026-01-09 | Initial implementation with grep-based verification |
 
@@ -39,11 +35,11 @@ This skill is automatically invoked in two scenarios:
 
 ### 1. Wave Boundary Auto-Invocation
 
-When the execute-spec-orchestrator transitions between waves, this skill runs automatically:
+When `/execute-tasks` transitions between waves (TeamDelete → TeamCreate cycles), this skill runs automatically:
 
 ```javascript
-// In wave-orchestrator.md / execute-spec-orchestrator.md
-// Before spawning workers for wave N:
+// In /execute-tasks Step 6a (main session verification loop)
+// Before creating team for wave N:
 if (waveN.tasks.some(task => task.blocked_by.length > 0)) {
   // Auto-invoke artifact-verification
   const verificationResult = await invokeSkill('artifact-verification', {
@@ -61,10 +57,10 @@ if (waveN.tasks.some(task => task.blocked_by.length > 0)) {
 
 ### 2. Task Start Auto-Invocation
 
-When phase2-implementation starts a task with dependencies:
+When phase2-implementation (teammate mode) starts a task with dependencies:
 
 ```javascript
-// In phase2-implementation.md
+// In phase2-implementation (teammate mode)
 // At task start:
 if (task.blocked_by && task.blocked_by.length > 0) {
   // Auto-invoke artifact-verification

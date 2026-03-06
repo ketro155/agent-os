@@ -1,7 +1,7 @@
 ---
 name: subtask-expansion
 description: Generates TDD-structured subtasks (RED-GREEN-VERIFY) for a parent task based on keyword complexity analysis. Use during /execute-tasks when a task has needs_subtask_expansion or when phase1-discovery encounters tasks without subtasks. Use when user says "expand task", "generate subtasks", "break down task", or "subtask expansion".
-version: 1.0.0
+version: 1.1.0
 metadata:
   author: Agent OS
   category: workflow-automation
@@ -87,6 +87,16 @@ function analyzeKeywords(description) {
   return "LOW";
 }
 ```
+
+### LLM Override Guidance
+
+The keyword heuristic above is a starting point, not the final word. Priority order for complexity determination:
+
+1. **`complexity_override`** (explicit in task definition) — always wins
+2. **LLM contextual judgment** — if you recognize that "add distributed caching layer" is HIGH despite the "add" keyword, override the heuristic
+3. **Keyword analysis** (above) — fallback when no override and no strong contextual signal
+
+When overriding the keyword result, set `complexity_source: "llm_judgment"` and include a `reasoning` field explaining why (e.g., "keyword 'add' suggests LOW but the scope involves distributed systems coordination, upgrading to HIGH").
 
 ### Step 3: Additional Complexity Factors
 

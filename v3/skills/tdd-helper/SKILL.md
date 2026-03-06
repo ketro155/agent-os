@@ -1,7 +1,7 @@
 ---
 name: tdd-helper
-description: Guides implementation through the Test-Driven Development RED-GREEN-REFACTOR cycle with proper test structure, naming conventions, and anti-pattern avoidance. Use when starting new feature implementation, fixing bugs test-first, or refactoring existing code. Use when user says "help with TDD", "red green refactor", "write tests first", or "test-driven development guide".
-version: 1.0.0
+description: Guides implementation through the Test-Driven Development RED-GREEN-REFACTOR cycle with proper test structure, naming conventions, and anti-pattern avoidance. Use when starting new feature implementation, fixing bugs test-first, or refactoring existing code. Use when user says "help with TDD", "red green refactor", "write tests first", or "test-driven development guide". NOT for classifying test failures (use /test-guardian).
+version: 2.0.0
 metadata:
   author: Agent OS
   category: testing
@@ -108,6 +108,20 @@ npm test -- --grep "validateEmail"
 
 Expected: GREEN (still passing)
 
+## Test Runner Auto-Detection
+
+Detect the project's test runner before running commands:
+
+| Signal | Runner | Command |
+|--------|--------|---------|
+| `vitest.config.*` or `vitest` in package.json | Vitest | `npx vitest run` |
+| `jest.config.*` or `jest` in package.json | Jest | `npx jest` |
+| `.mocharc.*` or `mocha` in package.json | Mocha | `npx mocha` |
+| `playwright.config.*` | Playwright | `npx playwright test` |
+| None detected | Fallback | `npm test` |
+
+See `references/tdd-implementation-guide.md` for full runner detection logic and configuration patterns.
+
 ## Test Structure Guidelines
 
 ### Naming Convention
@@ -153,25 +167,29 @@ it('should calculate total with tax', () => {
 
 ## Integration with Agent OS
 
-### Before Implementation
+### Commit Conventions by TDD Phase
 
-1. Read task requirements
-2. Identify test scenarios
-3. Write test file first
-4. Commit: `test: add tests for [feature]`
+| TDD Phase | Commit Prefix | Example |
+|-----------|---------------|---------|
+| RED (failing test) | `test:` | `test: add validation tests for email input` |
+| GREEN (make pass) | `feat:` or `fix:` | `feat: implement email validation` |
+| REFACTOR (improve) | `refactor:` | `refactor: extract email regex to constant` |
 
-### During Implementation
+### Subtask Execution Awareness
 
-1. Run tests frequently
-2. One test at a time
-3. Commit when GREEN: `feat: implement [feature]`
+- **Sequential** (≤4 subtasks): Execute one at a time, commit after each
+- **Batched** (>4 subtasks): Group related RED-GREEN pairs, commit per pair
+- **Parallel groups**: Each teammate handles independent task; coordinate via SendMessage
 
-### After Implementation
+### Context Pressure Response
 
-1. Run full test suite
-2. Check coverage
-3. Refactor if needed
-4. Commit: `refactor: improve [feature]`
+When context offloading exceeds ~100KB (check via `/context-stats`), invoke `/context-summary` to compress before continuing TDD cycles. This prevents context loss during long implementation sessions.
+
+### Cross-References
+
+- Full TDD workflow rules: `rules/tdd-workflow.md`
+- Runner detection and test patterns: `references/tdd-implementation-guide.md`
+- Test failure classification: `/test-guardian`
 
 ## Anti-Patterns to Avoid
 

@@ -1,7 +1,7 @@
 ---
 name: log-entry
 description: Adds an entry to the Agent OS project memory logs for cross-session continuity, supporting decisions, implementations, and insights. Use after significant architectural choices, major code changes, or when a learning or pattern emerges. Use when user says "log this decision", "record this insight", "document this implementation", or "add log entry".
-version: 1.1.0
+version: 1.2.0
 metadata:
   author: Agent OS
   category: documentation
@@ -61,7 +61,43 @@ Based on type, collect the required information:
 
 ### 3. Format and Append
 
-Format the entry using the template from the appropriate log file and append it.
+Format the entry using the templates below and append above the `<!-- Add new ... -->` marker in the log file.
+
+**Decision template** (for `decisions-log.md`):
+```markdown
+### [YYYY-MM-DD] Title
+**Session**: ${CLAUDE_SESSION_ID}
+**Context**: What prompted this decision?
+**Options Considered**:
+1. Option A — [brief description]
+2. Option B — [brief description]
+**Decision**: Which option was chosen
+**Rationale**: Why this option was selected
+**Consequences**: What this means going forward
+**Related**: Links to specs, tasks, or code
+```
+
+**Implementation template** (for `implementation-log.md`):
+```markdown
+### [YYYY-MM-DD] Title
+**Session**: ${CLAUDE_SESSION_ID}
+**Spec/Task**: Reference to spec or task ID
+**Files Changed**: List of modified files
+**Summary**: What was implemented
+**Why**: Motivation for the approach
+**Gotchas**: Tricky parts or non-obvious decisions
+**Future Work**: What's left or could be improved
+```
+
+**Insight template** (for `insights.md`):
+```markdown
+### [YYYY-MM-DD] Title
+**Session**: ${CLAUDE_SESSION_ID}
+**Category**: Pattern | Anti-pattern | Idea | Learning
+**Source**: Where this insight came from
+**Insight**: The actual learning or pattern
+**Application**: How to apply this in future work
+```
 
 ### 4. Log File Locations
 

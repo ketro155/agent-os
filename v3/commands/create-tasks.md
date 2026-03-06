@@ -139,21 +139,17 @@ Add `correctness_criteria` and `failure_prevention` to implementation tasks:
 1. Does the implementation address the `correctness_criteria` claims?
 2. Are `failure_prevention` scenarios handled (error paths, edge cases)?
 
-### Step 1: Create tasks.md and tasks.json (writing-plans + tdd skills)
+### Step 1: Create tasks.md and tasks.json
 
-Use the writing-plans skill to create detailed micro-tasks and the tdd skill to enforce test-first structure. Generate both human-readable (tasks.md) and machine-readable (tasks.json) formats.
+Create detailed micro-tasks with test-first structure. Generate both human-readable (tasks.md) and machine-readable (tasks.json) formats.
 
 **Core Principle:** DOCUMENT EVERYTHING THE EXECUTOR NEEDS TO KNOW
 
-**Writing Plans Approach:**
-```
-ACTION: writing-plans skill structures task breakdown
-WORKFLOW:
-  1. Break down hierarchically: Feature → Components → Tasks → Subtasks
-  2. Each subtask should be 2-5 minutes of focused work
-  3. Include exact file paths and complete code examples
-  4. Follow TDD structure for each task
-```
+**Task Breakdown Approach:**
+1. Break down hierarchically: Feature → Components → Tasks → Subtasks
+2. Each subtask should be 2-5 minutes of focused work
+3. Include exact file paths and complete code examples
+4. Follow TDD structure for each task
 
 **TDD Task Structure (tdd skill):**
 ```

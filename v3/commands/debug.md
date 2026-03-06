@@ -24,7 +24,7 @@ Unified debugging command with automatic context detection and Explore agent int
 | Feature | Tool | Purpose |
 |---------|------|---------|
 | **Explore Agent** | `Task` with `subagent_type='Explore'` | Comprehensive root cause investigation |
-| **systematic-debugging** | skill (auto-invokes) | 4-phase root cause analysis |
+| **Systematic Investigation** | built-in (Step 4) | 4-phase root cause analysis |
 | **pre-commit-gate** | hook | Validates fix before commit |
 | **generateReproScript** | function (v4.9.0) | Creates reproducible test scripts |
 
@@ -76,7 +76,7 @@ PROMPT: "Investigate issue in codebase:
 
 ### 4. Systematic Investigation
 
-systematic-debugging skill auto-invokes with Explore results:
+Perform systematic investigation using Explore results:
 
 **Phase 1: Root Cause Investigation**
 - Read error messages and stack traces

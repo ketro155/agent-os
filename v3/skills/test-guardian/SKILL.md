@@ -1,6 +1,6 @@
 ---
 name: test-guardian
-description: Analyzes test failures and classifies them as FLAKY, BROKEN, or NEW based on historical test results, then recommends retry, fix, or quarantine actions. Use when tests fail during Phase 2 implementation, E2E scenarios fail intermittently, or you suspect flakiness. Use when user says "classify test failure", "is this test flaky", "analyze failing tests", or "test guardian".
+description: Analyzes test failures and classifies them as FLAKY, BROKEN, or NEW based on historical test results, then recommends retry, fix, or quarantine actions. Use when tests fail during Phase 2 implementation, E2E scenarios fail intermittently, or you suspect flakiness. Use when user says "classify test failure", "is this test flaky", "analyze failing tests", or "test guardian". NOT for guiding TDD implementation cycle (use /tdd-helper).
 version: 1.0.0
 context: fork
 metadata:

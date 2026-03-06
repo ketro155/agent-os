@@ -1,7 +1,7 @@
 ---
 name: context-summary
 description: Compresses the current working context into a structured summary for handoff to subagents, session recovery, or wave transitions. Use before spawning subagents, ending sessions, or when the context window is filling up. Use when user says "summarize context", "prepare handoff", "compress session", or "context summary". NOT for viewing offloaded outputs (use /context-read).
-version: 1.0.0
+version: 1.1.0
 context: fork
 metadata:
   author: Agent OS
@@ -19,7 +19,7 @@ Compress current working context into a structured summary for handoff to subage
 - Before spawning a subagent that needs current context
 - At session end for cross-session continuity
 - When context window is filling up
-- Before wave transitions in multi-wave execution
+- Before team transitions (TeamDelete → TeamCreate cycles) in multi-wave execution
 
 ## Summary Structure
 
@@ -130,10 +130,12 @@ Target these compression levels:
 - [question needing user input]
 ```
 
-### For Wave Transition
+### For Team Transition (v5.5.0)
 
 ```markdown
 ## Wave [N] Complete → Wave [N+1]
+
+**Team Status**: TeamDelete completed, ready for TeamCreate("wave-[N+1]")
 
 **Wave [N] Deliverables**:
 - [artifact 1] at [path]
