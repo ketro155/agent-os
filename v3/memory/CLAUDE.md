@@ -5,7 +5,7 @@
 
 ## Overview
 
-Agent OS is a development framework for structured AI-assisted workflows with hooks, subagents, skills, and dependency-first task execution. Key capabilities: deterministic validation hooks, 14 hooks (5 new in v5.5.0), native subagents with four-tier security, 10 hot-reload skills, dependency-first tasks v4.0 with computed waves, flat team orchestration with split-pane visibility, and two-tier code review (Sonnet real-time + Opus deep analysis).
+Agent OS is a development framework for structured AI-assisted workflows with hooks, subagents, skills, and dependency-first task execution. Key capabilities: deterministic validation hooks, 14 hooks (5 new in v5.5.0), native subagents with four-tier security, 11 hot-reload skills, dependency-first tasks v4.0 with computed waves, flat team orchestration with split-pane visibility, and two-tier code review (Sonnet real-time + Opus deep analysis).
 
 ## Core Workflows
 
@@ -132,6 +132,7 @@ AGENT_OS_SCRATCH_MAX_MB=250    # Scratch cleanup threshold
 | Skill | Invocation | Purpose |
 |-------|------------|---------|
 | artifact-verification | `/artifact-verification` | Verify predecessor task outputs |
+| brainstorming | `/brainstorming` | Generate approaches with trade-off analysis |
 | context-summary | `/context-summary` | Compress context for handoff |
 | context-read | `/context-read <id>` | Retrieve offloaded output |
 | context-search | `/context-search <term>` | Search offloaded outputs |

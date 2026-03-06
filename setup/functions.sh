@@ -299,6 +299,7 @@ install_v3_from_github() {
     mkdir -p "./.claude/scripts"
     mkdir -p "./.claude/rules"
     mkdir -p "./.claude/skills/artifact-verification"
+    mkdir -p "./.claude/skills/brainstorming"
     mkdir -p "./.claude/skills/context-summary"
     mkdir -p "./.claude/skills/tdd-helper"
     mkdir -p "./.claude/skills/subtask-expansion"
@@ -408,7 +409,7 @@ install_v3_from_github() {
     # Download skills
     echo ""
     echo "  📂 Skills:"
-    for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
+    for skill in artifact-verification brainstorming context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
         download_file "${BASE_URL}/v3/skills/${skill}/SKILL.md" \
             "./.claude/skills/${skill}/SKILL.md" \
             "$overwrite" \

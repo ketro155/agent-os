@@ -445,6 +445,7 @@ if [ "$CLAUDE_CODE" = true ]; then
     create_tracked_dir "./.claude/rules"
     create_tracked_dir "./.claude/skills"
     create_tracked_dir "./.claude/skills/artifact-verification"
+    create_tracked_dir "./.claude/skills/brainstorming"
     create_tracked_dir "./.claude/skills/context-summary"
     create_tracked_dir "./.claude/skills/tdd-helper"
     create_tracked_dir "./.claude/skills/subtask-expansion"
@@ -625,7 +626,7 @@ if [ "$CLAUDE_CODE" = true ]; then
         # Install skills (v4.9.0 - hot-reloadable patterns, v4.10.0 - context offloading)
         echo ""
         echo "  📂 Skills:"
-        for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
+        for skill in artifact-verification brainstorming context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
             if [ -f "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" ]; then
                 copy_file "$BASE_AGENT_OS/v3/skills/${skill}/SKILL.md" "./.claude/skills/${skill}/SKILL.md" "$OVERWRITE_CLAUDE" "skills/${skill}/SKILL.md"
             fi

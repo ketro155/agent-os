@@ -8,7 +8,7 @@
 set -e  # Exit on error
 
 # Version information
-AGENT_OS_VERSION="5.5.0"
+AGENT_OS_VERSION="5.5.1"
 AGENT_OS_RELEASE_DATE="2026-03-06"
 
 # Initialize flags
@@ -97,6 +97,7 @@ mkdir -p "$INSTALL_DIR/v3/scripts"
 mkdir -p "$INSTALL_DIR/v3/memory/rules"
 mkdir -p "$INSTALL_DIR/v3/schemas"
 mkdir -p "$INSTALL_DIR/v3/skills/artifact-verification"
+mkdir -p "$INSTALL_DIR/v3/skills/brainstorming"
 mkdir -p "$INSTALL_DIR/v3/skills/context-summary"
 mkdir -p "$INSTALL_DIR/v3/skills/tdd-helper"
 mkdir -p "$INSTALL_DIR/v3/skills/subtask-expansion"
@@ -253,7 +254,7 @@ done
 
 echo ""
 echo "  📂 v3 Skills:"
-for skill in artifact-verification context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
+for skill in artifact-verification brainstorming context-summary tdd-helper subtask-expansion log-entry context-read context-search context-stats test-guardian tmux-monitor; do
     download_file "${BASE_URL}/v3/skills/${skill}/SKILL.md" \
         "$INSTALL_DIR/v3/skills/${skill}/SKILL.md" \
         "$OVERWRITE_COMMANDS" \
@@ -346,7 +347,7 @@ echo "   $INSTALL_DIR/v3/agents/             - Agent templates (20 agents + 3 re
 echo "   $INSTALL_DIR/v3/hooks/              - Native hooks (9 hooks)"
 echo "   $INSTALL_DIR/v3/scripts/            - Utility scripts (19 scripts)"
 echo "   $INSTALL_DIR/v3/memory/             - Memory templates + rules (13 files)"
-echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (10 skills)"
+echo "   $INSTALL_DIR/v3/skills/             - Hot-reloadable skills (11 skills)"
 echo "   $INSTALL_DIR/v3/templates/          - Spec, task, test templates"
 echo "   $INSTALL_DIR/standards/             - Development standards"
 echo "   $INSTALL_DIR/config.yml             - Configuration"
