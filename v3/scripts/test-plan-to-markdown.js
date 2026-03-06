@@ -9,8 +9,7 @@
  * Usage: node test-plan-to-markdown.js <test-plan.json path>
  */
 
-const fs = require('fs');
-const path = require('path');
+const { formatDuration, runCli } = require('./markdown-utils');
 
 function generateMarkdown(planJson) {
   const {
@@ -240,14 +239,6 @@ function getPriorityIcon(priority) {
   return icons[priority] || '⚪';
 }
 
-function formatDuration(seconds) {
-  if (!seconds) return 'N/A';
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-}
-
 function stepToDescription(step) {
   switch (step.action) {
     case 'navigate':
@@ -271,30 +262,4 @@ function stepToDescription(step) {
   }
 }
 
-// Main execution
-function main() {
-  const jsonPath = process.argv[2];
-
-  if (!jsonPath) {
-    console.error('Usage: test-plan-to-markdown.js <test-plan.json path>');
-    process.exit(1);
-  }
-
-  if (!fs.existsSync(jsonPath)) {
-    console.error(`File not found: ${jsonPath}`);
-    process.exit(1);
-  }
-
-  try {
-    const planJson = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-    const markdown = generateMarkdown(planJson);
-    const mdPath = jsonPath.replace('.json', '.md');
-    fs.writeFileSync(mdPath, markdown);
-    console.log(`Generated: ${mdPath}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
-}
-
-main();
+runCli('test-plan-to-markdown.js', generateMarkdown);

@@ -210,7 +210,7 @@ done
 
 echo ""
 echo "  📂 v3 Hooks:"
-for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle; do
+for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle pre-compact stop user-prompt-submit post-tool-failure; do
     download_file "${BASE_URL}/v3/hooks/${hook}.sh" \
         "$INSTALL_DIR/v3/hooks/${hook}.sh" \
         "$OVERWRITE_COMMANDS" \
@@ -220,14 +220,14 @@ done
 
 echo ""
 echo "  📂 v3 Scripts:"
-for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh test-skill-triggers.sh; do
+for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh test-skill-triggers.sh error-utils.sh tmux-monitor.sh; do
     download_file "${BASE_URL}/v3/scripts/${script}" \
         "$INSTALL_DIR/v3/scripts/${script}" \
         "$OVERWRITE_COMMANDS" \
         "v3/scripts/${script}"
     chmod +x "$INSTALL_DIR/v3/scripts/${script}" 2>/dev/null || true
 done
-for script in json-to-markdown.js test-plan-to-markdown.js test-report-to-markdown.js ast-verify.ts wave-parallel.ts verification-loop.ts e2e-utils.ts test-patterns.ts compute-waves.ts migrate-v3-to-v4.js; do
+for script in json-to-markdown.js test-plan-to-markdown.js test-report-to-markdown.js markdown-utils.js ast-verify.ts wave-parallel.ts verification-loop.ts e2e-utils.ts test-patterns.ts compute-waves.ts graph-utils.ts migrate-v3-to-v4.js; do
     download_file "${BASE_URL}/v3/scripts/${script}" \
         "$INSTALL_DIR/v3/scripts/${script}" \
         "$OVERWRITE_COMMANDS" \

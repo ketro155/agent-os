@@ -351,10 +351,10 @@ install_v3_from_github() {
             "agents/references/${ref}.md"
     done
 
-    # Download hooks (9 hooks)
+    # Download hooks (13 hooks)
     echo ""
     echo "  📂 Hooks:"
-    for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle; do
+    for hook in session-start session-end post-file-change pre-commit-gate subagent-start subagent-stop setup task-completed teammate-idle pre-compact stop user-prompt-submit post-tool-failure; do
         download_file "${BASE_URL}/v3/hooks/${hook}.sh" \
             "./.claude/hooks/${hook}.sh" \
             "$overwrite" \
@@ -365,14 +365,14 @@ install_v3_from_github() {
     # Download scripts
     echo ""
     echo "  📂 Scripts:"
-    for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh test-skill-triggers.sh; do
+    for script in task-operations.sh pr-review-operations.sh branch-setup.sh execute-spec-operations.sh test-operations.sh redact-secrets.sh code-review-ops.sh test-skill-triggers.sh error-utils.sh tmux-monitor.sh; do
         download_file "${BASE_URL}/v3/scripts/${script}" \
             "./.claude/scripts/${script}" \
             "$overwrite" \
             "scripts/${script}"
         chmod +x "./.claude/scripts/${script}" 2>/dev/null || true
     done
-    for script in json-to-markdown.js test-plan-to-markdown.js test-report-to-markdown.js ast-verify.ts wave-parallel.ts verification-loop.ts e2e-utils.ts test-patterns.ts compute-waves.ts migrate-v3-to-v4.js; do
+    for script in json-to-markdown.js test-plan-to-markdown.js test-report-to-markdown.js markdown-utils.js ast-verify.ts wave-parallel.ts verification-loop.ts e2e-utils.ts test-patterns.ts compute-waves.ts graph-utils.ts migrate-v3-to-v4.js; do
         download_file "${BASE_URL}/v3/scripts/${script}" \
             "./.claude/scripts/${script}" \
             "$overwrite" \

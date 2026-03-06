@@ -12,21 +12,19 @@
  */
 
 import * as fs from 'fs';
+import { kahnTopologicalSort, groupByDepth, GraphNode } from './graph-utils';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface TaskV4 {
-  id: string;
+interface TaskV4 extends GraphNode {
   task_type: string;
   description: string;
   status: string;
-  depends_on: string[];
   isolation_score?: number;
   shared_files?: string[];
   subtasks?: string[];
-  parent?: string;
 }
 
 interface ComputedWave {
@@ -52,79 +50,31 @@ interface ComputedSection {
 export function computeWaves(tasks: TaskV4[]): ComputedSection {
   // Filter to top-level tasks (exclude subtasks)
   const topLevel = tasks.filter(t => !t.parent);
-
-  // Build dependency graph and in-degree map
-  const graph: Record<string, string[]> = {};
-  const inDegree: Record<string, number> = {};
   const taskMap = new Map(topLevel.map(t => [t.id, t]));
 
-  for (const task of topLevel) {
-    graph[task.id] = task.depends_on.filter(d => taskMap.has(d));
-    inDegree[task.id] = graph[task.id].length;
+  // Run Kahn's algorithm via shared utility
+  const result = kahnTopologicalSort(tasks);
+
+  // Warn on cycles
+  if (result.unprocessed.length > 0) {
+    console.warn(`Circular dependency detected. Unprocessed tasks: ${result.unprocessed.join(', ')}`);
   }
 
-  // Kahn's algorithm: assign depth to each task
-  const depth: Record<string, number> = {};
-  const queue: string[] = [];
+  // Group by depth into waves
+  const waveGroups = groupByDepth(result.depths);
 
-  // Seed queue with zero in-degree tasks
-  for (const task of topLevel) {
-    if (inDegree[task.id] === 0) {
-      queue.push(task.id);
-      depth[task.id] = 0;
-    }
-  }
+  const waves: ComputedWave[] = waveGroups.map(({ depth: d, tasks: taskIds }) => {
+    const waveTasks = taskIds.map(id => taskMap.get(id)!);
+    const implTasks = waveTasks.filter(t => t.task_type === 'implementation');
+    const canParallel = taskIds.length > 1 && implTasks.every(t => (t.isolation_score ?? 1.0) >= 0.8);
 
-  let processed = 0;
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    processed++;
-
-    // Find tasks that depend on current
-    for (const task of topLevel) {
-      if (graph[task.id].includes(current)) {
-        // Update depth: max of current depth + 1
-        depth[task.id] = Math.max(depth[task.id] || 0, depth[current] + 1);
-        inDegree[task.id]--;
-        if (inDegree[task.id] === 0) {
-          queue.push(task.id);
-        }
-      }
-    }
-  }
-
-  // Check for cycles
-  if (processed < topLevel.length) {
-    const unprocessed = topLevel.filter(t => depth[t.id] === undefined).map(t => t.id);
-    console.warn(`Circular dependency detected. Unprocessed tasks: ${unprocessed.join(', ')}`);
-    // Assign max depth + 1 to unprocessed
-    const maxDepth = Math.max(0, ...Object.values(depth));
-    for (const id of unprocessed) {
-      depth[id] = maxDepth + 1;
-    }
-  }
-
-  // Group by depth → waves
-  const waveMap = new Map<number, string[]>();
-  for (const [id, d] of Object.entries(depth)) {
-    if (!waveMap.has(d)) waveMap.set(d, []);
-    waveMap.get(d)!.push(id);
-  }
-
-  const waves: ComputedWave[] = Array.from(waveMap.entries())
-    .sort(([a], [b]) => a - b)
-    .map(([d, taskIds]) => {
-      const waveTasks = taskIds.map(id => taskMap.get(id)!);
-      const implTasks = waveTasks.filter(t => t.task_type === 'implementation');
-      const canParallel = taskIds.length > 1 && implTasks.every(t => (t.isolation_score ?? 1.0) >= 0.8);
-
-      return {
-        depth: d,
-        tasks: taskIds,
-        label: inferWaveLabel(waveTasks),
-        parallel: canParallel
-      };
-    });
+    return {
+      depth: d,
+      tasks: taskIds,
+      label: inferWaveLabel(waveTasks),
+      parallel: canParallel
+    };
+  });
 
   // Compute statistics
   const implCount = topLevel.filter(t => t.task_type === 'implementation').length;
@@ -138,7 +88,7 @@ export function computeWaves(tasks: TaskV4[]): ComputedSection {
 
   return {
     waves,
-    dependency_graph: graph,
+    dependency_graph: result.graph,
     max_concurrent_workers: maxConcurrent,
     estimated_parallel_speedup: speedup,
     total_implementation_tasks: implCount,

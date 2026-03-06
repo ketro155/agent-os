@@ -11,6 +11,7 @@
  */
 
 const fs = require('fs');
+const { getTaskStatusIcon, formatTimestamp, generateProgressBar, runCli } = require('./markdown-utils');
 
 // ============================================================================
 // Task type icons (v4.0)
@@ -71,7 +72,7 @@ function generateMarkdownV4(tasksJson) {
         const t = tasks.find(tt => tt.id === id);
         if (!t) return id;
         const icon = getTypeIcon(t.task_type);
-        const status = getStatusIcon(t.status);
+        const status = getTaskStatusIcon(t.status);
         return `${icon}${icon ? ' ' : ''}${id} ${status}`.trim();
       });
       const parallelTag = wave.parallel ? ' [parallel]' : '';
@@ -108,7 +109,7 @@ function generateMarkdownV4(tasksJson) {
     lines.push('|----|------|-------------|--------|------------|----------|');
     for (const t of infraTasks) {
       const icon = getTypeIcon(t.task_type);
-      const status = `${getStatusIcon(t.status)} ${t.status}`;
+      const status = `${getTaskStatusIcon(t.status)} ${t.status}`;
       const deps = (t.depends_on || []).join(', ') || '-';
       const assign = t.auto_assign || '-';
       lines.push(`| ${icon} ${t.id} | ${t.task_type} | ${t.description} | ${status} | ${deps} | ${assign} |`);
@@ -124,7 +125,7 @@ function generateMarkdownV4(tasksJson) {
   lines.push('');
 
   for (const parent of [...implParents, ...implStandalone]) {
-    const statusIcon = getStatusIcon(parent.status);
+    const statusIcon = getTaskStatusIcon(parent.status);
     const progressBar = generateProgressBar(parent.progress_percent || 0);
 
     lines.push(`### Task ${parent.id}: ${parent.description}`);
@@ -141,10 +142,10 @@ function generateMarkdownV4(tasksJson) {
       lines.push(`**Depends On**: ${parent.depends_on.join(', ')}`);
     }
     if (parent.started_at) {
-      lines.push(`**Started**: ${formatDate(parent.started_at)}`);
+      lines.push(`**Started**: ${formatTimestamp(parent.started_at)}`);
     }
     if (parent.completed_at) {
-      lines.push(`**Completed**: ${formatDate(parent.completed_at)}${parent.duration_minutes ? ` (${parent.duration_minutes} min)` : ''}`);
+      lines.push(`**Completed**: ${formatTimestamp(parent.completed_at)}${parent.duration_minutes ? ` (${parent.duration_minutes} min)` : ''}`);
     }
     if (parent.blocker) {
       lines.push(`**Blocker**: ${parent.blocker}`);
@@ -297,7 +298,7 @@ function generateMarkdownV3(tasksJson) {
   const parentTasks = tasks.filter(t => t.type === 'parent');
 
   for (const parent of parentTasks) {
-    const statusIcon = getStatusIcon(parent.status);
+    const statusIcon = getTaskStatusIcon(parent.status);
     const progressBar = generateProgressBar(parent.progress_percent || 0);
 
     lines.push(`### Task ${parent.id}: ${parent.description}`);
@@ -305,10 +306,10 @@ function generateMarkdownV3(tasksJson) {
     lines.push(`**Status**: ${statusIcon} ${parent.status} ${progressBar}`);
 
     if (parent.started_at) {
-      lines.push(`**Started**: ${formatDate(parent.started_at)}`);
+      lines.push(`**Started**: ${formatTimestamp(parent.started_at)}`);
     }
     if (parent.completed_at) {
-      lines.push(`**Completed**: ${formatDate(parent.completed_at)} (${parent.duration_minutes} min)`);
+      lines.push(`**Completed**: ${formatTimestamp(parent.completed_at)} (${parent.duration_minutes} min)`);
     }
     if (parent.blocker) {
       lines.push(`**Blocker**: ${parent.blocker}`);
@@ -360,33 +361,6 @@ function generateMarkdownV3(tasksJson) {
   return lines.join('\n');
 }
 
-// ============================================================================
-// Shared utilities
-// ============================================================================
-
-function getStatusIcon(status) {
-  const icons = {
-    'pending': '\u23F3',
-    'in_progress': '\uD83D\uDD04',
-    'pass': '\u2705',
-    'blocked': '\uD83D\uDEAB',
-    'skipped': '\u23ED\uFE0F'
-  };
-  return icons[status] || '\u2753';
-}
-
-function generateProgressBar(percent) {
-  const filled = Math.round(percent / 10);
-  const empty = 10 - filled;
-  return `[${'█'.repeat(filled)}${'░'.repeat(empty)}] ${percent}%`;
-}
-
-function formatDate(isoDate) {
-  if (!isoDate) return 'N/A';
-  const date = new Date(isoDate);
-  return date.toLocaleString();
-}
-
 function getWaveStatus(taskIds, tasks) {
   const waveTasks = tasks.filter(t => taskIds.includes(t.id));
   const completed = waveTasks.filter(t => t.status === 'pass').length;
@@ -401,48 +375,20 @@ function getWaveStatus(taskIds, tasks) {
 // Main
 // ============================================================================
 
-function main() {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0) {
-    console.error('Usage: json-to-markdown.js <tasks.json path>');
-    process.exit(1);
+// Route to correct renderer based on version
+function generate(tasksJson) {
+  if (tasksJson.version && tasksJson.version.startsWith('4')) {
+    return generateMarkdownV4(tasksJson);
+  } else if (tasksJson.version && tasksJson.version.startsWith('3')) {
+    return generateMarkdownV3(tasksJson);
   }
-
-  const jsonPath = args[0];
-
-  if (!fs.existsSync(jsonPath)) {
-    console.error(`File not found: ${jsonPath}`);
-    process.exit(1);
-  }
-
-  try {
-    const jsonContent = fs.readFileSync(jsonPath, 'utf8');
-    const tasksJson = JSON.parse(jsonContent);
-
-    // Route to correct renderer based on version
-    let markdown;
-    if (tasksJson.version && tasksJson.version.startsWith('4')) {
-      markdown = generateMarkdownV4(tasksJson);
-    } else if (tasksJson.version && tasksJson.version.startsWith('3')) {
-      markdown = generateMarkdownV3(tasksJson);
-    } else {
-      console.log(`Skipping: Unsupported version ${tasksJson.version || 'unknown'}`);
-      process.exit(0);
-    }
-
-    const mdPath = jsonPath.replace('.json', '.md');
-    fs.writeFileSync(mdPath, markdown);
-
-    tasksJson.markdown_generated = new Date().toISOString();
-    fs.writeFileSync(jsonPath, JSON.stringify(tasksJson, null, 2));
-
-    console.log(`Generated: ${mdPath}`);
-
-  } catch (error) {
-    console.error(`Error processing ${jsonPath}: ${error.message}`);
-    process.exit(1);
-  }
+  console.log(`Skipping: Unsupported version ${tasksJson.version || 'unknown'}`);
+  process.exit(0);
 }
 
-main();
+runCli('json-to-markdown.js', generate, {
+  postWrite: (jsonPath, json) => {
+    json.markdown_generated = new Date().toISOString();
+    fs.writeFileSync(jsonPath, JSON.stringify(json, null, 2));
+  }
+});

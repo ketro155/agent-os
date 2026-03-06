@@ -13,6 +13,7 @@
  */
 
 import * as fs from 'fs';
+import { buildDependencyGraph as buildGraph, hasCrossDependency } from './graph-utils';
 
 // ============================================================================
 // Types
@@ -142,48 +143,24 @@ export function identifyParallelWaves(
 }
 
 /**
- * Check if a task group has dependencies on another group
+ * Check if a task group has dependencies on another group.
+ * Delegates to shared graph-utils; re-exported for backward compatibility.
  */
 export function hasDependencyOnGroup(
   groupA: string[],
   groupB: string[],
   dependencyGraph: Record<string, string[]>
 ): boolean {
-  for (const taskId of groupA) {
-    const deps = dependencyGraph[taskId] || [];
-    for (const dep of deps) {
-      if (groupB.includes(dep)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return hasCrossDependency(groupA, groupB, dependencyGraph);
 }
 
 /**
  * Build dependency graph from tasks.json structure.
  * Supports v3.0 (parallelization.blocked_by) and v4.0 (depends_on).
+ * Delegates to shared graph-utils; re-exported for backward compatibility.
  */
 export function buildDependencyGraph(tasks: (Task | TaskV4)[], version?: string): Record<string, string[]> {
-  const graph: Record<string, string[]> = {};
-
-  if (version && version.startsWith('4')) {
-    // v4.0: read depends_on directly, filter to top-level tasks
-    for (const task of tasks as TaskV4[]) {
-      if (!task.parent) {
-        graph[task.id] = task.depends_on || [];
-      }
-    }
-  } else {
-    // v3.0: read from parallelization.blocked_by
-    for (const task of tasks as Task[]) {
-      if (task.type === 'parent') {
-        graph[task.id] = task.parallelization?.blocked_by || [];
-      }
-    }
-  }
-
-  return graph;
+  return buildGraph(tasks, version);
 }
 
 /**

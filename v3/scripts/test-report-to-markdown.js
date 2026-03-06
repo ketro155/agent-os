@@ -9,8 +9,7 @@
  * Usage: node test-report-to-markdown.js <test-report.json path>
  */
 
-const fs = require('fs');
-const path = require('path');
+const { getTestStatusIcon, formatTimestamp, formatDuration, formatMilliseconds, truncate, runCli } = require('./markdown-utils');
 
 function generateMarkdown(reportJson) {
   const {
@@ -32,9 +31,9 @@ function generateMarkdown(reportJson) {
   lines.push(`# Test Report: ${plan_name}`);
   lines.push('');
   lines.push(`> **Auto-generated from test-report.json** - Do not edit directly`);
-  lines.push(`> Executed: ${formatDateTime(executed_at)}`);
+  lines.push(`> Executed: ${formatTimestamp(executed_at)}`);
   if (completed_at) {
-    lines.push(`> Completed: ${formatDateTime(completed_at)}`);
+    lines.push(`> Completed: ${formatTimestamp(completed_at)}`);
   }
   lines.push('');
 
@@ -220,7 +219,7 @@ function generateMarkdown(reportJson) {
     lines.push('| Scenario | Status | Evidence Folder |');
     lines.push('|----------|--------|-----------------|');
     for (const s of scenariosWithEvidence) {
-      const statusIcon = getStatusIcon(s.status);
+      const statusIcon = getTestStatusIcon(s.status);
       lines.push(`| ${s.id} | ${statusIcon} ${s.status} | [${s.evidence_folder}](${s.evidence_folder}) |`);
     }
     lines.push('');
@@ -258,68 +257,4 @@ function getStatusBanner(summary) {
   return '## ⏳ Tests In Progress';
 }
 
-function getStatusIcon(status) {
-  const icons = {
-    passed: '✅',
-    failed: '❌',
-    error: '💥',
-    skipped: '⏭️',
-    pending: '⏳'
-  };
-  return icons[status] || '❓';
-}
-
-function formatDateTime(isoString) {
-  if (!isoString) return 'N/A';
-  const date = new Date(isoString);
-  return date.toLocaleString();
-}
-
-function formatDuration(seconds) {
-  if (!seconds) return 'N/A';
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-}
-
-function formatMilliseconds(ms) {
-  if (!ms) return 'N/A';
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = (ms / 1000).toFixed(1);
-  return `${seconds}s`;
-}
-
-function truncate(str, maxLength) {
-  if (!str) return '';
-  if (str.length <= maxLength) return str;
-  return str.substring(0, maxLength - 3) + '...';
-}
-
-// Main execution
-function main() {
-  const jsonPath = process.argv[2];
-
-  if (!jsonPath) {
-    console.error('Usage: test-report-to-markdown.js <test-report.json path>');
-    process.exit(1);
-  }
-
-  if (!fs.existsSync(jsonPath)) {
-    console.error(`File not found: ${jsonPath}`);
-    process.exit(1);
-  }
-
-  try {
-    const reportJson = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-    const markdown = generateMarkdown(reportJson);
-    const mdPath = jsonPath.replace('.json', '.md');
-    fs.writeFileSync(mdPath, markdown);
-    console.log(`Generated: ${mdPath}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
-}
-
-main();
+runCli('test-report-to-markdown.js', generateMarkdown);
