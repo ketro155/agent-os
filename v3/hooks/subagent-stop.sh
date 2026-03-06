@@ -1,9 +1,8 @@
 #!/bin/bash
-# Agent OS v5.4.1 - SubagentStop Hook with Context Offloading
-# Implements FewWord-inspired tiered output strategy
-# - <512B: inline display
-# - 512B-4KB: compact pointer (~35 tokens)
-# - >4KB: pointer + failure preview
+# Agent OS v5.5.0 - SubagentStop Hook
+# Simplified offloading (PreCompact hook handles context preservation)
+# - >512B: offload to scratch with compact pointer
+# - Expired cleanup via find (cross-platform)
 # Input: Hook context JSON on stdin
 
 set -e
@@ -13,19 +12,16 @@ METRICS_DIR="$PROJECT_DIR/.agent-os/metrics"
 TRANSCRIPTS_DIR="$METRICS_DIR/transcripts"
 AGENTS_LOG="$METRICS_DIR/agents.jsonl"
 
-# NEW: Scratch directory for offloaded outputs
+# Scratch directory for offloaded outputs
 SCRATCH_DIR="$PROJECT_DIR/.agent-os/scratch"
 TOOL_OUTPUTS_DIR="$SCRATCH_DIR/tool_outputs"
 OUTPUT_INDEX="$SCRATCH_DIR/index.jsonl"
 SESSION_STATS="$SCRATCH_DIR/session_stats.json"
 
-# Offloading thresholds (configurable via env)
-INLINE_MAX=${AGENT_OS_INLINE_MAX:-512}        # <512B: inline
-PREVIEW_MIN=${AGENT_OS_PREVIEW_MIN:-4096}     # >4KB: add preview for failures
-PREVIEW_LINES=${AGENT_OS_PREVIEW_LINES:-5}    # Lines to show in preview
+# Offloading threshold (configurable via env)
+INLINE_MAX=${AGENT_OS_INLINE_MAX:-512}
 
-# Retention periods (in hours)
-SUCCESS_RETENTION=${AGENT_OS_SUCCESS_RETENTION:-24}
+# Retention period (in hours) — applies to all offloaded files
 FAILURE_RETENTION=${AGENT_OS_FAILURE_RETENTION:-48}
 
 # Ensure directories exist
@@ -60,9 +56,9 @@ if [ -f "$AGENTS_LOG" ]; then
   AGENT_TYPE=$(grep "\"agent_id\":\"$AGENT_ID\"" "$AGENTS_LOG" | grep '"event":"start"' | tail -1 | jq -r '.agent_type' 2>/dev/null || echo "unknown")
 fi
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TIERED OUTPUT OFFLOADING
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
+# OUTPUT OFFLOADING (single tier: offload everything > INLINE_MAX)
+# ===============================================================================
 
 OFFLOAD_MSG=""
 BYTES_OFFLOADED=0
@@ -87,38 +83,18 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
 
     BYTES_OFFLOADED=$TRANSCRIPT_SIZE
 
-    # Set retention metadata
-    if [ "$EXIT_CODE" -eq 0 ]; then
-      RETENTION_HOURS=$SUCCESS_RETENTION
-    else
-      RETENTION_HOURS=$FAILURE_RETENTION
-    fi
-    EXPIRES_AT=$(date -u -v+${RETENTION_HOURS}H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "+${RETENTION_HOURS} hours" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")
-
     # Log to index
     cat >> "$OUTPUT_INDEX" << EOF
-{"id":"$OUTPUT_ID","agent_type":"$AGENT_TYPE","agent_id":"$AGENT_ID","size":$TRANSCRIPT_SIZE,"exit_code":$EXIT_CODE,"created_at":"$STOPPED_AT","expires_at":"$EXPIRES_AT","path":"$OUTPUT_FILE"}
+{"id":"$OUTPUT_ID","agent_type":"$AGENT_TYPE","agent_id":"$AGENT_ID","size":$TRANSCRIPT_SIZE,"exit_code":$EXIT_CODE,"created_at":"$STOPPED_AT","path":"$OUTPUT_FILE"}
 EOF
 
     # Update LATEST symlinks
     ln -sf "$OUTPUT_FILE" "$TOOL_OUTPUTS_DIR/LATEST.txt" 2>/dev/null || true
     ln -sf "$OUTPUT_FILE" "$TOOL_OUTPUTS_DIR/LATEST_${AGENT_TYPE}.txt" 2>/dev/null || true
 
-    # Build offload message based on tier
+    # Build offload message
     HUMAN_SIZE=$(numfmt --to=iec-i --suffix=B "$TRANSCRIPT_SIZE" 2>/dev/null || echo "${TRANSCRIPT_SIZE}B")
-
-    if [ "$TRANSCRIPT_SIZE" -le "$PREVIEW_MIN" ]; then
-      # Tier 2: 512B-4KB - compact pointer only
-      OFFLOAD_MSG="[Output offloaded: $HUMAN_SIZE → /context-read $OUTPUT_ID]"
-    else
-      # Tier 3: >4KB - pointer + preview for failures
-      if [ "$EXIT_CODE" -ne 0 ]; then
-        PREVIEW=$(tail -n "$PREVIEW_LINES" "$OUTPUT_FILE" | head -c 500)
-        OFFLOAD_MSG="[Output offloaded: $HUMAN_SIZE → /context-read $OUTPUT_ID]\n---Preview (last $PREVIEW_LINES lines)---\n$PREVIEW\n---"
-      else
-        OFFLOAD_MSG="[Output offloaded: $HUMAN_SIZE → /context-read $OUTPUT_ID]"
-      fi
-    fi
+    OFFLOAD_MSG="[Output offloaded: $HUMAN_SIZE → /context-read $OUTPUT_ID]"
   fi
 
   # Also copy to transcripts dir for debugging
@@ -126,9 +102,9 @@ EOF
   cp "$TRANSCRIPT_PATH" "$TRANSCRIPTS_DIR/$TRANSCRIPT_FILENAME" 2>/dev/null || true
 fi
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # UPDATE SESSION STATISTICS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 # Initialize or update session stats
 if [ -f "$SESSION_STATS" ]; then
@@ -155,17 +131,17 @@ else
 EOF
 fi
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # LOG AGENT STOP EVENT
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 cat >> "$AGENTS_LOG" << EOF
 {"event":"stop","agent_id":"$AGENT_ID","agent_type":"$AGENT_TYPE","stopped_at":"$STOPPED_AT","duration_seconds":${DURATION:-null},"exit_code":$EXIT_CODE,"bytes_offloaded":$BYTES_OFFLOADED,"output_id":"$OUTPUT_ID"}
 EOF
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CLEANUP: LRU eviction and expired files
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
+# CLEANUP: time-based expiry
+# ===============================================================================
 
 # Clean up old transcripts (keep last 20)
 TRANSCRIPT_COUNT=$(ls -1 "$TRANSCRIPTS_DIR" 2>/dev/null | wc -l | tr -d ' ')
@@ -173,40 +149,13 @@ if [ "$TRANSCRIPT_COUNT" -gt 20 ]; then
   ls -1t "$TRANSCRIPTS_DIR" | tail -n +21 | xargs -I{} rm "$TRANSCRIPTS_DIR/{}" 2>/dev/null || true
 fi
 
-# Clean up expired offloaded outputs
-CURRENT_TIME=$(date +%s)
-if [ -f "$OUTPUT_INDEX" ]; then
-  while IFS= read -r line; do
-    EXPIRES=$(echo "$line" | jq -r '.expires_at' 2>/dev/null)
-    if [ -n "$EXPIRES" ] && [ "$EXPIRES" != "null" ]; then
-      EXPIRE_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$EXPIRES" +%s 2>/dev/null || echo "0")
-      if [ "$EXPIRE_EPOCH" -lt "$CURRENT_TIME" ]; then
-        FILE_PATH=$(echo "$line" | jq -r '.path')
-        rm -f "$FILE_PATH" 2>/dev/null || true
-      fi
-    fi
-  done < "$OUTPUT_INDEX"
-fi
+# Clean up offloaded outputs older than FAILURE_RETENTION hours (cross-platform)
+RETENTION_MINUTES=$((FAILURE_RETENTION * 60))
+find "$TOOL_OUTPUTS_DIR" -name "*.txt" -not -name "LATEST*.txt" -mmin +$RETENTION_MINUTES -delete 2>/dev/null || true
 
-# LRU eviction if scratch exceeds 250MB
-SCRATCH_SIZE=$(du -sm "$SCRATCH_DIR" 2>/dev/null | cut -f1 || echo "0")
-SCRATCH_MAX=${AGENT_OS_SCRATCH_MAX_MB:-250}
-if [ "$SCRATCH_SIZE" -gt "$SCRATCH_MAX" ]; then
-  # Delete oldest files until under limit
-  while [ "$SCRATCH_SIZE" -gt "$SCRATCH_MAX" ]; do
-    OLDEST=$(ls -1t "$TOOL_OUTPUTS_DIR"/*.txt 2>/dev/null | tail -1)
-    if [ -n "$OLDEST" ] && [ -f "$OLDEST" ]; then
-      rm -f "$OLDEST"
-    else
-      break
-    fi
-    SCRATCH_SIZE=$(du -sm "$SCRATCH_DIR" 2>/dev/null | cut -f1 || echo "0")
-  done
-fi
-
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 # BUILD RESPONSE
-# ═══════════════════════════════════════════════════════════════════════════════
+# ===============================================================================
 
 TOTAL_AGENTS=$(grep -c '"event":"start"' "$AGENTS_LOG" 2>/dev/null || echo "0")
 COMPLETED_AGENTS=$(grep -c '"event":"stop"' "$AGENTS_LOG" 2>/dev/null || echo "0")
