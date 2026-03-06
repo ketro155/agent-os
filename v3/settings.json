@@ -1,6 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Agent OS v5.4.2 - Context optimization + progressive disclosure",
+  "_comment": "Agent OS v5.5.0 - Flat hierarchy + split-panes + expanded hooks",
+
+  "teammateMode": "split-panes",
 
   "hooks": {
     "Setup": [
@@ -42,12 +44,13 @@
 
     "SubagentStart": [
       {
-        "_comment": "Initialize subagent context and track lifecycle metrics (v4.8.0)",
+        "_comment": "Initialize subagent context and track lifecycle metrics (v4.8.0). Async: logging only.",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent-start.sh\"",
-            "timeout": 5
+            "timeout": 5,
+            "async": true
           }
         ]
       }
@@ -55,7 +58,7 @@
 
     "SubagentStop": [
       {
-        "_comment": "Capture subagent completion and transcript for debugging (v4.8.0)",
+        "_comment": "Capture subagent completion and transcript for debugging (v4.8.0). Blocking: offloading needs result.",
         "hooks": [
           {
             "type": "command",
@@ -68,12 +71,13 @@
 
     "TaskCompleted": [
       {
-        "_comment": "Log task completion to progress and session stats (v4.12.0)",
+        "_comment": "Log task completion to progress and session stats (v4.12.0). Async: logging only.",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/task-completed.sh\"",
-            "timeout": 5
+            "timeout": 5,
+            "async": true
           }
         ]
       }
@@ -81,12 +85,13 @@
 
     "TeammateIdle": [
       {
-        "_comment": "Track teammate lifecycle metrics for debugging slow waves (v5.3.0)",
+        "_comment": "Track teammate lifecycle metrics for debugging slow waves (v5.3.0). Async: logging only.",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/teammate-idle.sh\"",
-            "timeout": 5
+            "timeout": 5,
+            "async": true
           }
         ]
       }
@@ -106,6 +111,20 @@
       }
     ],
 
+    "PostToolUseFailure": [
+      {
+        "_comment": "Track tool failures for debugging flaky operations (v5.5.0). Async: observational only.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-tool-failure.sh\"",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+
     "PreToolUse": [
       {
         "_comment": "Validation gate before git commits - CANNOT BE SKIPPED",
@@ -115,6 +134,51 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-commit-gate.sh\"",
             "timeout": 120
+          },
+          {
+            "type": "prompt",
+            "prompt": "Review the staged changes. Are they complete, tested, and consistent with the task requirements? Reply {\"decision\": \"allow\"} or {\"decision\": \"block\", \"reason\": \"...\"}",
+            "_comment": "Prompt-based validation for semantic completeness (v5.5.0)"
+          }
+        ]
+      }
+    ],
+
+    "PreCompact": [
+      {
+        "_comment": "Inject critical context (task state, wave progress) before context window compaction (v5.5.0)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-compact.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "_comment": "Detect premature stops, log incomplete work (v5.5.0). Async: observational only.",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop.sh\"",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+
+    "UserPromptSubmit": [
+      {
+        "_comment": "Inject active task context into every user prompt (v5.5.0)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/user-prompt-submit.sh\"",
+            "timeout": 3
           }
         ]
       }
@@ -149,7 +213,7 @@
   },
 
   "env": {
-    "AGENT_OS_VERSION": "5.4.2",
+    "AGENT_OS_VERSION": "5.5.0",
     "AGENT_OS_TASKS_V4": "true",
     "AGENT_OS_TEAMS": "true",
     "AGENT_OS_MAX_TEAMMATES": "5",
@@ -158,6 +222,7 @@
     "AGENT_OS_SUCCESS_RETENTION": "24",
     "AGENT_OS_FAILURE_RETENTION": "48",
     "AGENT_OS_SCRATCH_MAX_MB": "250",
-    "AGENT_OS_CODE_REVIEW": "false"
+    "AGENT_OS_CODE_REVIEW": "false",
+    "AGENT_OS_TMUX_MONITOR": "false"
   }
 }

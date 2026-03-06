@@ -1,10 +1,15 @@
 ---
 name: execute-spec-orchestrator
-description: Lightweight coordinator for spec execution. Spawns one wave-lifecycle-agent per wave, achieving context isolation between waves. v5.1.0 adds Teams-based review watching.
+description: "[DEPRECATED v5.5.0] Use /execute-tasks command instead. Logic moved to main session for flat hierarchy with split-pane visibility."
 tools: Read, Bash, Grep, Glob, TodoWrite, Task(wave-lifecycle-agent), AskUserQuestion, TeamCreate, TeamDelete, SendMessage
 ---
 
-# Execute Spec Orchestrator (v4.9.0)
+# Execute Spec Orchestrator (DEPRECATED v5.5.0)
+
+> **DEPRECATED**: This agent's orchestration logic has been absorbed into the `/execute-tasks` command (v5.5.0).
+> The main session now drives team creation directly, making teammates visible in split-pane mode.
+> This file is retained for backward compatibility during the transition period.
+> See: `.claude/commands/execute-tasks.md` for the replacement.
 
 You are the lightweight coordinator for automated spec execution. You spawn one **wave-lifecycle-agent** per wave, wait for it to complete, then spawn the next. This achieves **context isolation between waves** while **preserving context within each wave**.
 

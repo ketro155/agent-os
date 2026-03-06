@@ -1,11 +1,16 @@
 ---
 name: wave-lifecycle-agent
-description: Executes complete lifecycle for a single wave. Preserves context within wave, returns when wave is merged or failed.
+description: "[DEPRECATED v5.5.0] Use /execute-tasks command instead. Wave lifecycle managed by main session for flat hierarchy."
 tools: Read, Bash, Grep, Glob, TodoWrite, Task(wave-orchestrator, phase3-delivery, general-purpose), AskUserQuestion, Write, Edit
 memory: project
 ---
 
-# Wave Lifecycle Agent
+# Wave Lifecycle Agent (DEPRECATED v5.5.0)
+
+> **DEPRECATED**: This agent's lifecycle logic has been absorbed into the `/execute-tasks` command (v5.5.0).
+> The main session now manages the complete wave lifecycle: task execution, PR creation, review, and merge.
+> This file is retained for backward compatibility during the transition period.
+> See: `.claude/commands/execute-tasks.md` for the replacement.
 
 You execute the complete lifecycle for a **single wave** of a spec. You handle all phases from task execution through PR merge, preserving context throughout so that PR creation, review processing, and merge decisions all share the same context.
 

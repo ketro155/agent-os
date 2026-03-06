@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.5.0] - 2026-03-06
+
+### Added
+- **Flat team orchestration** — main session is the team lead, teammates visible in split-panes (`Shift+Down` to cycle)
+- **`teammateMode: "split-panes"`** — new settings.json config for visible teammate panes
+- **5 new hook events**: PreCompact (context preservation), Stop (incomplete work detection), UserPromptSubmit (active task injection), PostToolUseFailure (failure tracking), prompt-based PreToolUse (semantic commit validation)
+- **Async hooks** — SubagentStart, TaskCompleted, TeammateIdle, PostToolUseFailure, Stop now non-blocking (~15s saved per wave)
+- **Worktree isolation** — high-isolation tasks can use `isolation: "worktree"` for conflict-free parallel work
+- **error-utils.sh** — centralized structured error reporting for shell scripts
+- **tmux-monitor.sh** — single-pane task progress dashboard (complements split-pane teammate view)
+
+### Changed
+- **execute-tasks command** — rewritten as main-session orchestrator, absorbs logic from 3 deprecated agents
+- **subagent-stop.sh** — simplified from 242 to ~120 lines (removed LRU eviction, 3-tier offloading simplified to single tier)
+- **teams-integration.md** — rewritten for flat architecture and split-pane visibility
+- **wave-team-protocol.md** — simplified from ~610 to ~200 lines for flat architecture
+- **review-watcher.md** — user-facing INFORM messages for split-pane visibility
+- **CLAUDE.md** — v5.5.0 with flat architecture diagram, 14 hooks table, updated model strategy
+- **Model downgrades**: git-workflow (Sonnet), test-reporter (Sonnet), project-manager (Haiku) — ~40% cost reduction
+
+### Deprecated
+- **execute-spec-orchestrator.md** — logic absorbed into /execute-tasks command
+- **wave-lifecycle-agent.md** — logic absorbed into /execute-tasks command
+- **wave-orchestrator.md** — logic absorbed into /execute-tasks command
+
+### Removed
+- Nested 5-level spawn chain (main→exec-spec→wave-life→wave-orch→team) replaced by 1-level flat hierarchy
+
 ## [Unreleased]
 
 ### Added

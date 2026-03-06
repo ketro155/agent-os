@@ -1,4 +1,4 @@
-# Agent OS Environment Variables (v5.4.0)
+# Agent OS Environment Variables (v5.5.0)
 
 > Centralized documentation for all environment variables used by Agent OS.
 > See individual components for detailed usage.
@@ -374,6 +374,11 @@ All default values are defined in:
 ---
 
 ## Changelog
+
+### v5.5.0 (2026-03-06)
+- Updated `AGENT_OS_CODE_REVIEW` used-by: now driven by `/execute-tasks` command (was wave-orchestrator)
+- `AGENT_OS_MAX_TEAMMATES` used-by: now driven by `/execute-tasks` command (was wave-orchestrator)
+- Note: `AGENT_OS_PREVIEW_MIN` retained in env but no longer used by simplified subagent-stop.sh
 
 ### v5.4.0 (2026-02-13)
 - Added Code Review section with `AGENT_OS_CODE_REVIEW` variable

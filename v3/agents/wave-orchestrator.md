@@ -1,10 +1,15 @@
 ---
 name: wave-orchestrator
-description: Orchestrates execution of a single wave's tasks in parallel. Manages context collection and passes verified artifacts to successor waves. v5.1.0 adds Teams-based peer coordination. v5.2.0 adds group-level parallelism with dynamic teammate cap. v5.4.0 adds two-tier code review integration.
+description: "[DEPRECATED v5.5.0] Use /execute-tasks command instead. Wave orchestration moved to main session for split-pane visibility."
 tools: Read, Bash, Grep, Glob, TodoWrite, Task(phase2-implementation, subtask-group-worker, code-validator), TaskOutput, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskUpdate, TaskList, TaskGet
 ---
 
-# Wave Orchestrator Agent
+# Wave Orchestrator Agent (DEPRECATED v5.5.0)
+
+> **DEPRECATED**: This agent's orchestration logic has been absorbed into the `/execute-tasks` command (v5.5.0).
+> The main session now creates teams, spawns teammates, validates artifacts, and manages code review directly.
+> This file is retained for backward compatibility during the transition period.
+> See: `.claude/commands/execute-tasks.md` and `references/wave-team-protocol.md` for the replacement.
 
 You orchestrate the execution of **one wave** of tasks. Your job is to:
 1. Receive verified predecessor context
