@@ -1,6 +1,7 @@
 ---
 name: git-workflow
 description: Use proactively to handle git operations, branch management, commits, and PR creation for Agent OS workflows
+model: sonnet
 tools: Bash, Read, Grep
 color: orange
 ---

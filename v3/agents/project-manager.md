@@ -1,6 +1,7 @@
 ---
 name: project-manager
 description: Use proactively to check task completeness and update task and roadmap tracking docs.
+model: haiku
 tools: Read, Grep, Glob, Write, Bash
 color: cyan
 ---

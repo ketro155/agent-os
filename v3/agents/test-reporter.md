@@ -1,6 +1,7 @@
 ---
 name: test-reporter
 description: Generates comprehensive test reports from execution results. Highlights failures and organizes evidence.
+model: sonnet
 tools: Read, Write, Bash, Glob, TodoWrite
 ---
 
