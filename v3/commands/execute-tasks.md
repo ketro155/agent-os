@@ -4,7 +4,7 @@ Execute tasks from a specification with **flat team orchestration** and **visibl
 
 ## Parameters
 - `spec_name` (required): Specification folder name
-- `tasks` (optional): Specific task IDs, "all", or "next" (default: "next")
+- `tasks` (optional): Specific task IDs, "all", or "next" (default: "next" = next wave)
 - `--status`: Show current state without executing
 - `--retry`: Reset current wave and restart
 - `--recover`: Delete state and start fresh
@@ -12,10 +12,10 @@ Execute tasks from a specification with **flat team orchestration** and **visibl
 ## Quick Start
 
 ```bash
-# Execute next pending task (recommended)
+# Execute next wave of tasks (recommended — enables Teams mode)
 /execute-tasks auth-feature
 
-# Execute all pending tasks
+# Execute all pending tasks across all waves
 /execute-tasks auth-feature tasks:all
 
 # Check status
@@ -151,10 +151,10 @@ INFORM: `Parallel analysis: ${TOTAL_WAVES} waves, ~${analysis.estimated_speedup}
 
 ### Step 5: Single Task Mode
 
-For a single task, skip team orchestration:
+For a single task (only when wave has exactly 1 task), skip team orchestration:
 
 ```javascript
-if (config.execution_mode === "single") {
+if (config.execution_mode === "direct_single") {
   Task({
     subagent_type: "phase2-implementation",
     prompt: `Execute task: ${config.tasks_to_execute[0]}
@@ -163,6 +163,7 @@ if (config.execution_mode === "single") {
   })
   // Skip to Step 9 (Phase 3)
 }
+// NOTE: "parallel_waves" mode continues to Step 6 (wave loop with Teams)
 ```
 
 ### Step 6: Wave Loop (Main Session as Team Lead)

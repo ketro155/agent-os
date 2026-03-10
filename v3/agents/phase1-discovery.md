@@ -306,12 +306,26 @@ IF RESULT.count > 0:
 
 ---
 
-### 2. Determine Tasks to Execute
+### 2. Determine Tasks to Execute (v5.5.1)
+
+> **"next" means next wave** — not single task. This enables Teams mode by returning
+> all parallelizable tasks in the next pending wave.
 
 ```
 IF requested_tasks == "next":
-  Find first pending subtask
-  Return single task
+  # Run wave analysis to find the next pending wave
+  WAVE_ANALYSIS = bash `npx tsx "${CLAUDE_PROJECT_DIR}/.claude/scripts/wave-parallel.ts" analyze \
+    "${CLAUDE_PROJECT_DIR}/.agent-os/specs/[spec-name]/tasks.json"`
+  waves = JSON.parse(WAVE_ANALYSIS).waves
+
+  IF waves.length > 0:
+    # Return ALL tasks in the first pending wave
+    next_wave = waves[0]
+    Return next_wave.tasks (may be 1 or many)
+  ELSE:
+    # Fallback: find first pending parent task
+    Find first pending parent task (task_type == "implementation", status == "pending")
+    Return single task
 
 IF requested_tasks == "all":
   Return all pending tasks
@@ -328,17 +342,13 @@ IF 1 task:
   mode = "direct_single"
   No orchestration needed
 
-IF 2+ tasks AND execution_strategy.mode == "parallel_waves":
+IF 2+ tasks:
   mode = "parallel_waves"
+  Include parallel_config with wave breakdown from wave analysis
   Return wave configuration
 
-IF 2+ tasks AND execution_strategy.mode == "sequential":
-  mode = "orchestrated_sequential"
-  Tasks have dependencies
-
-ELSE:
-  mode = "direct_single"
-  Recommend single-task focus
+NOTE: mode must be one of: "direct_single", "parallel_waves"
+The orchestrator uses these exact strings to determine execution path.
 ```
 
 ### 4. Check Prerequisites
