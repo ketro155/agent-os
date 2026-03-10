@@ -1,5 +1,5 @@
 <!-- AGENT-OS:START -->
-# Agent OS v5.5.0 - Core Memory
+# Agent OS v5.5.1 - Core Memory
 
 > Loaded at every session start. Keep concise. For detailed docs, see `rules/*.md` files.
 

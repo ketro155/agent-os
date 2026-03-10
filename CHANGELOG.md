@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [5.5.1] - 2026-03-10
+
+### Fixed
+- **Teams mode unreachable via default parameter** — `phase1-discovery` interpreted `"next"` as single subtask, so teammate cap always evaluated to 1 and `TeamCreate` was never called. Now `"next"` runs `wave-parallel.ts` analysis and returns all tasks in the next pending wave, enabling Teams mode for multi-task waves.
+- **execute-tasks Step 5 mode mismatch** — compared `"single"` but discovery returned `"direct_single"`, causing the single-task shortcut to be silently skipped.
+- **Stale `"orchestrated_sequential"` mode** — removed dead branch from discovery Step 3; simplified to two modes: `direct_single` and `parallel_waves`.
+
+### Changed
+- **Skill improvements** — new brainstorming skill, fix phantom refs, update triggers
+- **Installer support** — skill reference file support added to all three installers
+- **Version sync** — `settings.json` and `CLAUDE.md` now match `base.sh` at v5.5.1
+
 ## [5.5.0] - 2026-03-06
 
 ### Added
