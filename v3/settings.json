@@ -204,7 +204,16 @@
       "Bash(jq *)",
       "Bash(du *)",
       "mcp__claude-in-chrome__*",
-      "mcp__ide__*"
+      "mcp__ide__*",
+      "TeamCreate",
+      "TeamDelete",
+      "SendMessage",
+      "TaskCreate",
+      "TaskUpdate",
+      "TaskList",
+      "TaskGet",
+      "TaskOutput",
+      "TaskStop"
     ],
     "deny": [
       "Read(.env*)",

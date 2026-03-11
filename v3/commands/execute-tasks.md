@@ -166,6 +166,18 @@ if (config.execution_mode === "direct_single") {
 // NOTE: "parallel_waves" mode continues to Step 6 (wave loop with Teams)
 ```
 
+### Step 5.5: Discover Teams Tools (MANDATORY before Step 6)
+
+> Teams tools are **deferred** — they MUST be loaded via ToolSearch before use.
+> Without this step, TeamCreate/SendMessage calls will silently fail.
+
+```javascript
+if (config.execution_mode !== "direct_single") {
+  // Load all Teams tools in one call — they become available immediately
+  ToolSearch({ query: "select:TeamCreate,TeamDelete,SendMessage,TaskCreate,TaskUpdate,TaskList,TaskGet" })
+}
+```
+
 ### Step 6: Wave Loop (Main Session as Team Lead)
 
 > CRITICAL: This is the core orchestration loop. The main session creates teams,
