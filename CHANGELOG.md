@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Teams mode unreachable via default parameter** — `phase1-discovery` interpreted `"next"` as single subtask, so teammate cap always evaluated to 1 and `TeamCreate` was never called. Now `"next"` runs `wave-parallel.ts` analysis and returns all tasks in the next pending wave, enabling Teams mode for multi-task waves.
 - **execute-tasks Step 5 mode mismatch** — compared `"single"` but discovery returned `"direct_single"`, causing the single-task shortcut to be silently skipped.
 - **Stale `"orchestrated_sequential"` mode** — removed dead branch from discovery Step 3; simplified to two modes: `direct_single` and `parallel_waves`.
+- **Teams tools not discoverable** — `TeamCreate`, `SendMessage`, `TaskCreate` etc. are deferred tools that must be loaded via `ToolSearch` before use. Added mandatory Step 5.5 to execute-tasks.md.
+- **Teams tools not in permissions** — added all 9 Teams tools (`TeamCreate`, `TeamDelete`, `SendMessage`, `TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`, `TaskOutput`, `TaskStop`) to `settings.json` permissions allow list.
 
 ### Changed
 - **Skill improvements** — new brainstorming skill, fix phantom refs, update triggers
