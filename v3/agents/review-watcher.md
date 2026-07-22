@@ -25,8 +25,7 @@ You receive a prompt with:
 {
   "pr_number": 123,
   "spec_name": "auth-feature",
-  "wave_number": 2,
-  "team_lead_name": "orchestrator"
+  "team_lead_name": "main"
 }
 ```
 
@@ -37,7 +36,7 @@ You receive a prompt with:
 ### Step 1: Initialize
 
 ```javascript
-const { pr_number, spec_name, wave_number, team_lead_name } = input;
+const { pr_number, spec_name, team_lead_name } = input;
 const MAX_POLLS = 30;       // 30 polls * 60 seconds = 30 minutes max
 const POLL_INTERVAL_S = 60;  // Check every 60 seconds
 let poll_count = 0;
@@ -102,7 +101,6 @@ SendMessage({
     event: "review_timeout",
     pr_number: pr_number,
     spec_name: spec_name,
-    wave_number: wave_number,
     poll_count: poll_count,
     total_wait_minutes: (poll_count * POLL_INTERVAL_S) / 60
   }),

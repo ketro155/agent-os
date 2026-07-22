@@ -276,16 +276,19 @@ WAVE_LOOP: while (CURRENT_WAVE <= TOTAL_WAVES) {
     }
 
     // Spawn implementation teammates (VISIBLE in split-panes)
+    // IMPORTANT: All teammate Task() calls MUST be issued in a SINGLE message
+    // so Claude Code spawns them concurrently. A sequential loop would block on
+    // each teammate, defeating the purpose of parallel Teams execution.
     const agentType = (granularity === "task_level") ? "phase2-implementation" : "subtask-group-worker"
     const namePrefix = (agentType === "phase2-implementation") ? "impl" : "group"
-    const teammates = []
 
-    for (let i = 0; i < cap; i++) {
-      const teammate = Task({
-        subagent_type: agentType,
-        team_name: team_name,
-        name: `${namePrefix}-${i}`,
-        prompt: `You are a teammate in wave team "${team_name}".
+    // Build all teammate prompts, then spawn ALL at once in one message
+    const teammateConfigs = Array.from({ length: cap }, (_, i) => ({
+      subagent_type: agentType,
+      team_name: team_name,
+      name: `${namePrefix}-${i}`,
+      run_in_background: true,
+      prompt: `You are a teammate in wave team "${team_name}".
 
 INSTRUCTIONS:
 1. Use TaskList to find available (unblocked, unowned) tasks
@@ -304,9 +307,10 @@ INSTRUCTIONS:
 PREDECESSOR ARTIFACTS (VERIFIED):
 ${JSON.stringify(predecessorArtifacts)}
 `
-      })
-      teammates.push(teammate)
-    }
+    }))
+
+    // Issue ALL Task() calls in a single message for concurrent spawning
+    const teammates = teammateConfigs.map(config => Task(config))
 
     // Spawn code-reviewer (utility, exempt from cap)
     if (CODE_REVIEW_ENABLED) {
@@ -389,7 +393,7 @@ Return structured findings JSON.`
     for (const mate of teammates) {
       SendMessage({ type: "shutdown_request", recipient: mate.name, content: "Wave complete" })
     }
-    TeamDelete()
+    TeamDelete({ team_name })
 
   } else {
     // Legacy / sequential mode: Task() with run_in_background
@@ -522,7 +526,7 @@ if (TEAMS_ENABLED) {
   // Wait for review notification via SendMessage
   // When review arrives: spawn pr-review-implementation if needed
   // Cleanup:
-  TeamDelete()
+  TeamDelete({ team_name: review_team })
 }
 ```
 

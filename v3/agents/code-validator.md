@@ -1,6 +1,6 @@
 ---
 name: code-validator
-description: Deep code validation agent for wave-level review. Performs design pattern analysis, OWASP security scan, spec compliance validation, and cross-task consistency checks. Invoked by wave-orchestrator after all tasks complete via Task(). Enabled by AGENT_OS_CODE_REVIEW=true.
+description: Deep code validation agent for wave-level review. Performs design pattern analysis, OWASP security scan, spec compliance validation, and cross-task consistency checks. Invoked by /execute-tasks (main session) after all wave tasks complete via Task(). Enabled by AGENT_OS_CODE_REVIEW=true.
 tools: mcp__ide__getDiagnostics, mcp__ide__executeCode, Read, Grep, Glob, Bash, TodoWrite
 ---
 
@@ -150,7 +150,7 @@ Return structured findings as JSON:
 
 ## Error Handling
 
-- If you timeout (E005): wave-orchestrator treats as non-blocking pass with a note in PR
+- If you timeout (E005): main session treats as non-blocking pass with a note in PR
 - If you crash (E206): same treatment -- review is valuable but not worth blocking delivery
 - If `mcp__ide__getDiagnostics` is unavailable: fall back to `Bash` + `Grep` for diagnostics
 - Use `TodoWrite` to track findings as you analyze (helps with large change sets)

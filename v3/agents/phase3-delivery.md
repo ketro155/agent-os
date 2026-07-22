@@ -206,7 +206,7 @@ IF skip_e2e == true:
 
 ### 3.75 Code Review Results (v5.4.0)
 
-If `code_review` data is present in the wave results (set by wave-orchestrator when `AGENT_OS_CODE_REVIEW=true`), include a code review section in the PR description:
+If `code_review` data is present in the wave results (set by the main session when `AGENT_OS_CODE_REVIEW=true`), include a code review section in the PR description:
 
 ```markdown
 ## Code Review

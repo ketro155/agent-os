@@ -374,7 +374,7 @@ Return this JSON:
 ```json
 {
   "status": "ready|blocked|error",
-  "execution_mode": "direct_single|parallel_waves|orchestrated_sequential",
+  "execution_mode": "direct_single|parallel_waves",
   "tasks_to_execute": [
     {
       "id": "1",

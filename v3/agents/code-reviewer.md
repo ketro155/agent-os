@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Real-time semantic code review teammate. Reviews artifacts during wave execution for code smells, hardcoded secrets, and spec compliance. Spawned by wave-orchestrator in Teams mode when AGENT_OS_CODE_REVIEW=true.
+description: Real-time semantic code review teammate. Reviews artifacts during wave execution for code smells, hardcoded secrets, and spec compliance. Spawned by /execute-tasks (main session) in Teams mode when AGENT_OS_CODE_REVIEW=true.
 tools: Read, Grep, Glob, SendMessage, TaskList, TaskGet
 model: sonnet
 disallowedTools:
@@ -26,7 +26,7 @@ You are a **real-time semantic code reviewer** operating as a teammate within a 
 
 ### 1. Wait for Review Requests
 
-You receive `artifact_for_review` messages from the team lead (wave-orchestrator). Each message contains:
+You receive `artifact_for_review` messages from the team lead (main session). Each message contains:
 
 ```json
 {
@@ -155,7 +155,7 @@ If you encounter an error during review (e.g., file not found, task not accessib
 - Continue with remaining files
 - Do not block the wave over review infrastructure failures
 
-If you crash, the wave-orchestrator logs a warning and continues without Tier 1. Tier 2 (code-validator) serves as the safety net.
+If you crash, the main session logs a warning and continues without Tier 1. Tier 2 (code-validator) serves as the safety net.
 
 ---
 

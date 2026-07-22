@@ -2,7 +2,7 @@
 
 # Agent OS Shared Functions
 # Used by both base.sh and project.sh
-# Updated for v5.4.2 architecture
+# Updated for v5.5.1 architecture
 
 # Base URL for raw GitHub content
 BASE_URL="https://raw.githubusercontent.com/buildermethods/agent-os/main"

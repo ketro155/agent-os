@@ -1,6 +1,6 @@
 # Wave Verification Reference
 
-> Reference document for wave-orchestrator. Loaded on demand when working in `.claude/agents/`.
+> Reference document for wave verification. Loaded on demand when working in `.claude/agents/`.
 > See the main agent definition for core execution logic.
 
 ## AST-Based Verification (v4.9.0)
